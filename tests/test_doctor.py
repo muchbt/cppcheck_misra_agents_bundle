@@ -146,6 +146,8 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(progress_result["level"], "error")
         self.assertIn("progress.json", progress_result["message"])
         self.assertIn("progress.json", progress_result["detail"])
+        self.assertNotIn("runtime_strategy_ok", [item["code"] for item in results])
+        self.assertNotIn("unfinished_run_absent", [item["code"] for item in results])
 
     def test_task2_cli_sources_do_not_use_pep604_optional_syntax(self) -> None:
         doctor_source = (TOOLS_DIR / "doctor.py").read_text(encoding="utf-8")

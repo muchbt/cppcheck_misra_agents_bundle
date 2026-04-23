@@ -283,10 +283,6 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
         check_cppcheck_xml(cppcheck_xml_path),
         check_agent_command(config),
         check_custom_verification_command(config),
-        check_runtime_strategy(config, progress),
-        check_existing_unfinished_run(progress),
-        check_archive_size(runs_dir),
-        check_prompt_length(prompt_path),
     ]
 
     if config_error is not None:
@@ -296,6 +292,20 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
 
     if progress_error is not None:
         results.insert(4, progress_error)
+    else:
+        results.extend(
+            [
+                check_runtime_strategy(config, progress),
+                check_existing_unfinished_run(progress),
+            ]
+        )
+
+    results.extend(
+        [
+            check_archive_size(runs_dir),
+            check_prompt_length(prompt_path),
+        ]
+    )
 
     return results
 
