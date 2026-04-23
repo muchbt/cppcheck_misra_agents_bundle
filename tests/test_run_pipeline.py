@@ -88,7 +88,7 @@ class SplitAndRunPipelineTests(unittest.TestCase):
             self.assertEqual(json.loads(run_log_lines[0])["event"], "split_started")
             self.assertEqual(json.loads(run_log_lines[1])["event"], "split_completed")
 
-    def test_run_pipeline_prints_progress_and_verifies_successful_chunk(self) -> None:
+    def test_run_pipeline_uses_agent_runner_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime_dir = Path(tmp) / "runtime"
             results_dir = runtime_dir / "results"
@@ -118,15 +118,21 @@ class SplitAndRunPipelineTests(unittest.TestCase):
                 },
             )
 
-            def fake_run_chunk(idx: int) -> int:
-                common.save_json(results_dir / f"chunk_{idx:03d}_result.json", {"chunk_index": idx})
-                return 0
+            def fake_run_chunk_agent(config: dict, chunk: dict) -> dict:
+                common.save_json(results_dir / "chunk_001_result.json", {"chunk_index": chunk["chunk_index"]})
+                return {
+                    "returncode": 0,
+                    "stdout": "",
+                    "stderr": "",
+                    "error_kind": "",
+                    "prompt": "prompt body",
+                }
 
             stdout = io.StringIO()
             with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
                 run_fix_pipeline, "RESULTS_DIR", results_dir
             ), patch.object(
-                run_fix_pipeline, "run_chunk", side_effect=fake_run_chunk
+                run_fix_pipeline, "run_chunk_agent", side_effect=fake_run_chunk_agent
             ), patch.object(
                 run_fix_pipeline,
                 "verify_chunk_result",
