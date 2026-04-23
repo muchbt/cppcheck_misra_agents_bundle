@@ -266,7 +266,17 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
             "pipeline.json 不是有效的 JSON。",
             f"路径: {config_path}; 详情: {exc}",
         )
-    progress = load_json(progress_path, {})
+    progress_error = None
+    try:
+        progress = load_json(progress_path, {})
+    except (OSError, json.JSONDecodeError) as exc:
+        progress = {}
+        progress_error = make_result(
+            "error",
+            "progress_json_invalid",
+            "progress.json 不是有效的 JSON。",
+            f"路径: {progress_path}; 详情: {exc}",
+        )
 
     results = [
         check_python_version(),
@@ -283,6 +293,9 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
         results.insert(2, config_error)
     else:
         results.insert(2, check_pipeline_config(config))
+
+    if progress_error is not None:
+        results.insert(4, progress_error)
 
     return results
 
@@ -306,7 +319,7 @@ def print_checks(results: List[Dict[str, Any]]) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="诊断 cppcheck/MISRA pipeline 运行环境。")
-    parser.parse_args([] if argv is None else argv)
+    parser.parse_args(sys.argv[1:] if argv is None else argv)
     results = collect_checks()
     print_checks(results)
     return 1 if any(result.get("level") == "error" for result in results) else 0
