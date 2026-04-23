@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
@@ -9,13 +10,43 @@ from common import ROOT, RUNTIME_DIR
 from providers import get_provider
 
 
+def resolve_env_path(value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = ROOT / path
+    return path
+
+
+def _link_or_copy(src: Path, dest: Path) -> None:
+    if dest.exists():
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.symlink_to(src)
+    except OSError:
+        shutil.copy2(src, dest)
+
+
+def prepare_codex_home(env: Dict[str, str]) -> None:
+    codex_home = env.get("CODEX_HOME", "")
+    if not codex_home:
+        return
+
+    target_dir = Path(codex_home)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    shared_home = Path.home() / ".codex"
+
+    for name in ("auth.json", "config.toml"):
+        source = shared_home / name
+        if source.exists():
+            _link_or_copy(source, target_dir / name)
+
+
 def build_launch_env(env_config: Dict[str, str]) -> Dict[str, str]:
     env = dict(os.environ)
     for key, value in env_config.items():
-        path = Path(value)
-        if not path.is_absolute():
-            path = ROOT / path
-        env[key] = str(path)
+        env[key] = str(resolve_env_path(value))
+    prepare_codex_home(env)
     return env
 
 
@@ -31,6 +62,15 @@ def resolve_cwd(cwd_mode: str, spec: Dict[str, Any]) -> Path:
             path = ROOT / path
         return path
     return ROOT
+
+
+def classify_runtime_error(stderr: str) -> str:
+    text = (stderr or "").lower()
+    if "failed to connect to websocket" in text or "api.openai.com/v1/responses" in text or "stream disconnected before completion" in text:
+        return "network_error"
+    if "auth" in text and ("login" in text or "token" in text or "credential" in text):
+        return "auth_error"
+    return "runtime_error"
 
 
 def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
@@ -78,6 +118,6 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
-        "error_kind": "" if completed.returncode == 0 else "runtime_error",
+        "error_kind": "" if completed.returncode == 0 else classify_runtime_error(completed.stderr),
         "prompt": prompt,
     }

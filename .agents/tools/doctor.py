@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import shlex
 import sys
@@ -129,6 +130,18 @@ def _ensure_writable_dir(path: Path) -> str:
     return ""
 
 
+def _get_agent_provider_name(config: Any) -> str:
+    agent = config.get("agent", {}) if isinstance(config, dict) else {}
+    provider_name = agent.get("provider", "") if isinstance(agent, dict) else ""
+    return str(provider_name).strip()
+
+
+def _get_agent_launch(config: Any) -> Dict[str, Any]:
+    agent = config.get("agent", {}) if isinstance(config, dict) else {}
+    launch = agent.get("launch", {}) if isinstance(agent, dict) else {}
+    return launch if isinstance(launch, dict) else {}
+
+
 def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     agent = config.get("agent", {}) if isinstance(config, dict) else {}
     provider_name = agent.get("provider", "") if isinstance(agent, dict) else ""
@@ -234,6 +247,84 @@ def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
         "agent_launch_ok",
         "agent 启动配置适合非交互执行。",
         f"provider: {provider_name}; 命令: {' '.join(argv)}; prompt_via: {prompt_via}",
+    )
+
+
+def check_agent_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    provider_name = _get_agent_provider_name(config)
+    if provider_name != "codex":
+        return make_result(
+            "ok",
+            "agent_auth_not_applicable",
+            "当前 provider 无需额外认证检查。",
+            f"provider: {provider_name or '未设置'}",
+        )
+
+    launch = _get_agent_launch(config)
+    env = launch.get("env", {}) if isinstance(launch, dict) else {}
+    codex_home_value = env.get("CODEX_HOME", "") if isinstance(env, dict) else ""
+    codex_home = _resolve_launch_dir(root, codex_home_value) if isinstance(codex_home_value, str) and codex_home_value.strip() else None
+
+    shared_auth = Path.home() / ".codex" / "auth.json"
+    workspace_auth = codex_home / "auth.json" if codex_home is not None else None
+
+    if workspace_auth is not None and workspace_auth.exists():
+        return make_result(
+            "ok",
+            "agent_auth_ok",
+            "agent 认证文件已就绪。",
+            f"路径: {workspace_auth}",
+        )
+    if shared_auth.exists():
+        detail = f"共享认证文件: {shared_auth}"
+        if workspace_auth is not None:
+            detail += f"; 运行时将同步到: {workspace_auth}"
+        return make_result(
+            "ok",
+            "agent_auth_shared",
+            "检测到可复用的共享认证文件。",
+            detail,
+        )
+    return make_result(
+        "error",
+        "agent_auth_missing",
+        "未找到可用的 agent 认证文件。",
+        f"期望路径: {workspace_auth if workspace_auth is not None else '未配置 CODEX_HOME/auth.json'}; 共享路径: {shared_auth}",
+    )
+
+
+def check_agent_network(config: Any) -> Dict[str, Any]:
+    provider_name = _get_agent_provider_name(config)
+    if provider_name != "codex":
+        return make_result(
+            "ok",
+            "agent_network_not_applicable",
+            "当前 provider 无需额外网络检查。",
+            f"provider: {provider_name or '未设置'}",
+        )
+
+    launch = _get_agent_launch(config)
+    argv = launch.get("argv", []) if isinstance(launch, dict) else []
+    if "--oss" in argv:
+        return make_result(
+            "ok",
+            "agent_network_local_provider",
+            "当前 codex 配置使用本地 provider。",
+            f"命令: {' '.join(argv)}",
+        )
+
+    if os.environ.get("CODEX_SANDBOX_NETWORK_DISABLED") == "1":
+        return make_result(
+            "error",
+            "agent_network_disabled",
+            "当前环境禁止 agent 访问外部网络。",
+            "检测到 CODEX_SANDBOX_NETWORK_DISABLED=1；codex exec 无法连接 OpenAI Responses websocket。",
+        )
+    return make_result(
+        "ok",
+        "agent_network_ok",
+        "未发现显式的 agent 网络阻断环境变量。",
+        f"命令: {' '.join(argv)}",
     )
 
 
@@ -418,6 +509,8 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
         results.extend(
             [
                 check_agent_launch(config, root),
+                check_agent_auth(config, root),
+                check_agent_network(config),
                 check_custom_verification_command(config),
             ]
         )

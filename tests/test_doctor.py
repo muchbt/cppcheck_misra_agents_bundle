@@ -174,6 +174,27 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["level"], "error")
         self.assertEqual(result["code"], "agent_launch_env_unwritable")
 
+    def test_check_agent_auth_reports_missing_auth(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_home = Path(tmp) / "home"
+            fake_home.mkdir(parents=True)
+            config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+            with patch.object(doctor.Path, "home", return_value=fake_home):
+                result = doctor.check_agent_auth(config, root=root)
+
+        self.assertEqual(result["level"], "error")
+        self.assertEqual(result["code"], "agent_auth_missing")
+
+    def test_check_agent_network_reports_disabled_network(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+
+        with patch.dict(os.environ, {"CODEX_SANDBOX_NETWORK_DISABLED": "1"}, clear=False):
+            result = doctor.check_agent_network(config)
+
+        self.assertEqual(result["level"], "error")
+        self.assertEqual(result["code"], "agent_network_disabled")
+
     def test_check_custom_verification_command_reports_missing_executable(self) -> None:
         config = {"verification": {"custom_command": "missing-verify"}}
 

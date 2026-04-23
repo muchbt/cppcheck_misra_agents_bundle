@@ -168,6 +168,51 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(result["error_kind"], "spawn_error")
         self.assertIn("permission denied", result["stderr"])
 
+    def test_run_chunk_agent_bootstraps_codex_auth_into_workspace_home(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        chunk = {"chunk_index": 1}
+        agent_runner = importlib.import_module("agent_runner")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_home = root / "home"
+            shared_codex = fake_home / ".codex"
+            workspace_codex = root / ".agents" / "runtime" / "agent-home"
+            shared_codex.mkdir(parents=True)
+            workspace_codex.mkdir(parents=True)
+            (shared_codex / "auth.json").write_text('{"tokens": {}}', encoding="utf-8")
+            (shared_codex / "config.toml").write_text("model = \"gpt-5.3-codex\"\n", encoding="utf-8")
+
+            with patch.object(
+                agent_runner,
+                "ROOT",
+                root,
+            ), patch.object(
+                agent_runner,
+                "get_provider",
+                return_value=SimpleNamespace(
+                    build_launch_spec=lambda current_config, current_chunk: {
+                        "argv": ["codex", "exec", "--full-auto"],
+                        "prompt_via": "stdin",
+                        "cwd_mode": "project_root",
+                        "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
+                        "requires_tty": False,
+                        "output_mode": "exit_code",
+                        "prompt": "prompt body",
+                    }
+                ),
+            ), patch.object(
+                agent_runner.Path,
+                "home",
+                return_value=fake_home,
+            ), patch.object(agent_runner.subprocess, "run") as run_mock:
+                run_mock.return_value = SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                result = agent_runner.run_chunk_agent(config, chunk)
+
+            self.assertEqual(result["returncode"], 0)
+            self.assertTrue((workspace_codex / "auth.json").exists())
+            self.assertTrue((workspace_codex / "config.toml").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
