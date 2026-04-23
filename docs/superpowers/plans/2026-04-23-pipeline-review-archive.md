@@ -318,3 +318,142 @@ These items came from `improvements_v2.md` but are intentionally deferred becaus
 - Add a runtime lock file such as `.agents/runtime/.lock` to prevent concurrent `oneshot` processes.
 - Document that `.agents/reports/` represents the latest merge result, while `.agents/runs/<run_id>/` is the historical archive.
 - Expand verification integration tests to cover custom command success, custom command failure, missing command, and timeout behavior.
+
+---
+
+## Task 7: 通用非交互 agent 执行抽象
+
+> 背景：Task 6 的真实链路验证表明，当前 `split -> run -> merge` 主流程可用，但 `run` 阶段仍依赖“字符串命令 + prompt 位置参数”的旧式 agent 调用方式。该方式会把交互式 CLI 当成批处理执行器，导致真实环境下因为 TTY、PATH 更新或只读文件系统而失败。该问题属于通用执行层缺陷，不应作为 Codex 特例处理。
+
+**Files:**
+- `.agents/config/pipeline.json`
+- `.agents/tools/common.py`
+- `.agents/tools/doctor.py`
+- `.agents/tools/run_fix_pipeline.py`
+- `.agents/tools/providers/base.py`
+- `.agents/tools/providers/__init__.py`
+- `.agents/tools/providers/codex.py`
+- `.agents/tools/agent_runner.py`
+- `README.md`
+- `tests/test_doctor.py`
+- `tests/test_run_pipeline.py`
+- `tests/test_agent_runner.py`
+
+### Task 7.1: 升级 agent 配置模型
+
+- [ ] Replace legacy `agent.command` string config with a structured model:
+
+```json
+"agent": {
+  "provider": "codex",
+  "launch": {
+    "argv": ["codex", "exec", "--full-auto"],
+    "prompt_via": "stdin",
+    "cwd": "project_root",
+    "env": {
+      "CODEX_HOME": ".agents/runtime/agent-home"
+    },
+    "requires_tty": false,
+    "output": {
+      "mode": "exit_code"
+    }
+  },
+  "capabilities": {
+    "non_interactive": true,
+    "workspace_write_required": true
+  },
+  "auto_bootstrap_compat": true
+}
+```
+
+- [ ] Update config validation so the old `agent.command: "codex"` form is rejected with a clear error.
+- [ ] Keep Python 3.8-compatible type annotations in config validation and runner code.
+
+### Task 7.2: 引入 provider 目录和通用 runner
+
+- [ ] Add `.agents/tools/providers/base.py` for provider and launch spec types.
+- [ ] Add `.agents/tools/providers/__init__.py` for provider registry.
+- [ ] Add `.agents/tools/providers/codex.py` as the only real provider in phase 1.
+- [ ] Add `.agents/tools/agent_runner.py`:
+  - Load structured `agent` config
+  - Resolve provider
+  - Validate launch spec
+  - Support `prompt_via = stdin | arg | file`
+  - Resolve `cwd = project_root | runtime_dir | custom`
+  - Prepare environment variables mapped to writable workspace paths
+  - Execute subprocess and return a unified result
+- [ ] Remove or replace direct use of `.agents/tools/agent_adapter_codex.py` so the pipeline no longer executes `[agent_cmd, prompt]`.
+
+### Task 7.3: 将 run 流程切换到通用执行层
+
+- [ ] Modify `.agents/tools/run_fix_pipeline.py` so chunk execution goes through the new runner.
+- [ ] Preserve existing progress updates, retry behavior, unified logging, verification calls, and failure semantics.
+- [ ] Keep failure classification compatible with current runtime state:
+  - `config_error`
+  - `spawn_error`
+  - `runtime_error`
+  - `interactive_not_supported`
+
+### Task 7.4: 升级 doctor 诊断规则
+
+- [ ] Update `.agents/tools/doctor.py` to validate execution suitability instead of only checking command existence.
+- [ ] Check at least:
+  - `agent.provider` is supported
+  - `launch.argv` is a non-empty array
+  - `prompt_via` is supported by the provider
+  - `cwd` resolves correctly
+  - mapped env directories can be created/written in workspace
+  - `requires_tty` and `capabilities.non_interactive` are not contradictory
+  - provider is implemented in this phase
+- [ ] For the phase-1 `codex` provider, block configurations that still imply an interactive TUI-style launch.
+- [ ] Reserve provider-differentiated diagnostics for a future `claude` provider without implementing it now.
+
+### Task 7.5: 文档与测试
+
+- [ ] Update `README.md` with the new structured agent config model and non-interactive execution requirements.
+- [ ] Add tests for:
+  - accepting structured `agent` config
+  - rejecting legacy string command config
+  - runner stdin/env/cwd handling
+  - spawn error and non-zero exit propagation
+  - doctor blocker diagnostics for interactive / non-writable / malformed configs
+  - run pipeline behavior after switching to the runner
+- [ ] Run:
+
+```bash
+python3 -m unittest tests.test_doctor tests.test_run_pipeline tests.test_agent_runner -v
+python3 .agents/tools/pipeline_cli.py doctor
+```
+
+- [ ] Run a real pipeline verification against generated sample input after the runner switch:
+
+```bash
+python3 gen_scan_files.py
+cppcheck --enable=warning,style --addon=misra.py --xml --xml-version=2 . 2> cppcheck.xml
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --run-id 20260423-999
+```
+
+Expected:
+- no interactive TUI prompt
+- no PATH update failure caused by interactive startup mode
+- split completes
+- run enters provider-backed non-interactive execution
+- failures, if any, are recorded through the new unified execution layer
+
+- [ ] Commit:
+
+```bash
+git add .agents/config/pipeline.json .agents/tools/common.py .agents/tools/doctor.py .agents/tools/run_fix_pipeline.py .agents/tools/providers/base.py .agents/tools/providers/__init__.py .agents/tools/providers/codex.py .agents/tools/agent_runner.py README.md tests/test_doctor.py tests/test_run_pipeline.py tests/test_agent_runner.py
+git commit -m "feat: add non-interactive agent runner"
+```
+
+---
+
+## Phase 2 Reservation
+
+`Claude Code` support is intentionally reserved for phase 2. The phase-1 design must leave room for:
+
+- adding `.agents/tools/providers/claude.py`
+- extending provider registry without changing the runner contract
+- adding provider-specific doctor diagnostics
+- mapping provider-specific writable home/config directories

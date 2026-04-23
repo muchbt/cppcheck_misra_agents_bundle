@@ -209,6 +209,170 @@ python3 .agents/tools/pipeline_cli.py merge
 - `.agents/reports/` 语义说明：二期文档可明确它始终表示最近一次 merge 结果，历史结果以 `.agents/runs/<run_id>/` 为准。
 - 更完整的验证集成测试：二期可覆盖自定义验证命令成功、失败、缺失、超时等组合场景。
 
+## 真实验证反馈与后续阶段
+
+在基于 `gen_scan_files.py` 生成示例源码、使用 `cppcheck --enable=warning,style --addon=misra.py --xml --xml-version=2 . 2> cppcheck.xml` 生成真实输入并执行完整流水线后，`split` 阶段可以稳定完成，但 `run` 阶段在第一个 chunk 上失败。失败原因不是 `split -> run -> merge` 主流程设计错误，也不是 `oneshot` 编排错误，而是当前 agent 接入方式把交互式 CLI 当成了批处理执行器：
+
+- 当前配置模型只有 `agent.command` 字符串，缺少对非交互执行、prompt 传递、工作目录、环境变量、输出模式的结构化表达。
+- 当前 `agent_adapter_codex.py` 直接以 `[agent_cmd, prompt]` 形式调用 agent，会拉起交互式 TUI，而不是稳定的非交互执行模式。
+- 实际验证中，`codex` CLI 会在启动时尝试更新 PATH 和用户环境；在只读或受限环境下会直接失败。这类问题不应视为 Codex 特例，后续若接入 `Claude Code` 或其他交互式 agent CLI，也会落入同类风险。
+
+因此，本设计在保留 Task 1-6 目标与交付事实的前提下，追加一个新的后续阶段，用于修复通用执行层设计缺陷，而不是回溯性否定前 6 个任务。
+
+前文中关于“不重写 agent 调用架构”、`agent.command` 基础诊断、以及 prompt 传递方式暂不调整等表述，均只适用于 Task 1-6 的一期范围；进入 Task 7 后，这些局部前提以本节的结构化 agent 执行设计为准。
+
+## 后续阶段：Task 7 通用非交互 agent 执行抽象
+
+### 目标
+
+- 将当前 `agent.command` 字符串模型升级为结构化 agent 配置模型。
+- 引入通用的非交互执行协议（launch spec / runner），使流水线不再直接依赖某个交互式 CLI 的默认行为。
+- 重构当前 `codex` 接入为 provider 目录化实现。
+- 升级 `doctor`，从“命令存在”检查提升到“是否适合流水线非交互执行”的能力检查。
+- 为 `Claude Code` 二期支持预留 provider 接口、配置模型和诊断边界，但不在本期真正实现其 provider。
+
+### 非目标
+
+- 不在本期实现 `Claude Code` provider。
+- 不重写 `split`、`run`、`merge` 的业务逻辑。
+- 不改变 chunk JSON 主结构。
+- 不为了兼容旧配置保留 `agent.command: "codex"` 字符串模式。
+- 不把 provider 体系扩展成通用插件框架或并行多 agent 调度系统。
+
+### 配置模型
+
+将旧配置：
+
+```json
+"agent": {
+  "type": "codex",
+  "command": "codex",
+  "auto_bootstrap_compat": true
+}
+```
+
+升级为新的结构化模型：
+
+```json
+"agent": {
+  "provider": "codex",
+  "launch": {
+    "argv": ["codex", "exec", "--full-auto"],
+    "prompt_via": "stdin",
+    "cwd": "project_root",
+    "env": {
+      "CODEX_HOME": ".agents/runtime/agent-home"
+    },
+    "requires_tty": false,
+    "output": {
+      "mode": "exit_code"
+    }
+  },
+  "capabilities": {
+    "non_interactive": true,
+    "workspace_write_required": true
+  },
+  "auto_bootstrap_compat": true
+}
+```
+
+其中：
+
+- `provider`：一期仅支持 `codex`，二期可扩展 `claude`。
+- `launch.argv`：结构化命令参数数组，禁止使用单字符串。
+- `launch.prompt_via`：一期支持 `stdin | arg | file`，当前推荐 `stdin`。
+- `launch.cwd`：支持 `project_root | runtime_dir | custom`。
+- `launch.env`：允许声明工作区内可写目录映射。
+- `launch.requires_tty`：显式声明是否依赖交互终端。
+- `launch.output.mode`：一期先支持 `exit_code`，为后续 `stdout_json`、`file` 预留扩展位。
+- `capabilities`：供 `doctor` 和后续 provider 扩展使用，一期至少包含 `non_interactive` 和 `workspace_write_required`。
+- `auto_bootstrap_compat`：保留与现有兼容层同步相关的开关语义，避免影响 `.agents` / `.codex` 双目录同步。
+
+### 模块结构
+
+新增以下结构：
+
+- `.agents/tools/agent_runner.py`
+  - 读取结构化 agent 配置
+  - 加载 provider
+  - 校验 launch spec
+  - 处理 cwd / env / stdin / 输出
+  - 执行子进程并返回统一结果
+- `.agents/tools/providers/base.py`
+  - 定义 provider spec、launch spec、执行结果等通用类型
+- `.agents/tools/providers/__init__.py`
+  - 负责 provider 注册与查找
+- `.agents/tools/providers/codex.py`
+  - 一期唯一真实 provider
+  - 负责组装 prompt、提供 launch spec、声明诊断要求
+
+现有 `.agents/tools/agent_adapter_codex.py` 在 Task 7 落地后删除，不保留并行旧入口。
+
+### 数据流与职责边界
+
+职责划分采用四层模型：
+
+1. `run_fix_pipeline.py`
+   - 只负责 chunk 选择、重试、progress 更新、统一日志、verify 调用
+   - 不直接拼 CLI 或处理 provider 细节
+2. `providers/codex.py`
+   - 读取 chunk，组装 prompt，返回 launch spec
+   - 不直接执行 subprocess
+3. `agent_runner.py`
+   - 合并配置与 provider 默认值
+   - 校验执行协议
+   - 调用 `subprocess`
+   - 返回统一执行结果
+4. `doctor.py`
+   - 复用 provider 和 runner 元信息做执行层诊断
+
+建议的数据流为：
+
+```text
+run_fix_pipeline.py
+  -> agent_runner.run_chunk_agent(chunk_index)
+    -> providers.codex.build_launch_spec(chunk_index, config)
+      -> agent_runner.execute_launch_spec(spec)
+        -> 返回统一执行结果
+```
+
+### 错误处理与诊断规则
+
+将 agent 执行失败统一归类为：
+
+- `config_error`：配置结构不合法，运行前阻断
+- `spawn_error`：命令不存在、cwd 无法解析、环境目录不可写、stdin/file 准备失败
+- `runtime_error`：agent 进程启动成功但非零退出
+- `interactive_not_supported`：配置声明需要 TTY 或不支持非交互执行
+
+`doctor` 从“命令是否存在”升级为“执行协议是否适合流水线”检查，至少覆盖：
+
+- `agent.provider` 是否支持
+- `launch.argv` 是否存在且为非空数组
+- `prompt_via` 是否为支持值
+- `cwd` 是否可解析
+- `env` 映射的工作区目录是否可创建 / 可写
+- `requires_tty` 与 `capabilities.non_interactive` 是否冲突
+- provider 是否为一期真实实现
+- 对 `codex` provider，若配置为交互式 TUI 风格调用，直接报 blocker
+
+### 测试策略
+
+Task 7 追加测试，覆盖：
+
+- 新配置模型接受结构化 `agent`，拒绝旧的字符串命令模式
+- runner 能正确处理 `stdin` prompt、`cwd`、`env`
+- `spawn_error`、非零退出码、交互式配置错误能统一回传
+- `codex` provider 生成的 launch spec 符合预期
+- `doctor` 能识别非交互能力缺失、TTY 需求、不写环境目录等阻断条件
+- `run_fix_pipeline.py` 使用 runner 返回值后，progress / 日志 / 失败语义保持不变
+
+### 与原计划的关系
+
+- Task 1-5 的实现与提交结论保持不变。
+- Task 6 的真实链路验证仍然有效，并作为 Task 7 的输入证据。
+- `Claude Code` 明确为二期支持目标，一期只预留 provider 接口、配置模型和诊断边界。
+
 ## 测试策略
 
 新增最小测试集，覆盖：
@@ -232,3 +396,5 @@ python3 .agents/tools/pipeline_cli.py merge
 - `oneshot` 续跑行为已明确：默认续跑并提示，`--fresh` 才开始新运行。
 - 中优先级的策略冲突检测已纳入本次计划，低优先级项已列为未来改进计划。
 - `docter` 错误拼写别名已明确排除。
+- 真实链路验证已经证明，后续风险集中在通用 agent 执行层，而不是 `split/run/merge` 主流程。
+- Task 7 作为追加阶段，能保持 Task 1-6 的交付事实，同时修复执行层设计缺陷并为二期 `Claude Code` 支持预留接口。
