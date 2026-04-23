@@ -21,6 +21,42 @@
 - `.agents/reports/*`：当前运行的中文报告
 - `.agents/runs/<run_id>/*`：历史归档
 
+## Agent 配置
+
+`pipeline.json` 中的 `agent` 必须使用结构化配置，不再支持旧的 `type` / `command` 字符串模型。
+
+默认的 `codex` 非交互配置如下：
+
+```json
+"agent": {
+  "provider": "codex",
+  "launch": {
+    "argv": ["codex", "exec", "--full-auto"],
+    "prompt_via": "stdin",
+    "cwd": "project_root",
+    "env": {
+      "CODEX_HOME": ".agents/runtime/agent-home"
+    },
+    "requires_tty": false,
+    "output": {
+      "mode": "exit_code"
+    }
+  },
+  "capabilities": {
+    "non_interactive": true,
+    "workspace_write_required": true
+  },
+  "auto_bootstrap_compat": true
+}
+```
+
+要求如下：
+
+- 必须使用非交互命令形式；对 `codex` 来说，应使用 `codex exec`
+- `prompt_via` 当前推荐 `stdin`
+- `CODEX_HOME` 这类运行目录应映射到工作区内可写路径
+- 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误
+
 ## 推荐用法
 
 首次接入、环境异常、命令失败时，先运行：
