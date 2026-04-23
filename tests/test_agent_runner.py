@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import importlib
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +64,49 @@ class AgentConfigValidationTests(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
+
+
+class CodexProviderTests(unittest.TestCase):
+    def test_codex_provider_builds_non_interactive_launch_spec(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(
+                json.dumps(chunk),
+                encoding="utf-8",
+            )
+
+            codex_provider = importlib.import_module("providers.codex")
+
+            with patch.object(codex_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                codex_provider, "PROMPTS_DIR", prompts_dir
+            ):
+                spec = codex_provider.build_launch_spec(config, chunk)
+
+        self.assertEqual(spec["argv"][:3], ["codex", "exec", "--full-auto"])
+        self.assertEqual(spec["prompt_via"], "stdin")
+        self.assertEqual(spec["cwd_mode"], "project_root")
+        self.assertFalse(spec["requires_tty"])
+        self.assertEqual(spec["output_mode"], "exit_code")
+        self.assertIn("Read chunk 1", spec["prompt"])
+        self.assertIn("Fix strategy: conservative.", spec["prompt"])
 
 
 if __name__ == "__main__":
