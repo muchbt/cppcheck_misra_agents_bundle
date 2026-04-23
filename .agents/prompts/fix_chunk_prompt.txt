@@ -1,0 +1,19 @@
+Read .agents/runtime/chunks/chunk_{chunk_index:03d}.json and use the cppcheck-misra-fix skill.
+
+{strategy_instructions}
+
+Requirements:
+1. Process only the current chunk
+2. Inspect only files listed in the chunk unless strictly necessary
+3. Apply minimal edits only
+4. Do not do unrelated refactors or formatting
+5. Do not infer logic from comments
+6. Follow the fix_strategy and per-issue strategy_action/risk fields from the chunk JSON
+7. Update:
+   - .agents/runtime/issue_status.json
+   - .agents/runtime/file_change_index.json
+   - .agents/runtime/results/chunk_{chunk_index:03d}_result.json
+   - .agents/runtime/results/chunk_{chunk_index:03d}_result.md
+8. Record each independent edit point with linked issue keys
+9. Perform minimal verification and record the result
+10. For every high-risk fixed issue, include risk_level, risk_reason, and review_required_after_fix=true in the result JSON

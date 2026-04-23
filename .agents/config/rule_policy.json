@@ -1,0 +1,118 @@
+{
+  "default": {
+    "action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "risk_reason": "No rule-specific auto-fix policy is configured."
+  },
+  "actions": {
+    "unusedVariable": {
+      "action": "auto_fix",
+      "risk_level": "low"
+    },
+    "unreadVariable": {
+      "action": "auto_fix",
+      "risk_level": "low"
+    },
+    "constVariable": {
+      "action": "auto_fix",
+      "risk_level": "low"
+    },
+    "nullPointer": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": [
+        "control_flow"
+      ],
+      "risk_reason": "Null pointer fixes can change control flow."
+    },
+    "uninitvar": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": [
+        "initialization"
+      ],
+      "risk_reason": "Initialization fixes can change runtime behavior."
+    },
+    "misra-c2012-2.2": {
+      "action": "auto_fix",
+      "risk_level": "low"
+    },
+    "misra-c2012-8.9": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": [
+        "linkage",
+        "scope"
+      ],
+      "risk_reason": "Scope changes can affect linkage and visibility."
+    },
+    "misra-c2012-17.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": [
+        "return_value",
+        "misra"
+      ],
+      "risk_reason": "Return-value handling can change error handling semantics."
+    }
+  },
+  "patterns": [
+    {
+      "match_contains": "volatile",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": [
+        "volatile"
+      ],
+      "risk_reason": "Volatile-related changes may affect hardware or concurrency semantics."
+    },
+    {
+      "match_contains": "interrupt",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": [
+        "interrupt"
+      ],
+      "risk_reason": "Interrupt path changes need manual timing and safety review."
+    },
+    {
+      "match_contains": "register",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": [
+        "register"
+      ],
+      "risk_reason": "Register access changes may affect hardware behavior."
+    },
+    {
+      "match_contains": "rte_",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": [
+        "rte"
+      ],
+      "risk_reason": "AUTOSAR RTE paths require integration review."
+    },
+    {
+      "match_contains": "mcal",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": [
+        "mcal"
+      ],
+      "risk_reason": "MCAL paths can affect hardware abstraction behavior."
+    },
+    {
+      "match_contains": "canif",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": [
+        "canif"
+      ],
+      "risk_reason": "CAN interface changes need communication stack review."
+    }
+  ]
+}

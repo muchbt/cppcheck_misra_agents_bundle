@@ -1,0 +1,30 @@
+{
+  "chunk_index": 1,
+  "chunk_total": 10,
+  "input_issue_keys": [
+    "src/a.c:127:nullPointer:7ab21dfe"
+  ],
+  "files_touched": [
+    "src/a.c"
+  ],
+  "fixed": [
+    {
+      "issue_key": "src/a.c:127:nullPointer:7ab21dfe",
+      "edit_ids": [
+        "src/a.c#001"
+      ],
+      "summary": "added explicit null check",
+      "risk_level": "medium",
+      "risk_reason": "Null pointer fixes can change control flow.",
+      "review_required_after_fix": false
+    }
+  ],
+  "skipped": [],
+  "needs_manual_review": [],
+  "review_required_after_fix": [],
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "notes": "light verification only"
+  }
+}

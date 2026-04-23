@@ -1,0 +1,9 @@
+{
+  "xml_file": "cppcheck.xml",
+  "total_chunks": 2,
+  "completed_chunks": [],
+  "failed_chunks": [],
+  "current_chunk": 1,
+  "fix_strategy": "all_auto",
+  "status": "ready"
+}

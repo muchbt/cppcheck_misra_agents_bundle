@@ -1,0 +1,48 @@
+{
+  "project": {
+    "runtime_dir": ".agents/runtime",
+    "reports_dir": ".agents/reports",
+    "chunks_dir": ".agents/runtime/chunks",
+    "results_dir": ".agents/runtime/results"
+  },
+  "input": {
+    "cppcheck_xml": "cppcheck.xml"
+  },
+  "chunking": {
+    "max_issues_per_chunk": 12,
+    "max_files_per_chunk": 3,
+    "prefer_group_by_file": true,
+    "split_high_risk_alone": true
+  },
+  "filter": {
+    "include_severity": [
+      "error",
+      "warning",
+      "style"
+    ],
+    "exclude_information": true
+  },
+  "misra": {
+    "enabled": true,
+    "detect_prefixes": [
+      "misra",
+      "misra-c2012",
+      "misra-c2023"
+    ]
+  },
+  "fix_strategy": {
+    "mode": "conservative",
+    "mark_high_risk_in_all_auto": true,
+    "require_review_after_high_risk_fix": true
+  },
+  "verification": {
+    "mode": "light",
+    "rerun_cppcheck_for_touched_files": false,
+    "custom_command": ""
+  },
+  "agent": {
+    "type": "codex",
+    "command": "codex",
+    "auto_bootstrap_compat": true
+  }
+}

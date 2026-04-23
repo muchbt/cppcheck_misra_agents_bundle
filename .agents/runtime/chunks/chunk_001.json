@@ -1,0 +1,216 @@
+{
+  "chunk_index": 1,
+  "chunk_total": 2,
+  "issue_count": 11,
+  "files": [
+    "cppcheck_error.c",
+    "cppcheck_info.c",
+    "cppcheck_warning.c"
+  ],
+  "fix_strategy": "all_auto",
+  "contains_high_risk": true,
+  "requires_review_after_fix_count": 10,
+  "issues": [
+    {
+      "issue_key": "cppcheck_error.c:3:misra-c2012-8.4:4a2c80d8",
+      "file": "cppcheck_error.c",
+      "line": 3,
+      "severity": "style",
+      "rule_id": "misra-c2012-8.4",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "unknown_rule"
+      ],
+      "risk_reason": "No rule-specific auto-fix policy is configured.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_error.c:10:bufferAccessOutOfBounds:afec5dc6",
+      "file": "cppcheck_error.c",
+      "line": 10,
+      "severity": "error",
+      "rule_id": "bufferAccessOutOfBounds",
+      "msg": "Buffer is accessed out of bounds: buffer",
+      "is_misra": false,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "unknown_rule"
+      ],
+      "risk_reason": "No rule-specific auto-fix policy is configured.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_error.c:10:misra-c2012-17.7:4a2c80d8",
+      "file": "cppcheck_error.c",
+      "line": 10,
+      "severity": "style",
+      "rule_id": "misra-c2012-17.7",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "return_value",
+        "misra"
+      ],
+      "risk_reason": "Return-value handling can change error handling semantics.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_info.c:1:misra-c2012-21.6:4a2c80d8",
+      "file": "cppcheck_info.c",
+      "line": 1,
+      "severity": "style",
+      "rule_id": "misra-c2012-21.6",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "unknown_rule"
+      ],
+      "risk_reason": "No rule-specific auto-fix policy is configured.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_info.c:10:misra-c2012-17.7:4a2c80d8",
+      "file": "cppcheck_info.c",
+      "line": 10,
+      "severity": "style",
+      "rule_id": "misra-c2012-17.7",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "return_value",
+        "misra"
+      ],
+      "risk_reason": "Return-value handling can change error handling semantics.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_info.c:13:misra-c2012-8.4:4a2c80d8",
+      "file": "cppcheck_info.c",
+      "line": 13,
+      "severity": "style",
+      "rule_id": "misra-c2012-8.4",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "unknown_rule"
+      ],
+      "risk_reason": "No rule-specific auto-fix policy is configured.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_warning.c:1:misra-c2012-21.6:4a2c80d8",
+      "file": "cppcheck_warning.c",
+      "line": 1,
+      "severity": "style",
+      "rule_id": "misra-c2012-21.6",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "unknown_rule"
+      ],
+      "risk_reason": "No rule-specific auto-fix policy is configured.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_warning.c:3:misra-c2012-8.4:4a2c80d8",
+      "file": "cppcheck_warning.c",
+      "line": 3,
+      "severity": "style",
+      "rule_id": "misra-c2012-8.4",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "unknown_rule"
+      ],
+      "risk_reason": "No rule-specific auto-fix policy is configured.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_warning.c:4:unassignedVariable:b3783ebc",
+      "file": "cppcheck_warning.c",
+      "line": 4,
+      "severity": "style",
+      "rule_id": "unassignedVariable",
+      "msg": "Variable 'uninitialized_var' is not assigned a value.",
+      "is_misra": false,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "unknown_rule"
+      ],
+      "risk_reason": "No rule-specific auto-fix policy is configured.",
+      "requires_review_after_fix": true
+    },
+    {
+      "issue_key": "cppcheck_warning.c:10:uninitvar:74e17dfb",
+      "file": "cppcheck_warning.c",
+      "line": 10,
+      "severity": "error",
+      "rule_id": "uninitvar",
+      "msg": "Uninitialized variable: uninitialized_var",
+      "is_misra": false,
+      "fix_strategy": "all_auto",
+      "action": "careful_fix",
+      "strategy_action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": [
+        "initialization"
+      ],
+      "risk_reason": "Initialization fixes can change runtime behavior.",
+      "requires_review_after_fix": false
+    },
+    {
+      "issue_key": "cppcheck_warning.c:11:misra-c2012-17.7:4a2c80d8",
+      "file": "cppcheck_warning.c",
+      "line": 11,
+      "severity": "style",
+      "rule_id": "misra-c2012-17.7",
+      "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+      "is_misra": true,
+      "fix_strategy": "all_auto",
+      "action": "needs_manual_review",
+      "strategy_action": "careful_fix",
+      "risk_level": "high",
+      "risk_tags": [
+        "return_value",
+        "misra"
+      ],
+      "risk_reason": "Return-value handling can change error handling semantics.",
+      "requires_review_after_fix": true
+    }
+  ]
+}

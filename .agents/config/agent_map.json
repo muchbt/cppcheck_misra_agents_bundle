@@ -1,0 +1,12 @@
+{
+  "agents": {
+    "codex": {
+      "bootstrap": {
+        "generate_agents_md": true,
+        "generate_codex_skill_dir": true,
+        "agents_md_target": "AGENTS.md",
+        "skill_target": ".codex/skills/cppcheck-misra-fix/SKILL.md"
+      }
+    }
+  }
+}
