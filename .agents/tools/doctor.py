@@ -6,7 +6,7 @@ import shutil
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from common import (
     ROOT,
@@ -304,7 +304,7 @@ def print_checks(results: List[Dict[str, Any]]) -> None:
             print(f"  详情: {detail}")
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="诊断 cppcheck/MISRA pipeline 运行环境。")
     parser.parse_args([] if argv is None else argv)
     results = collect_checks()

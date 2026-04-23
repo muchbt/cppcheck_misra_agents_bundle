@@ -121,6 +121,13 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(reloaded.ROOT, REPO_ROOT)
         self.assertTrue(any(item["code"] == "python_version" for item in results))
 
+    def test_task2_cli_sources_do_not_use_pep604_optional_syntax(self) -> None:
+        doctor_source = (TOOLS_DIR / "doctor.py").read_text(encoding="utf-8")
+        pipeline_cli_source = (TOOLS_DIR / "pipeline_cli.py").read_text(encoding="utf-8")
+
+        self.assertNotIn(" | None", doctor_source)
+        self.assertNotIn(" | None", pipeline_cli_source)
+
 
 if __name__ == "__main__":
     unittest.main()
