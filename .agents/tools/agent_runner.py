@@ -9,6 +9,10 @@ from typing import Any, Dict
 from common import ROOT, RUNTIME_DIR
 from providers import get_provider
 
+SANITIZED_ENV_KEYS = {
+    "CODEX_SANDBOX_NETWORK_DISABLED",
+}
+
 
 def resolve_env_path(value: str) -> Path:
     path = Path(value)
@@ -44,6 +48,8 @@ def prepare_codex_home(env: Dict[str, str]) -> None:
 
 def build_launch_env(env_config: Dict[str, str]) -> Dict[str, str]:
     env = dict(os.environ)
+    for key in SANITIZED_ENV_KEYS:
+        env.pop(key, None)
     for key, value in env_config.items():
         env[key] = str(resolve_env_path(value))
     prepare_codex_home(env)

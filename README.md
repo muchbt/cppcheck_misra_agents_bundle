@@ -56,6 +56,7 @@
 - `prompt_via` 当前推荐 `stdin`
 - `CODEX_HOME` 这类运行目录应映射到工作区内可写路径
 - 运行时会优先复用 `~/.codex/auth.json` 和 `~/.codex/config.toml`，同步到工作区 `CODEX_HOME`
+- 运行时会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`，避免用户手动解除该环境变量
 - 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误
 
 ## 推荐用法

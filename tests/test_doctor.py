@@ -186,14 +186,14 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["level"], "error")
         self.assertEqual(result["code"], "agent_auth_missing")
 
-    def test_check_agent_network_reports_disabled_network(self) -> None:
+    def test_check_agent_network_reports_sanitized_inherited_disable_flag(self) -> None:
         config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
 
         with patch.dict(os.environ, {"CODEX_SANDBOX_NETWORK_DISABLED": "1"}, clear=False):
             result = doctor.check_agent_network(config)
 
-        self.assertEqual(result["level"], "error")
-        self.assertEqual(result["code"], "agent_network_disabled")
+        self.assertEqual(result["level"], "warning")
+        self.assertEqual(result["code"], "agent_network_env_sanitized")
 
     def test_check_custom_verification_command_reports_missing_executable(self) -> None:
         config = {"verification": {"custom_command": "missing-verify"}}

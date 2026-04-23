@@ -213,6 +213,14 @@ class AgentRunnerTests(unittest.TestCase):
             self.assertTrue((workspace_codex / "auth.json").exists())
             self.assertTrue((workspace_codex / "config.toml").exists())
 
+    def test_build_launch_env_strips_inherited_network_disable_flag(self) -> None:
+        agent_runner = importlib.import_module("agent_runner")
+
+        with patch.dict(agent_runner.os.environ, {"CODEX_SANDBOX_NETWORK_DISABLED": "1"}, clear=False):
+            env = agent_runner.build_launch_env({"CODEX_HOME": ".agents/runtime/agent-home"})
+
+        self.assertNotIn("CODEX_SANDBOX_NETWORK_DISABLED", env)
+
 
 if __name__ == "__main__":
     unittest.main()

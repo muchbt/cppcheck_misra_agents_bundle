@@ -315,10 +315,10 @@ def check_agent_network(config: Any) -> Dict[str, Any]:
 
     if os.environ.get("CODEX_SANDBOX_NETWORK_DISABLED") == "1":
         return make_result(
-            "error",
-            "agent_network_disabled",
-            "当前环境禁止 agent 访问外部网络。",
-            "检测到 CODEX_SANDBOX_NETWORK_DISABLED=1；codex exec 无法连接 OpenAI Responses websocket。",
+            "warning",
+            "agent_network_env_sanitized",
+            "检测到继承的禁网环境变量，运行时会自动剥离。",
+            "检测到 CODEX_SANDBOX_NETWORK_DISABLED=1；agent_runner 启动 codex exec 时会移除该变量。若宿主环境本身仍禁网，运行时仍可能失败。",
         )
     return make_result(
         "ok",
