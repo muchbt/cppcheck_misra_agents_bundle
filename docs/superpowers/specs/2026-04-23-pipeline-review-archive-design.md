@@ -398,3 +398,24 @@ Task 7 追加测试，覆盖：
 - `docter` 错误拼写别名已明确排除。
 - 真实链路验证已经证明，后续风险集中在通用 agent 执行层，而不是 `split/run/merge` 主流程。
 - Task 7 作为追加阶段，能保持 Task 1-6 的交付事实，同时修复执行层设计缺陷并为二期 `Claude Code` 支持预留接口。
+
+## 一期收口与二期方向
+
+截至当前实现，一期范围内的 Task 1-7 已完成，当前方案已经具备：
+
+- `oneshot` / `doctor` / `split` / `run` / `merge` 的统一入口和续跑语义
+- 面向人工 review 的中文报告与归档
+- 结构化 `agent` 配置、非交互 provider / runner、认证复用与基础阻断诊断
+
+但真实 `codex exec` session 日志进一步暴露了一个结构问题：即使主工作区可写，agent 子会话仍可能把 `.agents` 挂为只读，导致 agent 无法直接写入 `.agents/runtime/*` 的权威运行态文件。这说明当前“一边执行 agent，一边让 agent 直写权威运行态”的模型仍然过于耦合。
+
+因此，二期优先方向明确为：
+
+- 引入一个 agent 可写 staging 目录，把 agent 写入和流水线权威状态分离
+
+二期目标不是迁移整个 `.agents/runtime` 主目录，而是在保持现有权威目录、归档目录和报告目录不变的前提下：
+
+- 为 agent 提供单独的可写 staging 工作区
+- 让 provider / runner 只要求 agent 写 staging 结果
+- 由流水线在 agent 退出后把 staging 结果导入 `.agents/runtime`
+- 将“agent 输出格式”和“流水线权威状态”解耦，降低 sandbox / mount 策略变化带来的失败风险
