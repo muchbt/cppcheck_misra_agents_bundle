@@ -115,6 +115,7 @@ git commit -m "feat: add pipeline doctor diagnostics"
 - [ ] Add tests that `oneshot` defaults to resume when `.agents/runtime/progress.json` has status `ready`, `running`, `partial`, or `failed`.
 - [ ] Add tests that `oneshot --fresh` runs split and resets current runtime logs/results.
 - [ ] Add tests that resume mode does not delete existing chunk result files.
+- [ ] Add tests that resume mode rejects a conflicting explicit `--strategy` and tells the user to use `--fresh`.
 - [ ] Add tests that `--run-id` is accepted for fresh runs and rejected for resume when it differs from current progress.
 - [ ] Modify `split_cppcheck_xml.py`:
   - Add `--run-id`.
@@ -134,10 +135,12 @@ git commit -m "feat: add pipeline doctor diagnostics"
 - [ ] Implement `oneshot.py`:
   - Run basic precheck via `doctor` helpers.
   - If unfinished runtime exists, default to resume and print run ID/progress summary.
+  - If resume mode receives an explicit `--strategy` that differs from `progress["fix_strategy"]`, exit before running any stage and print a Chinese message that names both strategies and recommends `--fresh --strategy <target>`.
   - If `--fresh`, run split before run.
   - If no runtime exists, run split.
   - Then run `run`, then `merge`.
   - On failure, log event and leave runtime intact for the next resume.
+  - Keep stage execution behind a small runner function so future work can add lock files, custom run IDs, or direct function calls without changing user-facing arguments.
 - [ ] Run:
 
 ```bash
@@ -279,6 +282,14 @@ python3 .agents/tools/pipeline_cli.py oneshot --strategy conservative
 
 Expected: if runtime is unfinished, prints that it is resuming and does not delete existing result files.
 
+- [ ] Run strategy-conflict smoke:
+
+```bash
+python3 .agents/tools/pipeline_cli.py oneshot --strategy all_auto
+```
+
+Expected: if the unfinished runtime was split with `conservative`, exits before running stages and tells the user to use `--fresh --strategy all_auto`.
+
 - [ ] Verify alias rejection:
 
 ```bash
@@ -294,3 +305,16 @@ git status --short
 ```
 
 Expected: no uncommitted implementation changes.
+
+---
+
+## Future Improvements
+
+These items came from `improvements_v2.md` but are intentionally deferred because they are low priority. The current implementation should keep extension points open for them.
+
+- Add `oneshot --run-id` so users can set custom run IDs from the one-command entry. For now, only `split --run-id` is required.
+- Decide whether `oneshot` stages should remain subprocess-based or become direct function calls. Current work should hide stage execution behind a runner helper.
+- Improve `doctor` support for compound agent commands such as `python3 -m some_agent`; current work only needs a basic executable check.
+- Add a runtime lock file such as `.agents/runtime/.lock` to prevent concurrent `oneshot` processes.
+- Document that `.agents/reports/` represents the latest merge result, while `.agents/runs/<run_id>/` is the historical archive.
+- Expand verification integration tests to cover custom command success, custom command failure, missing command, and timeout behavior.

@@ -10,6 +10,7 @@
 
 - 提供 `oneshot` 入口，自动完成预检、拆分、运行、合并、归档。
 - `oneshot` 发现已有未完成运行时默认续跑，并在终端明确提示用户；只有显式 `--fresh` 才开始新运行并清空当前 runtime。
+- `oneshot` 续跑时若用户传入的 `--strategy` 与当前运行策略不一致，应提前拦截并提示使用 `--fresh` 开始新运行。
 - 首次运行或发现环境异常时，引导用户执行 `doctor` 检查环境。
 - 运行过程中显示当前阶段、chunk 进度、续跑状态和失败摘要。
 - 使用统一日志结构，避免 `run_log.jsonl` 混写不同 schema。
@@ -47,6 +48,7 @@ python3 .agents/tools/pipeline_cli.py oneshot --strategy conservative
 
 2. 检查 `.agents/runtime/progress.json`：
    - 若存在未完成运行，默认续跑，并提示当前 `run_id`、已完成 chunk、失败 chunk、剩余 chunk。
+   - 续跑时以已有 `progress.json` 的 `fix_strategy` 为准；若用户显式传入不同的 `--strategy`，直接退出，并提示使用 `--fresh --strategy <目标策略>`。
    - 若用户传入 `--fresh`，开始新运行，执行 split 并清空当前 runtime。
    - 若用户传入 `--resume`，行为与默认续跑一致，用于脚本中表达意图。
 
@@ -194,6 +196,18 @@ python3 .agents/tools/pipeline_cli.py merge
 - `merge_results.py` 拆出统计构建、中文报告生成、checklist 生成和归档函数。
 - `pipeline_cli.py` 只负责命令分发，不承载业务逻辑。
 - `oneshot.py` 负责串联流程，不复制 `split`、`run`、`merge` 的核心逻辑。
+- `oneshot.py` 的阶段执行应封装为独立 runner 接口，当前只需要满足 `split/run/merge` 串联；后续可在该接口下扩展 `--run-id` 透传、并发锁、函数调用模式或更细粒度阶段控制。
+
+## 未来改进计划
+
+以下内容不进入本次实现，但当前设计应避免阻碍二期扩展：
+
+- `oneshot --run-id`：允许通过一键入口指定自定义运行 ID。当前仅要求分步 `split --run-id` 支持自定义 ID。
+- `oneshot` 调用方式优化：当前计划不强制 subprocess 或函数调用，要求先封装阶段 runner；二期可在不影响用户参数的前提下切换实现方式。
+- 复合 agent 命令诊断：`doctor` 当前按可执行命令做基础检查；二期可支持 `python3 -m xxx` 等复合命令的结构化解析。
+- 并发运行保护：二期可加入 `.agents/runtime/.lock`，避免多个 `oneshot` 同时读写 runtime。
+- `.agents/reports/` 语义说明：二期文档可明确它始终表示最近一次 merge 结果，历史结果以 `.agents/runs/<run_id>/` 为准。
+- 更完整的验证集成测试：二期可覆盖自定义验证命令成功、失败、缺失、超时等组合场景。
 
 ## 测试策略
 
@@ -205,6 +219,7 @@ python3 .agents/tools/pipeline_cli.py merge
 - 配置缺字段和策略不一致诊断。
 - `run_log.jsonl` 每行均符合统一事件结构。
 - `oneshot` 对未完成运行默认续跑，`--fresh` 才触发重新 split。
+- `oneshot` 续跑时发现 `--strategy` 与已有运行策略不一致，应退出并提示使用 `--fresh`。
 - `run_manifest.json` 包含 `started_at`、`finished_at`、`archived_at`。
 - 报告包含高风险、需人工复核、失败、未验证和具体 issue/edit 条目。
 - 归档目录包含 manifest、reports、runtime 和 logs。
@@ -215,4 +230,5 @@ python3 .agents/tools/pipeline_cli.py merge
 - 本设计已吸收 `improvements.md` 中影响正确性和可用性的反馈。
 - 设计范围仍聚焦低风险基础增强，没有要求重写核心修复流程。
 - `oneshot` 续跑行为已明确：默认续跑并提示，`--fresh` 才开始新运行。
+- 中优先级的策略冲突检测已纳入本次计划，低优先级项已列为未来改进计划。
 - `docter` 错误拼写别名已明确排除。
