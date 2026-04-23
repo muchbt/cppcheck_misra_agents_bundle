@@ -138,10 +138,53 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
 
     agent = config.get("agent", {})
     if isinstance(agent, dict):
-        if not isinstance(agent.get("type"), str) or not agent.get("type", "").strip():
-            errors.append("agent.type must be a non-empty string")
-        if not isinstance(agent.get("command"), str) or not agent.get("command", "").strip():
-            errors.append("agent.command must be a non-empty string")
+        provider = agent.get("provider")
+        if not isinstance(provider, str) or not provider.strip():
+            errors.append("agent.provider must be a non-empty string")
+
+        launch = agent.get("launch")
+        if not isinstance(launch, dict):
+            errors.append("agent.launch must be an object")
+        else:
+            argv = launch.get("argv")
+            if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item.strip() for item in argv):
+                errors.append("agent.launch.argv must be a non-empty list of strings")
+
+            prompt_via = launch.get("prompt_via")
+            if prompt_via not in {"stdin", "arg", "file"}:
+                errors.append("agent.launch.prompt_via must be one of: stdin, arg, file")
+
+            cwd = launch.get("cwd")
+            if cwd not in {"project_root", "runtime_dir", "custom"}:
+                errors.append("agent.launch.cwd must be one of: project_root, runtime_dir, custom")
+            if cwd == "custom":
+                custom_cwd = launch.get("cwd_path")
+                if not isinstance(custom_cwd, str) or not custom_cwd.strip():
+                    errors.append("agent.launch.cwd_path must be a non-empty string when cwd is custom")
+
+            env = launch.get("env")
+            if not isinstance(env, dict) or not all(isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip() for key, value in env.items()):
+                errors.append("agent.launch.env must be an object of non-empty string pairs")
+
+            if not isinstance(launch.get("requires_tty"), bool):
+                errors.append("agent.launch.requires_tty must be a boolean")
+
+            output = launch.get("output")
+            if not isinstance(output, dict):
+                errors.append("agent.launch.output must be an object")
+            else:
+                mode = output.get("mode")
+                if mode not in {"exit_code", "stdout_json", "file"}:
+                    errors.append("agent.launch.output.mode must be one of: exit_code, stdout_json, file")
+
+        capabilities = agent.get("capabilities")
+        if not isinstance(capabilities, dict):
+            errors.append("agent.capabilities must be an object")
+        else:
+            for key in ("non_interactive", "workspace_write_required"):
+                if not isinstance(capabilities.get(key), bool):
+                    errors.append(f"agent.capabilities.{key} must be a boolean")
+
         if not isinstance(agent.get("auto_bootstrap_compat"), bool):
             errors.append("agent.auto_bootstrap_compat must be a boolean")
 
