@@ -12,6 +12,8 @@ COMMANDS = {
     "merge": ("merge_results", "Merge runtime results into reports."),
     "verify": ("verify_chunk", "Verify one chunk result."),
     "bootstrap": ("bootstrap_agents", "Generate agent compatibility files."),
+    "doctor": ("doctor", "Run pipeline diagnostics."),
+    "oneshot": ("oneshot", "Run the one-shot agent entrypoint."),
 }
 
 
@@ -27,7 +29,9 @@ def main() -> None:
     module_name = COMMANDS[args.command][0]
     module = importlib.import_module(module_name)
     sys.argv = [f"{module_name}.py", *args.args]
-    module.main()
+    result = module.main()
+    if isinstance(result, int):
+        raise SystemExit(result)
 
 
 if __name__ == "__main__":
