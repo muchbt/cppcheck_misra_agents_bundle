@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from common import (
-    CONFIG_DIR,
     REPORTS_DIR,
     RUNTIME_DIR,
     RUNS_DIR,
@@ -16,6 +15,14 @@ from common import (
     save_json,
     write_text,
 )
+
+def build_report_paths() -> Dict[str, str]:
+    return {
+        "final_summary_md": ".agents/reports/final_summary.md",
+        "final_summary_json": ".agents/reports/final_summary.json",
+        "review_checklist_md": ".agents/reports/review_checklist.md",
+        "run_manifest_json": ".agents/reports/run_manifest.json",
+    }
 
 
 def collect_summary(
@@ -242,12 +249,7 @@ def write_run_manifest(archive_dir: Path, summary: Dict[str, Any], progress: Dic
         "chunk_counts": summary.get("chunk_counts", {}),
         "completed_chunks": summary.get("completed_chunks", []),
         "failed_chunks": summary.get("failed_chunks", []),
-        "report_paths": {
-            "final_summary_md": ".agents/reports/final_summary.md",
-            "final_summary_json": ".agents/reports/final_summary.json",
-            "review_checklist_md": ".agents/reports/review_checklist.md",
-            "run_manifest_json": ".agents/reports/run_manifest.json",
-        },
+        "report_paths": build_report_paths(),
     }
     save_json(archive_dir / "reports" / "run_manifest.json", manifest)
     return manifest
@@ -255,7 +257,6 @@ def write_run_manifest(archive_dir: Path, summary: Dict[str, Any], progress: Dic
 
 def main() -> int:
     ensure_dirs()
-    config = load_json(CONFIG_DIR / "pipeline.json", {})
     issue_status = load_json(RUNTIME_DIR / "issue_status.json", {})
     file_change_index = load_json(RUNTIME_DIR / "file_change_index.json", {})
     progress = load_json(RUNTIME_DIR / "progress.json", {})

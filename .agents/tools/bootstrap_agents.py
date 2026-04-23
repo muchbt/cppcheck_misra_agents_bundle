@@ -17,6 +17,24 @@ from common import (
     write_text,
 )
 
+def ensure_parent_dir(path: Path) -> None:
+    parent = path.parent
+    if parent.exists() and parent.is_dir():
+        return
+
+    current = parent
+    while current != ROOT and not current.exists():
+        current = current.parent
+
+    if current.exists() and current.is_file():
+        if current.name == ".codex" and current.stat().st_size == 0:
+            current.unlink()
+            current.mkdir(parents=True, exist_ok=True)
+        else:
+            raise SystemExit(f"Cannot create directory '{parent}': '{current}' is a file.")
+
+    parent.mkdir(parents=True, exist_ok=True)
+
 def build_agents_md_block() -> str:
     return """## Static analysis / cppcheck / MISRA workflow
 
@@ -36,6 +54,10 @@ def build_agents_md_block() -> str:
   - AUTOSAR RTE/MCAL/BSW high-risk paths
   - public interfaces / propagated header changes
 - In all_auto mode, high-risk issues may be fixed, but must be marked with risk_level, risk_reason, and review_required_after_fix=true
+- Prefer completing work inside the current workspace
+- If one issue is blocked, record the blocker and continue with other safe issues in the same chunk
+- Do not wait indefinitely for sandbox, tool, or environment side effects; write blockers into runtime state and result files
+- Ask users only when explicit authorization is required and no safe workspace-only path exists
 - After edits, update:
   - .agents/runtime/issue_status.json
   - .agents/runtime/file_change_index.json
@@ -68,6 +90,7 @@ def sync_skill(mode: str, dry_run: bool) -> None:
     changed = src != old
     print(f"[SKILL.md] target={skill_target} changed={changed} mode={mode} dry_run={dry_run}")
     if changed and not dry_run:
+        ensure_parent_dir(skill_target)
         write_text(skill_target, src)
 
 def main() -> None:

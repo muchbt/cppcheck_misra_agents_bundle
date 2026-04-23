@@ -140,8 +140,6 @@ class ReportsArchiveTests(unittest.TestCase):
             ), patch.object(
                 merge_results, "RUNS_DIR", runs_dir
             ), patch.object(
-                merge_results, "CONFIG_DIR", config_dir
-            ), patch.object(
                 merge_results, "now_iso", return_value="2026-04-23T10:30:00+08:00"
             ):
                 rc = merge_results.main()
