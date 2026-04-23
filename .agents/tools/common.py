@@ -25,6 +25,26 @@ RUN_ID_RE = re.compile(r"^(?P<date>\d{8})-(?P<seq>\d{3})$")
 AUTO_BLOCK_BEGIN = "<!-- BEGIN AUTO-GENERATED: cppcheck-misra-fix -->"
 AUTO_BLOCK_END = "<!-- END AUTO-GENERATED: cppcheck-misra-fix -->"
 
+
+def resolve_path_under_root(value: str, root: Path = ROOT) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = root / path
+    resolved_root = root.resolve(strict=False)
+    resolved_path = path.resolve(strict=False)
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError(f"path must stay under project root: {value}") from exc
+    return resolved_path
+
+
+def resolve_agent_staging_dir(config: Dict[str, Any], root: Path = ROOT) -> Path:
+    staging_dir = str(config.get("agent", {}).get("staging_dir", "")).strip()
+    if not staging_dir:
+        raise ValueError("agent.staging_dir must be a non-empty string")
+    return resolve_path_under_root(staging_dir, root=root)
+
 def ensure_dirs() -> None:
     for path in [
         AGENTS_DIR,
@@ -141,6 +161,14 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
         provider = agent.get("provider")
         if not isinstance(provider, str) or not provider.strip():
             errors.append("agent.provider must be a non-empty string")
+        staging_dir = agent.get("staging_dir")
+        if not isinstance(staging_dir, str) or not staging_dir.strip():
+            errors.append("agent.staging_dir must be a non-empty string")
+        else:
+            try:
+                resolve_agent_staging_dir(config)
+            except ValueError:
+                errors.append("agent.staging_dir must resolve under project root")
 
         launch = agent.get("launch")
         if not isinstance(launch, dict):

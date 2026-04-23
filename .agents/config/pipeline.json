@@ -42,6 +42,7 @@
   },
   "agent": {
     "provider": "codex",
+    "staging_dir": ".agents/staging",
     "launch": {
       "argv": [
         "codex",
