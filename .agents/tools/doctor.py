@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import shlex
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -105,22 +106,37 @@ def check_pipeline_config(config: Any) -> Dict[str, Any]:
     )
 
 
-def _command_executable(command: str) -> str:
-    parts = command.split()
-    return parts[0] if parts else ""
+def _command_tokens(command: str) -> List[str]:
+    return shlex.split(command)
 
 
 def check_agent_command(config: Any) -> Dict[str, Any]:
     agent = config.get("agent", {}) if isinstance(config, dict) else {}
     command = agent.get("command", "") if isinstance(agent, dict) else ""
-    executable = _command_executable(command)
-    if not executable:
+    if not isinstance(command, str) or not command.strip():
         return make_result(
             "error",
             "agent_command_missing",
             "agent.command 为空。",
             "无法判断 agent 命令是否可执行。",
         )
+    try:
+        parts = _command_tokens(command)
+    except ValueError as exc:
+        return make_result(
+            "error",
+            "agent_command_invalid_syntax",
+            "agent.command 命令语法无效。",
+            f"命令: {command}; 详情: {exc}",
+        )
+    if len(parts) > 1:
+        return make_result(
+            "warning",
+            "agent_command_compound",
+            "agent.command 包含多个 token。",
+            "当前版本只完整检查简单可执行文件名；复合命令请结合实际 shell 语义人工确认。",
+        )
+    executable = parts[0] if parts else ""
     if shutil.which(executable) is None:
         return make_result(
             "error",
@@ -147,7 +163,23 @@ def check_custom_verification_command(config: Any) -> Dict[str, Any]:
             "跳过该项检查。",
         )
 
-    executable = _command_executable(command.strip())
+    try:
+        parts = _command_tokens(command.strip())
+    except ValueError as exc:
+        return make_result(
+            "error",
+            "custom_verification_command_invalid_syntax",
+            "自定义验证命令语法无效。",
+            f"命令: {command}; 详情: {exc}",
+        )
+    if len(parts) > 1:
+        return make_result(
+            "warning",
+            "custom_verification_command_compound",
+            "自定义验证命令包含多个 token。",
+            "当前版本只完整检查简单可执行文件名；复合命令请结合实际 shell 语义人工确认。",
+        )
+    executable = parts[0] if parts else ""
     if shutil.which(executable) is None:
         return make_result(
             "warning",
@@ -281,14 +313,18 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
     results = [
         check_python_version(),
         check_cppcheck_xml(cppcheck_xml_path),
-        check_agent_command(config),
-        check_custom_verification_command(config),
     ]
 
     if config_error is not None:
         results.insert(2, config_error)
     else:
         results.insert(2, check_pipeline_config(config))
+        results.extend(
+            [
+                check_agent_command(config),
+                check_custom_verification_command(config),
+            ]
+        )
 
     if progress_error is not None:
         results.insert(4, progress_error)

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import json
 import os
 import sys
 import tempfile
@@ -15,7 +14,6 @@ TOOLS_DIR = REPO_ROOT / ".agents" / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-import common  # type: ignore  # noqa: E402
 import doctor  # type: ignore  # noqa: E402
 
 
@@ -100,6 +98,24 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["level"], "error")
         self.assertEqual(result["code"], "agent_command_missing")
 
+    def test_check_agent_command_reports_compound_command_warning(self) -> None:
+        config = {"agent": {"command": "python3 -m module"}}
+
+        with patch.object(doctor.shutil, "which") as which:
+            result = doctor.check_agent_command(config)
+
+        which.assert_not_called()
+        self.assertEqual(result["level"], "warning")
+        self.assertEqual(result["code"], "agent_command_compound")
+
+    def test_check_agent_command_reports_invalid_syntax_error(self) -> None:
+        config = {"agent": {"command": "\"unterminated"}}
+
+        result = doctor.check_agent_command(config)
+
+        self.assertEqual(result["level"], "error")
+        self.assertEqual(result["code"], "agent_command_invalid_syntax")
+
     def test_check_custom_verification_command_reports_missing_executable(self) -> None:
         config = {"verification": {"custom_command": "missing-verify"}}
 
@@ -108,6 +124,16 @@ class DoctorTests(unittest.TestCase):
 
         self.assertEqual(result["level"], "warning")
         self.assertEqual(result["code"], "custom_verification_command_missing")
+
+    def test_check_custom_verification_command_reports_compound_command_warning(self) -> None:
+        config = {"verification": {"custom_command": "python3 -m verify"}}
+
+        with patch.object(doctor.shutil, "which") as which:
+            result = doctor.check_custom_verification_command(config)
+
+        which.assert_not_called()
+        self.assertEqual(result["level"], "warning")
+        self.assertEqual(result["code"], "custom_verification_command_compound")
 
     def test_collect_checks_uses_repo_root_from_any_cwd(self) -> None:
         original_cwd = Path.cwd()
@@ -148,6 +174,36 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("progress.json", progress_result["detail"])
         self.assertNotIn("runtime_strategy_ok", [item["code"] for item in results])
         self.assertNotIn("unfinished_run_absent", [item["code"] for item in results])
+
+    def test_collect_checks_reports_malformed_pipeline_json_without_command_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_dir = root / ".agents" / "config"
+            runtime_dir = root / ".agents" / "runtime"
+            prompts_dir = root / ".agents" / "prompts"
+            runs_dir = root / ".agents" / "runs"
+
+            config_dir.mkdir(parents=True)
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            runs_dir.mkdir(parents=True)
+
+            (config_dir / "pipeline.json").write_text("{", encoding="utf-8")
+            (runtime_dir / "progress.json").write_text("{}", encoding="utf-8")
+            (prompts_dir / "fix_chunk_prompt.txt").write_text("short prompt", encoding="utf-8")
+
+            results = doctor.collect_checks(root=root)
+
+        codes = [item["code"] for item in results]
+        self.assertIn("pipeline_config_invalid", codes)
+        self.assertNotIn("agent_command_ok", codes)
+        self.assertNotIn("agent_command_missing", codes)
+        self.assertNotIn("agent_command_compound", codes)
+        self.assertNotIn("agent_command_invalid_syntax", codes)
+        self.assertNotIn("custom_verification_command_ok", codes)
+        self.assertNotIn("custom_verification_command_missing", codes)
+        self.assertNotIn("custom_verification_command_compound", codes)
+        self.assertNotIn("custom_verification_command_invalid_syntax", codes)
 
     def test_task2_cli_sources_do_not_use_pep604_optional_syntax(self) -> None:
         doctor_source = (TOOLS_DIR / "doctor.py").read_text(encoding="utf-8")
