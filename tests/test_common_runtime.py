@@ -64,6 +64,18 @@ class CommonRuntimeTests(unittest.TestCase):
         self.assertIn("chunking.max_issues_per_chunk must be a positive integer", errors)
         self.assertEqual(warnings, [])
 
+    def test_validate_pipeline_config_rejects_bool_chunk_sizes(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        broken = deepcopy(config)
+        broken["chunking"]["max_issues_per_chunk"] = True
+        broken["chunking"]["max_files_per_chunk"] = False
+
+        errors, warnings = common.validate_pipeline_config(broken)
+
+        self.assertIn("chunking.max_issues_per_chunk must be a positive integer", errors)
+        self.assertIn("chunking.max_files_per_chunk must be a positive integer", errors)
+        self.assertEqual(warnings, [])
+
     def test_append_pipeline_event_writes_stable_jsonl_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime_dir = Path(tmp)
@@ -143,6 +155,22 @@ class CommonRuntimeTests(unittest.TestCase):
             )
             self.assertGreater(common.archive_size_bytes(archive_dir), 0)
             self.assertEqual(common.archive_size_bytes(root / "missing"), 0)
+
+    def test_archive_copy_preserves_empty_runtime_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            reports_dir = root / "reports"
+            archive_dir = root / "archive"
+
+            (runtime_dir / "chunks").mkdir(parents=True)
+            (runtime_dir / "results").mkdir(parents=True)
+            reports_dir.mkdir()
+
+            common.copy_current_run_archive(runtime_dir, reports_dir, archive_dir)
+
+            self.assertTrue((archive_dir / "runtime" / "chunks").is_dir())
+            self.assertTrue((archive_dir / "runtime" / "results").is_dir())
 
 
 if __name__ == "__main__":

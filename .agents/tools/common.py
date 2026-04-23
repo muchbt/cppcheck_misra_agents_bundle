@@ -93,7 +93,7 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
     if isinstance(chunking, dict):
         for key in ("max_issues_per_chunk", "max_files_per_chunk"):
             value = chunking.get(key)
-            if not isinstance(value, int) or value <= 0:
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 errors.append(f"chunking.{key} must be a positive integer")
         for key in ("prefer_group_by_file", "split_high_risk_alone"):
             value = chunking.get(key)
@@ -204,11 +204,13 @@ def copy_current_run_archive(runtime_dir: Path, reports_dir: Path, archive_dir: 
                 shutil.copy2(path, runtime_archive / path.name)
         for name in ("chunks", "results"):
             src_dir = runtime_dir / name
+            dest_dir = runtime_archive / name
+            dest_dir.mkdir(parents=True, exist_ok=True)
             if src_dir.exists():
                 for src in src_dir.rglob("*"):
                     if src.is_dir():
                         continue
-                    dest = runtime_archive / name / src.relative_to(src_dir)
+                    dest = dest_dir / src.relative_to(src_dir)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dest)
         for name in ("pipeline.log", "run_log.jsonl"):
