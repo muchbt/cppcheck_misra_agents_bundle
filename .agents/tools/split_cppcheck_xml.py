@@ -1,20 +1,26 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from common import (
+    RUN_ID_RE,
     CONFIG_DIR,
     CHUNKS_DIR,
     RESULTS_DIR,
     RUNTIME_DIR,
+    append_pipeline_event,
     build_issue_key,
     ensure_dirs,
     load_json,
+    next_run_id,
+    now_iso,
     normalize_msg,
+    reset_runtime_logs,
     save_json,
 )
 
@@ -24,7 +30,7 @@ def is_misra_rule(rule_id: str, detect_prefixes: List[str]) -> bool:
     rid = (rule_id or "").lower()
     return any(rid.startswith(prefix.lower()) for prefix in detect_prefixes)
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Split cppcheck XML into agent-ready chunks.")
     parser.add_argument(
         "--strategy",
@@ -32,7 +38,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override fix_strategy.mode from pipeline.json for this split run.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Override run ID for this fresh split, format YYYYMMDD-XXX.",
+    )
+    return parser.parse_args(sys.argv[1:] if argv is None else argv)
 
 def resolve_strategy(config: Dict[str, Any], override: Optional[str]) -> str:
     if override:
@@ -42,6 +53,13 @@ def resolve_strategy(config: Dict[str, Any], override: Optional[str]) -> str:
         valid = ", ".join(sorted(VALID_STRATEGIES))
         raise SystemExit(f"Invalid fix_strategy.mode '{mode}'. Valid values: {valid}.")
     return mode
+
+def resolve_cppcheck_xml_path(config: Dict[str, Any]) -> Path:
+    configured = str(config.get("input", {}).get("cppcheck_xml", "cppcheck.xml")).strip() or "cppcheck.xml"
+    xml_path = Path(configured)
+    if xml_path.is_absolute():
+        return xml_path
+    return CONFIG_DIR.parents[1] / xml_path
 
 def as_list(value: Any) -> List[str]:
     if value is None:
@@ -200,15 +218,31 @@ def clear_previous_run_files() -> None:
         for path in RESULTS_DIR.glob(pattern):
             path.unlink()
 
-def main() -> None:
-    args = parse_args()
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
     config = load_json(CONFIG_DIR / "pipeline.json", {})
     policy = load_json(CONFIG_DIR / "rule_policy.json", {})
     strategy = resolve_strategy(config, args.strategy)
-    xml_file = Path(config["input"]["cppcheck_xml"])
+    run_id = args.run_id or next_run_id()
+    if not RUN_ID_RE.match(run_id):
+        raise SystemExit(f"Invalid --run-id '{run_id}'. Expected format: YYYYMMDD-XXX.")
+    started_at = now_iso()
+    xml_file = resolve_cppcheck_xml_path(config)
 
     issues = parse_xml(xml_file, config, policy, strategy)
     ensure_dirs()
+    reset_runtime_logs(RUNTIME_DIR)
+    append_pipeline_event(
+        RUNTIME_DIR,
+        event="split_started",
+        stage="split",
+        message="开始拆分 cppcheck.xml。",
+        data={
+            "run_id": run_id,
+            "xml_file": str(xml_file).replace("\\", "/"),
+            "strategy": strategy,
+        },
+    )
     clear_previous_run_files()
     save_json(RUNTIME_DIR / "issues_master.json", issues)
 
@@ -253,6 +287,8 @@ def main() -> None:
         save_json(CHUNKS_DIR / f"chunk_{idx:03d}.json", payload)
 
     progress = {
+        "run_id": run_id,
+        "started_at": started_at,
         "xml_file": str(xml_file).replace("\\", "/"),
         "total_chunks": total,
         "completed_chunks": [],
@@ -262,8 +298,21 @@ def main() -> None:
         "status": "ready",
     }
     save_json(RUNTIME_DIR / "progress.json", progress)
+    append_pipeline_event(
+        RUNTIME_DIR,
+        event="split_completed",
+        stage="split",
+        message="拆分完成。",
+        data={
+            "run_id": run_id,
+            "total_issues": len(issues),
+            "total_chunks": total,
+            "strategy": strategy,
+        },
+    )
 
-    print(f"Generated {total} chunks from {len(issues)} issues with strategy '{strategy}'.")
+    print(f"Generated {total} chunks from {len(issues)} issues with strategy '{strategy}' (run_id={run_id}).")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main(sys.argv[1:]))

@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Iterable, Optional, Set
+from typing import Iterable, List, Optional, Set
 
 from agent_adapter_codex import run_chunk
-from common import RESULTS_DIR, RUNTIME_DIR, append_jsonl, load_json, save_json
+from common import RESULTS_DIR, RUNTIME_DIR, append_pipeline_event, load_json, now_iso, save_json
+from verify_chunk import verify_chunk_result
 
-TZ = timezone(timedelta(hours=8))
 VALID_STRATEGIES = {"conservative", "all_auto"}
 
 
-def now() -> str:
-    return datetime.now(TZ).isoformat()
-
-
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Run chunk-based agent fixing pipeline with optional chunk limit, "
@@ -63,7 +58,7 @@ def parse_args() -> argparse.Namespace:
             "split_cppcheck_xml.py."
         ),
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def normalize_rule_set(rule_ids: Iterable[str]) -> Set[str]:
@@ -119,13 +114,15 @@ def next_chunk(progress: dict, selected_rules: Set[str], misra_only: bool, inclu
 
 
 def mark_failure(progress: dict, idx: int, returncode: int, attempt: int, exhausted: bool) -> None:
-    append_jsonl(
-        RUNTIME_DIR / "run_log.jsonl",
-        {
-            "chunk_index": idx,
-            "status": "failed" if exhausted else "retry_scheduled",
-            "finished_at": now(),
-            "returncode": returncode,
+    append_pipeline_event(
+        RUNTIME_DIR,
+        event="chunk_failed" if exhausted else "chunk_retry_scheduled",
+        stage="run",
+        level="error" if exhausted else "warning",
+        message=f"chunk {idx} 执行失败。" if exhausted else f"chunk {idx} 执行失败，准备重试。",
+        chunk_index=idx,
+        returncode=returncode,
+        data={
             "attempt": attempt,
             "exhausted": exhausted,
         },
@@ -135,8 +132,8 @@ def mark_failure(progress: dict, idx: int, returncode: int, attempt: int, exhaus
         progress["failed_chunks"].append(idx)
 
 
-def main() -> None:
-    args = parse_args()
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
     selected_rules = normalize_rule_set(args.rule_id)
 
     progress_path = RUNTIME_DIR / "progress.json"
@@ -163,6 +160,16 @@ def main() -> None:
         "strategy": requested_strategy,
     }
     save_json(progress_path, progress)
+    append_pipeline_event(
+        RUNTIME_DIR,
+        event="run_started",
+        stage="run",
+        message="开始执行 run 阶段。",
+        data={
+            "filters": progress["last_run_filters"],
+            "total_chunks": int(progress.get("total_chunks", 0)),
+        },
+    )
 
     processed_this_run = 0
 
@@ -170,19 +177,53 @@ def main() -> None:
         if args.max_chunks > 0 and processed_this_run >= args.max_chunks:
             progress["status"] = "partial"
             save_json(progress_path, progress)
+            append_pipeline_event(
+                RUNTIME_DIR,
+                event="run_partial",
+                stage="run",
+                level="warning",
+                message="达到 --max-chunks 限制，run 阶段部分完成。",
+                data={
+                    "processed": processed_this_run,
+                    "max_chunks": args.max_chunks,
+                },
+            )
             print(f"Stopped after processing {processed_this_run} chunk(s) due to --max-chunks.")
-            return
+            return 0
 
         idx = next_chunk(progress, selected_rules, args.misra_only, args.include_failed)
         if idx is None:
             progress["status"] = "done"
             save_json(progress_path, progress)
+            append_pipeline_event(
+                RUNTIME_DIR,
+                event="run_completed",
+                stage="run",
+                message="run 阶段已完成，无可处理 chunk。",
+                data={
+                    "processed": processed_this_run,
+                    "completed_chunks": len(progress.get("completed_chunks", [])),
+                    "failed_chunks": len(progress.get("failed_chunks", [])),
+                },
+            )
             print("No more eligible chunks to process.")
-            return
+            return 0
 
         progress["current_chunk"] = idx
-        progress["last_chunk_started_at"] = now()
+        progress["last_chunk_started_at"] = now_iso()
         save_json(progress_path, progress)
+        total = int(progress.get("total_chunks", 0))
+        print(f"正在处理 chunk {idx}/{total}")
+        append_pipeline_event(
+            RUNTIME_DIR,
+            event="chunk_started",
+            stage="run",
+            message=f"开始处理 chunk {idx}。",
+            chunk_index=idx,
+            data={
+                "total_chunks": total,
+            },
+        )
 
         max_attempts = max(1, args.retry_failed + 1)
         success = False
@@ -199,13 +240,18 @@ def main() -> None:
                     progress["completed_chunks"].append(idx)
                 if idx in progress["failed_chunks"]:
                     progress["failed_chunks"].remove(idx)
-                append_jsonl(
-                    RUNTIME_DIR / "run_log.jsonl",
-                    {
-                        "chunk_index": idx,
-                        "status": "completed",
-                        "finished_at": now(),
+                verification = verify_chunk_result(idx)
+                append_pipeline_event(
+                    RUNTIME_DIR,
+                    event="chunk_completed",
+                    stage="run",
+                    message=f"chunk {idx} 处理完成。",
+                    chunk_index=idx,
+                    returncode=rc,
+                    data={
                         "attempt": attempt,
+                        "verification_passed": bool(verification.get("passed")),
+                        "verification_mode": verification.get("mode", ""),
                     },
                 )
                 break
@@ -216,7 +262,7 @@ def main() -> None:
 
         if not success:
             progress["status"] = "failed"
-            progress["last_chunk_finished_at"] = now()
+            progress["last_chunk_finished_at"] = now_iso()
             progress["last_failure"] = {
                 "chunk_index": idx,
                 "returncode": last_rc,
@@ -224,12 +270,12 @@ def main() -> None:
             }
             save_json(progress_path, progress)
             print(f"Chunk {idx} failed after {max_attempts} attempt(s).")
-            return
+            return 1
 
         processed_this_run += 1
-        progress["last_chunk_finished_at"] = now()
+        progress["last_chunk_finished_at"] = now_iso()
         save_json(progress_path, progress)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
