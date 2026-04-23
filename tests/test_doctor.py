@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import sys
 import tempfile
@@ -88,6 +89,36 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["level"], "warning")
         self.assertEqual(result["code"], "prompt_too_long")
         self.assertIn("提示词", result["message"])
+
+    def test_collect_checks_uses_configured_cppcheck_xml_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_dir = root / ".agents" / "config"
+            runtime_dir = root / ".agents" / "runtime"
+            prompts_dir = root / ".agents" / "prompts"
+            scan_dir = root / "scan"
+
+            config_dir.mkdir(parents=True)
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            scan_dir.mkdir(parents=True)
+
+            config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+            config["input"]["cppcheck_xml"] = "scan/custom.xml"
+            (config_dir / "pipeline.json").write_text(json.dumps(config), encoding="utf-8")
+            (runtime_dir / "progress.json").write_text("{}", encoding="utf-8")
+            (prompts_dir / "fix_chunk_prompt.txt").write_text("short prompt", encoding="utf-8")
+            (scan_dir / "custom.xml").write_text(
+                "<results><errors><error id=\"misra-c2012-1.1\" severity=\"style\" /></errors></results>",
+                encoding="utf-8",
+            )
+
+            with patch.object(doctor.shutil, "which", return_value="/usr/bin/codex"):
+                results = doctor.collect_checks(root=root)
+
+        cppcheck_result = next(item for item in results if item["code"].startswith("cppcheck_xml"))
+        self.assertEqual(cppcheck_result["code"], "cppcheck_xml_ok")
+        self.assertIn("scan/custom.xml", cppcheck_result["detail"])
 
     def test_check_agent_command_reports_missing_executable(self) -> None:
         config = {"agent": {"command": "missing-codex"}}

@@ -280,9 +280,20 @@ def check_prompt_length(path: Path) -> Dict[str, Any]:
     )
 
 
+def resolve_cppcheck_xml_path(root: Path, config: Any) -> Path:
+    configured = "cppcheck.xml"
+    if isinstance(config, dict):
+        input_cfg = config.get("input", {})
+        if isinstance(input_cfg, dict):
+            value = input_cfg.get("cppcheck_xml")
+            if isinstance(value, str) and value.strip():
+                configured = value.strip()
+    path = Path(configured)
+    return path if path.is_absolute() else root / path
+
+
 def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
     config_path = root / ".agents" / "config" / "pipeline.json"
-    cppcheck_xml_path = root / "cppcheck.xml"
     progress_path = root / ".agents" / "runtime" / "progress.json"
     prompt_path = root / ".agents" / "prompts" / "fix_chunk_prompt.txt"
     runs_dir = root / ".agents" / "runs"
@@ -312,7 +323,7 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
 
     results = [
         check_python_version(),
-        check_cppcheck_xml(cppcheck_xml_path),
+        check_cppcheck_xml(resolve_cppcheck_xml_path(root, config)),
     ]
 
     if config_error is not None:
