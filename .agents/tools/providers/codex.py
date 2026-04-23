@@ -62,8 +62,11 @@ def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str
     launch = config["agent"]["launch"]
     chunk_index = int(chunk.get("chunk_index", 0))
     staging_paths = build_chunk_staging_paths(config, chunk_index)
+    argv = list(launch["argv"])
+    if "--add-dir" not in argv:
+        argv.extend(["--add-dir", str(staging_paths["chunk_dir"])])
     return {
-        "argv": list(launch["argv"]),
+        "argv": argv,
         "prompt_via": launch["prompt_via"],
         "cwd_mode": launch["cwd"],
         "env": dict(launch.get("env", {})),

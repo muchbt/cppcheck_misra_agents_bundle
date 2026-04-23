@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
 from agent_runner import run_chunk_agent
@@ -237,7 +238,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             last_rc = rc
             last_error_kind = str(result.get("error_kind", "")).strip()
             result_json = RESULTS_DIR / f"chunk_{idx:03d}_result.json"
-            success = rc == 0 and result_json.exists()
+            imported_paths = result.get("imported_paths", {})
+            imported_result_json = None
+            if isinstance(imported_paths, dict):
+                imported_path_value = imported_paths.get("chunk_result_json_path")
+                if imported_path_value:
+                    imported_result_json = Path(str(imported_path_value))
+            success = rc == 0 and (
+                (imported_result_json is not None and imported_result_json.exists())
+                or result_json.exists()
+            )
 
             if success:
                 if idx not in progress["completed_chunks"]:
@@ -256,6 +266,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         "attempt": attempt,
                         "verification_passed": bool(verification.get("passed")),
                         "verification_mode": verification.get("mode", ""),
+                        "imported_result_json": str(imported_result_json) if imported_result_json is not None else "",
                     },
                 )
                 break

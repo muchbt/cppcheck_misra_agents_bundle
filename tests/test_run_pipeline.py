@@ -119,13 +119,17 @@ class SplitAndRunPipelineTests(unittest.TestCase):
             )
 
             def fake_run_chunk_agent(config: dict, chunk: dict) -> dict:
-                common.save_json(results_dir / "chunk_001_result.json", {"chunk_index": chunk["chunk_index"]})
+                result_path = results_dir / "chunk_001_result.json"
+                common.save_json(result_path, {"chunk_index": chunk["chunk_index"]})
                 return {
                     "returncode": 0,
                     "stdout": "",
                     "stderr": "",
                     "error_kind": "",
                     "prompt": "prompt body",
+                    "imported_paths": {
+                        "chunk_result_json_path": result_path,
+                    },
                 }
 
             stdout = io.StringIO()
@@ -157,6 +161,7 @@ class SplitAndRunPipelineTests(unittest.TestCase):
             self.assertIn("chunk_completed", [item["event"] for item in events])
             completed = next(item for item in events if item["event"] == "chunk_completed")
             self.assertTrue(completed["data"]["verification_passed"])
+            self.assertEqual(str(results_dir / "chunk_001_result.json"), completed["data"]["imported_result_json"])
 
 
 if __name__ == "__main__":

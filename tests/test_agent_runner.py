@@ -113,6 +113,7 @@ class CodexProviderTests(unittest.TestCase):
                 spec = codex_provider.build_launch_spec(config, chunk)
 
         self.assertEqual(spec["argv"][:3], ["codex", "exec", "--full-auto"])
+        self.assertEqual(spec["argv"][3:5], ["--add-dir", str(staging_dir / "chunk_001")])
         self.assertEqual(spec["prompt_via"], "stdin")
         self.assertEqual(spec["cwd_mode"], "project_root")
         self.assertFalse(spec["requires_tty"])

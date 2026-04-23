@@ -174,6 +174,24 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["level"], "error")
         self.assertEqual(result["code"], "agent_launch_env_unwritable")
 
+    def test_check_agent_staging_dir_rejects_unwritable_dir(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+
+        with patch.object(doctor, "_ensure_writable_dir", return_value="permission denied"):
+            result = doctor.check_agent_staging_dir(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "error")
+        self.assertEqual(result["code"], "agent_staging_dir_unwritable")
+
+    def test_check_agent_staging_dir_reports_ok(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+
+        result = doctor.check_agent_staging_dir(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_staging_dir_ok")
+        self.assertIn("只写 staging", result["detail"])
+
     def test_check_agent_auth_reports_missing_auth(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -16,6 +16,7 @@ from common import (
     archive_size_bytes,
     load_json,
     read_text,
+    resolve_agent_staging_dir,
     validate_pipeline_config,
 )
 
@@ -247,6 +248,34 @@ def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
         "agent_launch_ok",
         "agent 启动配置适合非交互执行。",
         f"provider: {provider_name}; 命令: {' '.join(argv)}; prompt_via: {prompt_via}",
+    )
+
+
+def check_agent_staging_dir(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    try:
+        staging_dir = resolve_agent_staging_dir(config, root=root)
+    except ValueError as exc:
+        return make_result(
+            "error",
+            "agent_staging_dir_invalid",
+            "agent.staging_dir 无效。",
+            str(exc),
+        )
+
+    error = _ensure_writable_dir(staging_dir)
+    if error:
+        return make_result(
+            "error",
+            "agent_staging_dir_unwritable",
+            "agent staging 目录不可写。",
+            f"路径: {staging_dir}; 详情: {error}",
+        )
+
+    return make_result(
+        "ok",
+        "agent_staging_dir_ok",
+        "agent staging 目录可写。",
+        f"路径: {staging_dir}; agent 只写 staging，权威 runtime 由主流程导入维护。",
     )
 
 
@@ -509,6 +538,7 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
         results.extend(
             [
                 check_agent_launch(config, root),
+                check_agent_staging_dir(config, root),
                 check_agent_auth(config, root),
                 check_agent_network(config),
                 check_custom_verification_command(config),
