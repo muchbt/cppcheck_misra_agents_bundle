@@ -120,32 +120,59 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(cppcheck_result["code"], "cppcheck_xml_ok")
         self.assertIn("scan/custom.xml", cppcheck_result["detail"])
 
-    def test_check_agent_command_reports_missing_executable(self) -> None:
-        config = {"agent": {"command": "missing-codex"}}
+    def test_check_agent_launch_rejects_missing_executable(self) -> None:
+        config = {
+            "agent": {
+                "provider": "codex",
+                "launch": {
+                    "argv": ["missing-codex", "exec", "--full-auto"],
+                    "prompt_via": "stdin",
+                    "cwd": "project_root",
+                    "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
+                    "requires_tty": False,
+                    "output": {"mode": "exit_code"},
+                },
+                "capabilities": {"non_interactive": True, "workspace_write_required": True},
+                "auto_bootstrap_compat": True,
+            }
+        }
 
         with patch.object(doctor.shutil, "which", return_value=None):
-            result = doctor.check_agent_command(config)
+            result = doctor.check_agent_launch(config, root=REPO_ROOT)
 
         self.assertEqual(result["level"], "error")
-        self.assertEqual(result["code"], "agent_command_missing")
+        self.assertEqual(result["code"], "agent_launch_executable_missing")
 
-    def test_check_agent_command_reports_compound_command_warning(self) -> None:
-        config = {"agent": {"command": "python3 -m module"}}
+    def test_check_agent_launch_rejects_interactive_codex(self) -> None:
+        config = {
+            "agent": {
+                "provider": "codex",
+                "launch": {
+                    "argv": ["codex"],
+                    "prompt_via": "arg",
+                    "cwd": "project_root",
+                    "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
+                    "requires_tty": True,
+                    "output": {"mode": "exit_code"},
+                },
+                "capabilities": {"non_interactive": False, "workspace_write_required": True},
+                "auto_bootstrap_compat": True,
+            }
+        }
 
-        with patch.object(doctor.shutil, "which") as which:
-            result = doctor.check_agent_command(config)
-
-        which.assert_not_called()
-        self.assertEqual(result["level"], "warning")
-        self.assertEqual(result["code"], "agent_command_compound")
-
-    def test_check_agent_command_reports_invalid_syntax_error(self) -> None:
-        config = {"agent": {"command": "\"unterminated"}}
-
-        result = doctor.check_agent_command(config)
-
+        result = doctor.check_agent_launch(config, root=REPO_ROOT)
         self.assertEqual(result["level"], "error")
-        self.assertEqual(result["code"], "agent_command_invalid_syntax")
+        self.assertEqual(result["code"], "agent_launch_interactive_not_supported")
+
+    def test_check_agent_launch_rejects_unwritable_env_dir(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+
+        with patch.object(doctor.shutil, "which", return_value="/usr/bin/codex"), patch.object(
+            doctor, "_ensure_writable_dir", return_value="permission denied"
+        ):
+            result = doctor.check_agent_launch(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "error")
+        self.assertEqual(result["code"], "agent_launch_env_unwritable")
 
     def test_check_custom_verification_command_reports_missing_executable(self) -> None:
         config = {"verification": {"custom_command": "missing-verify"}}
@@ -227,10 +254,9 @@ class DoctorTests(unittest.TestCase):
 
         codes = [item["code"] for item in results]
         self.assertIn("pipeline_config_invalid", codes)
-        self.assertNotIn("agent_command_ok", codes)
-        self.assertNotIn("agent_command_missing", codes)
-        self.assertNotIn("agent_command_compound", codes)
-        self.assertNotIn("agent_command_invalid_syntax", codes)
+        self.assertNotIn("agent_launch_ok", codes)
+        self.assertNotIn("agent_launch_executable_missing", codes)
+        self.assertNotIn("agent_launch_interactive_not_supported", codes)
         self.assertNotIn("custom_verification_command_ok", codes)
         self.assertNotIn("custom_verification_command_missing", codes)
         self.assertNotIn("custom_verification_command_compound", codes)

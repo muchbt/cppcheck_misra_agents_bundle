@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from providers import get_provider
 from common import (
     ROOT,
     archive_size_bytes,
@@ -110,45 +111,129 @@ def _command_tokens(command: str) -> List[str]:
     return shlex.split(command)
 
 
-def check_agent_command(config: Any) -> Dict[str, Any]:
-    agent = config.get("agent", {}) if isinstance(config, dict) else {}
-    command = agent.get("command", "") if isinstance(agent, dict) else ""
-    if not isinstance(command, str) or not command.strip():
-        return make_result(
-            "error",
-            "agent_command_missing",
-            "agent.command 为空。",
-            "无法判断 agent 命令是否可执行。",
-        )
+def _resolve_launch_dir(root: Path, value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return root / path
+
+
+def _ensure_writable_dir(path: Path) -> str:
     try:
-        parts = _command_tokens(command)
-    except ValueError as exc:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".doctor-write-check"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        return str(exc)
+    return ""
+
+
+def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    agent = config.get("agent", {}) if isinstance(config, dict) else {}
+    provider_name = agent.get("provider", "") if isinstance(agent, dict) else ""
+    launch = agent.get("launch", {}) if isinstance(agent, dict) else {}
+    capabilities = agent.get("capabilities", {}) if isinstance(agent, dict) else {}
+
+    if not isinstance(provider_name, str) or not provider_name.strip():
         return make_result(
             "error",
-            "agent_command_invalid_syntax",
-            "agent.command 命令语法无效。",
-            f"命令: {command}; 详情: {exc}",
+            "agent_provider_missing",
+            "未配置 agent.provider。",
+            "无法判断当前应使用哪个 provider。",
         )
-    if len(parts) > 1:
+
+    provider = get_provider(provider_name)
+    if provider is None:
         return make_result(
-            "warning",
-            "agent_command_compound",
-            "agent.command 包含多个 token。",
-            "当前版本只完整检查简单可执行文件名；复合命令请结合实际 shell 语义人工确认。",
+            "error",
+            "agent_provider_unsupported",
+            "当前 agent.provider 不受支持。",
+            f"provider: {provider_name}",
         )
-    executable = parts[0] if parts else ""
+
+    argv = launch.get("argv", []) if isinstance(launch, dict) else []
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item.strip() for item in argv):
+        return make_result(
+            "error",
+            "agent_launch_invalid_argv",
+            "agent.launch.argv 无效。",
+            "launch.argv 必须是非空字符串数组。",
+        )
+
+    executable = argv[0]
     if shutil.which(executable) is None:
         return make_result(
             "error",
-            "agent_command_missing",
-            "未找到 agent.command 指向的可执行程序。",
-            f"命令: {command}",
+            "agent_launch_executable_missing",
+            "未找到 agent.launch.argv 指向的可执行程序。",
+            f"命令: {' '.join(argv)}",
         )
+
+    prompt_via = launch.get("prompt_via")
+    supported_prompt_via = getattr(provider, "SUPPORTED_PROMPT_VIA", {"stdin"})
+    if prompt_via not in supported_prompt_via:
+        return make_result(
+            "error",
+            "agent_launch_prompt_via_unsupported",
+            "当前 provider 不支持该 prompt 传递方式。",
+            f"provider: {provider_name}; prompt_via: {prompt_via}; supported: {', '.join(sorted(supported_prompt_via))}",
+        )
+
+    requires_tty = bool(launch.get("requires_tty"))
+    non_interactive = bool(capabilities.get("non_interactive"))
+    if requires_tty or not non_interactive:
+        return make_result(
+            "error",
+            "agent_launch_interactive_not_supported",
+            "当前 agent 配置仍依赖交互式执行。",
+            "流水线只支持非交互模式。",
+        )
+
+    cwd_mode = launch.get("cwd")
+    if cwd_mode not in {"project_root", "runtime_dir", "custom"}:
+        return make_result(
+            "error",
+            "agent_launch_cwd_invalid",
+            "agent.launch.cwd 无效。",
+            f"cwd: {cwd_mode}",
+        )
+
+    if provider_name == "codex":
+        prefix = getattr(provider, "NON_INTERACTIVE_COMMAND_PREFIX", [])
+        if argv[: len(prefix)] != prefix:
+            return make_result(
+                "error",
+                "agent_launch_interactive_not_supported",
+                "当前 codex 配置仍是交互式 TUI 风格启动方式。",
+                f"期望前缀: {' '.join(prefix)}; 当前命令: {' '.join(argv)}",
+            )
+
+    env = launch.get("env", {}) if isinstance(launch, dict) else {}
+    if isinstance(env, dict):
+        for key, value in env.items():
+            if not isinstance(key, str) or not key.strip() or not isinstance(value, str) or not value.strip():
+                return make_result(
+                    "error",
+                    "agent_launch_env_invalid",
+                    "agent.launch.env 无效。",
+                    "env 键和值都必须是非空字符串。",
+                )
+            resolved = _resolve_launch_dir(root, value)
+            error = _ensure_writable_dir(resolved)
+            if error:
+                return make_result(
+                    "error",
+                    "agent_launch_env_unwritable",
+                    "agent 运行目录不可写。",
+                    f"{key} -> {resolved}; 详情: {error}",
+                )
+
     return make_result(
         "ok",
-        "agent_command_ok",
-        "agent.command 可执行。",
-        f"命令: {command}",
+        "agent_launch_ok",
+        "agent 启动配置适合非交互执行。",
+        f"provider: {provider_name}; 命令: {' '.join(argv)}; prompt_via: {prompt_via}",
     )
 
 
@@ -332,7 +417,7 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
         results.insert(2, check_pipeline_config(config))
         results.extend(
             [
-                check_agent_command(config),
+                check_agent_launch(config, root),
                 check_custom_verification_command(config),
             ]
         )

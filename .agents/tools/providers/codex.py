@@ -4,6 +4,9 @@ from typing import Any, Dict
 
 from common import PROMPTS_DIR, RUNTIME_DIR, read_text
 
+SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
+NON_INTERACTIVE_COMMAND_PREFIX = ["codex", "exec"]
+
 
 def build_strategy_instructions(chunk: Dict[str, Any]) -> str:
     strategy = chunk.get("fix_strategy", "conservative")
