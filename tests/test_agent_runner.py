@@ -81,12 +81,21 @@ class CodexProviderTests(unittest.TestCase):
             runtime_dir = root / "runtime"
             prompts_dir = root / "prompts"
             chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
             runtime_dir.mkdir(parents=True)
             prompts_dir.mkdir(parents=True)
             chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
 
             (prompts_dir / "fix_chunk_prompt.txt").write_text(
-                "Read chunk {chunk_index}\n\n{strategy_instructions}\n",
+                (
+                    "Read chunk {chunk_index}\n"
+                    "{issue_status_delta_path}\n"
+                    "{file_change_delta_path}\n"
+                    "{chunk_result_json_path}\n"
+                    "{chunk_result_md_path}\n"
+                    "{strategy_instructions}\n"
+                ),
                 encoding="utf-8",
             )
             (chunks_dir / "chunk_001.json").write_text(
@@ -98,6 +107,8 @@ class CodexProviderTests(unittest.TestCase):
 
             with patch.object(codex_provider, "RUNTIME_DIR", runtime_dir), patch.object(
                 codex_provider, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                codex_provider, "resolve_agent_staging_dir", return_value=staging_dir
             ):
                 spec = codex_provider.build_launch_spec(config, chunk)
 
@@ -108,6 +119,12 @@ class CodexProviderTests(unittest.TestCase):
         self.assertEqual(spec["output_mode"], "exit_code")
         self.assertIn("Read chunk 1", spec["prompt"])
         self.assertIn("Fix strategy: conservative.", spec["prompt"])
+        self.assertIn(".agents/staging/chunk_001/issue_status_delta.json", spec["prompt"])
+        self.assertIn(".agents/staging/chunk_001/file_change_delta.json", spec["prompt"])
+        self.assertIn(".agents/staging/chunk_001/chunk_result.json", spec["prompt"])
+        self.assertIn(".agents/staging/chunk_001/chunk_result.md", spec["prompt"])
+        self.assertNotIn(".agents/runtime/results/chunk_001_result.json", spec["prompt"])
+        self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
 
 
 class AgentRunnerTests(unittest.TestCase):

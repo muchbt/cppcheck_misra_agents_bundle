@@ -10,14 +10,15 @@ Requirements:
 5. Do not infer logic from comments
 6. Follow the fix_strategy and per-issue strategy_action/risk fields from the chunk JSON
 7. Update:
-   - .agents/runtime/issue_status.json
-   - .agents/runtime/file_change_index.json
-   - .agents/runtime/results/chunk_{chunk_index:03d}_result.json
-   - .agents/runtime/results/chunk_{chunk_index:03d}_result.md
+   - {issue_status_delta_path}
+   - {file_change_delta_path}
+   - {chunk_result_json_path}
+   - {chunk_result_md_path}
 8. Record each independent edit point with linked issue keys
 9. Perform minimal verification and record the result
 10. For every high-risk fixed issue, include risk_level, risk_reason, and review_required_after_fix=true in the result JSON
 11. Prefer completing work inside the current workspace
 12. If one issue is blocked, record the blocker and continue with other safe issues in this chunk
-13. Do not wait indefinitely for environmental side effects; write the blocker into runtime state/result files
+13. Do not wait indefinitely for environmental side effects; write the blocker into the staging files for this chunk
 14. Ask the user only when explicit authorization is required and no safe in-workspace path exists
+15. Use only the staging paths listed above for this chunk's output files; do not directly overwrite canonical runtime result files
