@@ -47,6 +47,93 @@ class AgentStagingConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "project root"):
                 common.resolve_agent_staging_dir(config, root=root)
 
+    def test_import_chunk_staging_artifacts_merges_runtime_state_and_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / ".agents" / "runtime"
+            results_dir = runtime_dir / "results"
+            staging_dir = root / ".agents" / "staging" / "chunk_001"
+            results_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            common.save_json(
+                runtime_dir / "issue_status.json",
+                {
+                    "issue-a": {"status": "pending"},
+                },
+            )
+            common.save_json(
+                runtime_dir / "file_change_index.json",
+                {
+                    "src/a.c": {
+                        "edits": [{"edit_id": "src/a.c#001"}],
+                    }
+                },
+            )
+            common.save_json(
+                staging_dir / "issue_status_delta.json",
+                {
+                    "issue-a": {"status": "fixed"},
+                    "issue-b": {"status": "failed"},
+                },
+            )
+            common.save_json(
+                staging_dir / "file_change_delta.json",
+                {
+                    "src/a.c": {
+                        "edits": [{"edit_id": "src/a.c#002"}],
+                    },
+                    "src/b.c": {
+                        "edits": [{"edit_id": "src/b.c#001"}],
+                    },
+                },
+            )
+            common.save_json(
+                staging_dir / "chunk_result.json",
+                {"chunk_index": 1},
+            )
+            (staging_dir / "chunk_result.md").write_text("# chunk 1\n", encoding="utf-8")
+
+            imported = common.import_chunk_staging_artifacts(
+                staging_dir,
+                1,
+                runtime_dir=runtime_dir,
+                results_dir=results_dir,
+            )
+
+            issue_status = common.load_json(runtime_dir / "issue_status.json", {})
+            file_change_index = common.load_json(runtime_dir / "file_change_index.json", {})
+            chunk_result = common.load_json(results_dir / "chunk_001_result.json", {})
+
+        self.assertEqual(issue_status["issue-a"]["status"], "fixed")
+        self.assertEqual(issue_status["issue-b"]["status"], "failed")
+        self.assertEqual(len(file_change_index["src/a.c"]["edits"]), 2)
+        self.assertEqual(file_change_index["src/b.c"]["edits"][0]["edit_id"], "src/b.c#001")
+        self.assertEqual(chunk_result["chunk_index"], 1)
+        self.assertEqual(imported["chunk_result_json_path"], results_dir / "chunk_001_result.json")
+
+    def test_import_chunk_staging_artifacts_requires_all_staging_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / ".agents" / "runtime"
+            results_dir = runtime_dir / "results"
+            staging_dir = root / ".agents" / "staging" / "chunk_001"
+            results_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+            common.save_json(runtime_dir / "issue_status.json", {})
+            common.save_json(runtime_dir / "file_change_index.json", {})
+            common.save_json(staging_dir / "issue_status_delta.json", {})
+            common.save_json(staging_dir / "file_change_delta.json", {})
+            common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 1})
+
+            with self.assertRaisesRegex(FileNotFoundError, "missing staging artifact"):
+                common.import_chunk_staging_artifacts(
+                    staging_dir,
+                    1,
+                    runtime_dir=runtime_dir,
+                    results_dir=results_dir,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,12 +6,16 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
-from common import ROOT, RUNTIME_DIR
+from common import ROOT, import_chunk_staging_artifacts, prepare_chunk_staging_dir
 from providers import get_provider
 
 SANITIZED_ENV_KEYS = {
     "CODEX_SANDBOX_NETWORK_DISABLED",
 }
+
+
+def runtime_dir_for_root(root: Path = ROOT) -> Path:
+    return root / ".agents" / "runtime"
 
 
 def resolve_env_path(value: str) -> Path:
@@ -60,7 +64,7 @@ def resolve_cwd(cwd_mode: str, spec: Dict[str, Any]) -> Path:
     if cwd_mode == "project_root":
         return ROOT
     if cwd_mode == "runtime_dir":
-        return RUNTIME_DIR
+        return runtime_dir_for_root(ROOT)
     if cwd_mode == "custom":
         custom = spec.get("cwd_path", "")
         path = Path(str(custom))
@@ -96,6 +100,10 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
     prompt_via = str(spec.get("prompt_via", "stdin"))
     cwd = resolve_cwd(str(spec.get("cwd_mode", "project_root")), spec)
     env = build_launch_env(spec.get("env", {}))
+    chunk_index = int(chunk.get("chunk_index", 0))
+    staging_dir = Path(str(spec.get("staging_dir", "")).strip()) if str(spec.get("staging_dir", "")).strip() else None
+    if staging_dir is not None:
+        prepare_chunk_staging_dir(staging_dir)
 
     cmd = list(spec.get("argv", []))
     if prompt_via == "arg":
@@ -120,10 +128,31 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
             "prompt": prompt,
         }
 
+    if completed.returncode == 0 and staging_dir is not None:
+        try:
+            runtime_dir = runtime_dir_for_root(ROOT)
+            imported_paths = import_chunk_staging_artifacts(
+                staging_dir,
+                chunk_index,
+                runtime_dir=runtime_dir,
+                results_dir=runtime_dir / "results",
+            )
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            return {
+                "returncode": 1,
+                "stdout": completed.stdout,
+                "stderr": str(exc),
+                "error_kind": "import_error",
+                "prompt": prompt,
+            }
+    else:
+        imported_paths = {}
+
     return {
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
         "error_kind": "" if completed.returncode == 0 else classify_runtime_error(completed.stderr),
         "prompt": prompt,
+        "imported_paths": imported_paths,
     }

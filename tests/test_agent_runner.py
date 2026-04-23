@@ -133,11 +133,14 @@ class AgentRunnerTests(unittest.TestCase):
         chunk = {"chunk_index": 1}
         agent_runner = importlib.import_module("agent_runner")
 
-        with patch.object(
-            agent_runner,
-            "get_provider",
-            return_value=SimpleNamespace(
-                build_launch_spec=lambda current_config, current_chunk: {
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            staging_dir = root / ".agents" / "staging" / "chunk_001"
+            common.save_json(root / ".agents" / "runtime" / "issue_status.json", {})
+            common.save_json(root / ".agents" / "runtime" / "file_change_index.json", {})
+
+            def build_spec(current_config: dict, current_chunk: dict) -> dict:
+                return {
                     "argv": ["codex", "exec", "--full-auto"],
                     "prompt_via": "stdin",
                     "cwd_mode": "project_root",
@@ -145,20 +148,80 @@ class AgentRunnerTests(unittest.TestCase):
                     "requires_tty": False,
                     "output_mode": "exit_code",
                     "prompt": "prompt body",
+                    "staging_dir": str(staging_dir),
                 }
-            ),
-        ), patch.object(agent_runner.subprocess, "run") as run_mock:
-            run_mock.return_value = SimpleNamespace(returncode=0, stdout="ok", stderr="")
-            result = agent_runner.run_chunk_agent(config, chunk)
 
-        kwargs = run_mock.call_args.kwargs
-        self.assertEqual(kwargs["input"], "prompt body")
-        self.assertEqual(kwargs["text"], True)
-        self.assertTrue(kwargs["capture_output"])
-        self.assertEqual(kwargs["cwd"], str(agent_runner.ROOT))
-        self.assertEqual(kwargs["env"]["CODEX_HOME"], str(agent_runner.ROOT / ".agents" / "runtime" / "agent-home"))
-        self.assertEqual(result["returncode"], 0)
-        self.assertEqual(result["error_kind"], "")
+            def fake_run(*args, **kwargs):
+                common.save_json(staging_dir / "issue_status_delta.json", {"issue-a": {"status": "fixed"}})
+                common.save_json(staging_dir / "file_change_delta.json", {"src/a.c": {"edits": []}})
+                common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 1})
+                (staging_dir / "chunk_result.md").write_text("# chunk 1\n", encoding="utf-8")
+                return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+            with patch.object(agent_runner, "ROOT", root), patch.object(
+                agent_runner,
+                "get_provider",
+                return_value=SimpleNamespace(build_launch_spec=build_spec),
+            ), patch.object(agent_runner.subprocess, "run", side_effect=fake_run) as run_mock:
+                result = agent_runner.run_chunk_agent(config, chunk)
+                kwargs = run_mock.call_args.kwargs
+                imported_result = common.load_json(
+                    root / ".agents" / "runtime" / "results" / "chunk_001_result.json",
+                    {},
+                )
+
+            self.assertEqual(kwargs["input"], "prompt body")
+            self.assertEqual(kwargs["text"], True)
+            self.assertTrue(kwargs["capture_output"])
+            self.assertEqual(kwargs["cwd"], str(root))
+            self.assertEqual(
+                kwargs["env"]["CODEX_HOME"],
+                str(root / ".agents" / "runtime" / "agent-home"),
+            )
+            self.assertEqual(result["returncode"], 0)
+            self.assertEqual(result["error_kind"], "")
+            self.assertEqual(imported_result, {"chunk_index": 1})
+            self.assertEqual(
+                result["imported_paths"]["chunk_result_json_path"],
+                root / ".agents" / "runtime" / "results" / "chunk_001_result.json",
+            )
+
+    def test_run_chunk_agent_reports_import_error(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        chunk = {"chunk_index": 1}
+        agent_runner = importlib.import_module("agent_runner")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            staging_dir = root / ".agents" / "staging" / "chunk_001"
+            common.save_json(root / ".agents" / "runtime" / "issue_status.json", {})
+            common.save_json(root / ".agents" / "runtime" / "file_change_index.json", {})
+
+            with patch.object(
+                agent_runner,
+                "ROOT",
+                root,
+            ), patch.object(
+                agent_runner,
+                "get_provider",
+                return_value=SimpleNamespace(
+                    build_launch_spec=lambda current_config, current_chunk: {
+                        "argv": ["codex", "exec", "--full-auto"],
+                        "prompt_via": "stdin",
+                        "cwd_mode": "project_root",
+                        "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
+                        "requires_tty": False,
+                        "output_mode": "exit_code",
+                        "prompt": "prompt body",
+                        "staging_dir": str(staging_dir),
+                    }
+                ),
+            ), patch.object(agent_runner.subprocess, "run") as run_mock:
+                run_mock.return_value = SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                result = agent_runner.run_chunk_agent(config, chunk)
+
+        self.assertEqual(result["error_kind"], "import_error")
+        self.assertIn("missing staging artifact", result["stderr"])
 
     def test_run_chunk_agent_reports_spawn_error(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
@@ -177,6 +240,7 @@ class AgentRunnerTests(unittest.TestCase):
                     "requires_tty": False,
                     "output_mode": "exit_code",
                     "prompt": "prompt body",
+                    "staging_dir": str(REPO_ROOT / ".agents" / "staging" / "chunk_001"),
                 }
             ),
         ), patch.object(agent_runner.subprocess, "run", side_effect=OSError("permission denied")):
@@ -216,6 +280,7 @@ class AgentRunnerTests(unittest.TestCase):
                         "requires_tty": False,
                         "output_mode": "exit_code",
                         "prompt": "prompt body",
+                        "staging_dir": str(root / ".agents" / "staging" / "chunk_001"),
                     }
                 ),
             ), patch.object(
@@ -223,7 +288,18 @@ class AgentRunnerTests(unittest.TestCase):
                 "home",
                 return_value=fake_home,
             ), patch.object(agent_runner.subprocess, "run") as run_mock:
-                run_mock.return_value = SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                staging_dir = root / ".agents" / "staging" / "chunk_001"
+                common.save_json(root / ".agents" / "runtime" / "issue_status.json", {})
+                common.save_json(root / ".agents" / "runtime" / "file_change_index.json", {})
+
+                def fake_run(*args, **kwargs):
+                    common.save_json(staging_dir / "issue_status_delta.json", {})
+                    common.save_json(staging_dir / "file_change_delta.json", {})
+                    common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 1})
+                    (staging_dir / "chunk_result.md").write_text("# chunk 1\n", encoding="utf-8")
+                    return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+                run_mock.side_effect = fake_run
                 result = agent_runner.run_chunk_agent(config, chunk)
 
             self.assertEqual(result["returncode"], 0)

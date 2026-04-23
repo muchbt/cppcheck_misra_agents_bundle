@@ -45,6 +45,10 @@ def resolve_agent_staging_dir(config: Dict[str, Any], root: Path = ROOT) -> Path
         raise ValueError("agent.staging_dir must be a non-empty string")
     return resolve_path_under_root(staging_dir, root=root)
 
+
+def resolve_chunk_staging_dir(config: Dict[str, Any], chunk_index: int, root: Path = ROOT) -> Path:
+    return resolve_agent_staging_dir(config, root=root) / f"chunk_{int(chunk_index):03d}"
+
 def ensure_dirs() -> None:
     for path in [
         AGENTS_DIR,
@@ -379,3 +383,85 @@ def relative(path: Path) -> str:
         return str(path.relative_to(ROOT)).replace("\\", "/")
     except ValueError:
         return str(path).replace("\\", "/")
+
+
+def prepare_chunk_staging_dir(staging_dir: Path) -> Path:
+    if staging_dir.exists():
+        shutil.rmtree(staging_dir)
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    return staging_dir
+
+
+def _load_required_json_object(path: Path) -> Dict[str, Any]:
+    data = load_json(path, {})
+    if not isinstance(data, dict):
+        raise ValueError(f"expected JSON object: {path}")
+    return data
+
+
+def merge_file_change_index(base: Dict[str, Any], delta: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(base)
+    for file_path, delta_entry in delta.items():
+        current_entry = merged.get(file_path, {})
+        if not isinstance(current_entry, dict):
+            current_entry = {}
+        if not isinstance(delta_entry, dict):
+            raise ValueError(f"file_change_index entry must be an object: {file_path}")
+
+        next_entry = dict(current_entry)
+        for key, value in delta_entry.items():
+            if key == "edits":
+                current_edits = current_entry.get("edits", [])
+                if not isinstance(current_edits, list):
+                    current_edits = []
+                if not isinstance(value, list):
+                    raise ValueError(f"file_change_index.edits must be a list: {file_path}")
+                next_entry["edits"] = [*current_edits, *value]
+            else:
+                next_entry[key] = value
+        merged[file_path] = next_entry
+    return merged
+
+
+def import_chunk_staging_artifacts(
+    staging_dir: Path,
+    chunk_index: int,
+    runtime_dir: Path = RUNTIME_DIR,
+    results_dir: Path = RESULTS_DIR,
+) -> Dict[str, Path]:
+    issue_status_delta_path = staging_dir / "issue_status_delta.json"
+    file_change_delta_path = staging_dir / "file_change_delta.json"
+    chunk_result_json_path = staging_dir / "chunk_result.json"
+    chunk_result_md_path = staging_dir / "chunk_result.md"
+
+    for path in (
+        issue_status_delta_path,
+        file_change_delta_path,
+        chunk_result_json_path,
+        chunk_result_md_path,
+    ):
+        if not path.exists():
+            raise FileNotFoundError(f"missing staging artifact: {path}")
+
+    issue_status = _load_required_json_object(runtime_dir / "issue_status.json")
+    issue_status_delta = _load_required_json_object(issue_status_delta_path)
+    issue_status.update(issue_status_delta)
+    save_json(runtime_dir / "issue_status.json", issue_status)
+
+    file_change_index = _load_required_json_object(runtime_dir / "file_change_index.json")
+    file_change_delta = _load_required_json_object(file_change_delta_path)
+    merged_file_change_index = merge_file_change_index(file_change_index, file_change_delta)
+    save_json(runtime_dir / "file_change_index.json", merged_file_change_index)
+
+    imported_json_path = results_dir / f"chunk_{int(chunk_index):03d}_result.json"
+    imported_md_path = results_dir / f"chunk_{int(chunk_index):03d}_result.md"
+    imported_json_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(chunk_result_json_path, imported_json_path)
+    shutil.copy2(chunk_result_md_path, imported_md_path)
+
+    return {
+        "issue_status_path": runtime_dir / "issue_status.json",
+        "file_change_index_path": runtime_dir / "file_change_index.json",
+        "chunk_result_json_path": imported_json_path,
+        "chunk_result_md_path": imported_md_path,
+    }
