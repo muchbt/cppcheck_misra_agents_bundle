@@ -1,4 +1,5 @@
 {
+  "$schema": "./rule_policy.schema.json",
   "default": {
     "action": "needs_manual_review",
     "risk_level": "high",

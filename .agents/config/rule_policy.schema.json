@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "./rule_policy.schema.json",
+  "title": "Rule Policy Configuration",
+  "description": "Schema for cppcheck/MISRA rule policy configuration defining auto-fix strategies and risk levels.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["default", "actions", "patterns"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for IDE validation and autocompletion."
+    },
+    "default": {
+      "$ref": "#/definitions/actionConfig"
+    },
+    "actions": {
+      "type": "object",
+      "description": "Rule-specific action configurations. Keys are rule identifiers (e.g., 'unusedVariable', 'misra-c2012-2.2').",
+      "additionalProperties": {
+        "$ref": "#/definitions/actionConfig"
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "description": "Pattern-based action configurations. Matched against code context to determine action.",
+      "items": {
+        "$ref": "#/definitions/patternConfig"
+      }
+    }
+  },
+  "definitions": {
+    "actionType": {
+      "type": "string",
+      "enum": ["auto_fix", "careful_fix", "needs_manual_review"],
+      "description": "The type of action to take:\n- auto_fix: Safe to apply automatically\n- careful_fix: Requires careful review but can be auto-applied\n- needs_manual_review: Requires human review before any changes"
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Risk level associated with the fix:\n- low: Minimal impact, safe to auto-fix\n- medium: Moderate impact, needs careful review\n- high: Significant impact, requires manual review"
+    },
+    "actionConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "risk_level"],
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/actionType"
+        },
+        "risk_level": {
+          "$ref": "#/definitions/riskLevel"
+        },
+        "risk_tags": {
+          "type": "array",
+          "description": "Tags categorizing the risk factors.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "risk_reason": {
+          "type": "string",
+          "description": "Human-readable explanation of why this risk level was assigned."
+        }
+      }
+    },
+    "patternConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match_contains", "action", "risk_level"],
+      "properties": {
+        "match_contains": {
+          "type": "string",
+          "description": "Substring pattern to match in code context (case-sensitive)."
+        },
+        "action": {
+          "$ref": "#/definitions/actionType"
+        },
+        "risk_level": {
+          "$ref": "#/definitions/riskLevel"
+        },
+        "risk_tags": {
+          "type": "array",
+          "description": "Tags categorizing the risk factors.",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "risk_reason": {
+          "type": "string",
+          "description": "Human-readable explanation of why this risk level was assigned."
+        }
+      }
+    }
+  }
+}
