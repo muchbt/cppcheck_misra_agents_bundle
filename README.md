@@ -50,11 +50,37 @@
 }
 ```
 
+`Claude Code` 的最小非交互配置可使用：
+
+```json
+"agent": {
+  "provider": "claude",
+  "staging_dir": ".agents/staging",
+  "launch": {
+    "argv": ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits"],
+    "prompt_via": "stdin",
+    "cwd": "project_root",
+    "env": {},
+    "requires_tty": false,
+    "output": {
+      "mode": "exit_code"
+    }
+  },
+  "capabilities": {
+    "non_interactive": true,
+    "workspace_write_required": true
+  },
+  "auto_bootstrap_compat": true
+}
+```
+
 要求如下：
 
 - 必须使用非交互命令形式；对 `codex` 来说，应使用 `codex exec`
+- 对 `Claude Code` 来说，应使用 `claude -p` 一类非交互入口
 - `prompt_via` 当前推荐 `stdin`
 - `CODEX_HOME` 这类运行目录应映射到工作区内可写路径
+- `Claude Code` 的认证默认依赖本机 `claude auth login` 状态或运行环境中的 `ANTHROPIC_API_KEY`
 - 运行时会优先复用 `~/.codex/auth.json` 和 `~/.codex/config.toml`，同步到工作区 `CODEX_HOME`
 - 运行时会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`，避免用户手动解除该环境变量
 - 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误

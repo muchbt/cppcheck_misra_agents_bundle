@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
 from common import ROOT, import_chunk_staging_artifacts, prepare_chunk_staging_dir
 from providers import get_provider
-
-SANITIZED_ENV_KEYS = {
-    "CODEX_SANDBOX_NETWORK_DISABLED",
-}
 
 
 def runtime_dir_for_root(root: Path = ROOT) -> Path:
@@ -24,39 +19,15 @@ def resolve_env_path(value: str) -> Path:
         path = ROOT / path
     return path
 
-
-def _link_or_copy(src: Path, dest: Path) -> None:
-    if dest.exists():
-        return
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        dest.symlink_to(src)
-    except OSError:
-        shutil.copy2(src, dest)
-
-
-def prepare_codex_home(env: Dict[str, str]) -> None:
-    codex_home = env.get("CODEX_HOME", "")
-    if not codex_home:
-        return
-
-    target_dir = Path(codex_home)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    shared_home = Path.home() / ".codex"
-
-    for name in ("auth.json", "config.toml"):
-        source = shared_home / name
-        if source.exists():
-            _link_or_copy(source, target_dir / name)
-
-
-def build_launch_env(env_config: Dict[str, str]) -> Dict[str, str]:
+def build_launch_env(env_config: Dict[str, str], provider: Any) -> Dict[str, str]:
     env = dict(os.environ)
-    for key in SANITIZED_ENV_KEYS:
+    for key in getattr(provider, "SANITIZED_ENV_KEYS", set()):
         env.pop(key, None)
     for key, value in env_config.items():
         env[key] = str(resolve_env_path(value))
-    prepare_codex_home(env)
+    prepare_launch_env = getattr(provider, "prepare_launch_env", None)
+    if callable(prepare_launch_env):
+        prepare_launch_env(env)
     return env
 
 
@@ -72,16 +43,6 @@ def resolve_cwd(cwd_mode: str, spec: Dict[str, Any]) -> Path:
             path = ROOT / path
         return path
     return ROOT
-
-
-def classify_runtime_error(stderr: str) -> str:
-    text = (stderr or "").lower()
-    if "failed to connect to websocket" in text or "api.openai.com/v1/responses" in text or "stream disconnected before completion" in text:
-        return "network_error"
-    if "auth" in text and ("login" in text or "token" in text or "credential" in text):
-        return "auth_error"
-    return "runtime_error"
-
 
 def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
     provider_name = str(config.get("agent", {}).get("provider", "")).strip()
@@ -99,7 +60,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
     prompt = str(spec.get("prompt", ""))
     prompt_via = str(spec.get("prompt_via", "stdin"))
     cwd = resolve_cwd(str(spec.get("cwd_mode", "project_root")), spec)
-    env = build_launch_env(spec.get("env", {}))
+    env = build_launch_env(spec.get("env", {}), provider)
     chunk_index = int(chunk.get("chunk_index", 0))
     staging_dir = Path(str(spec.get("staging_dir", "")).strip()) if str(spec.get("staging_dir", "")).strip() else None
     if staging_dir is not None:
@@ -152,7 +113,9 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
-        "error_kind": "" if completed.returncode == 0 else classify_runtime_error(completed.stderr),
+        "error_kind": ""
+        if completed.returncode == 0
+        else getattr(provider, "classify_runtime_error", lambda stderr: "runtime_error")(completed.stderr),
         "prompt": prompt,
         "imported_paths": imported_paths,
     }

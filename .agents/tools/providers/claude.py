@@ -1,46 +1,25 @@
 from __future__ import annotations
 
-import shutil
-from pathlib import Path
 from typing import Any, Dict
 
 from common import RUNTIME_DIR
 from .base import build_chunk_prompt, build_chunk_staging_paths
 
 SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
-NON_INTERACTIVE_COMMAND_PREFIX = ["codex", "exec"]
-SANITIZED_ENV_KEYS = {"CODEX_SANDBOX_NETWORK_DISABLED"}
-
-def _link_or_copy(src: Path, dest: Path) -> None:
-    if dest.exists():
-        return
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        dest.symlink_to(src)
-    except OSError:
-        shutil.copy2(src, dest)
+NON_INTERACTIVE_COMMAND_PREFIX = ["claude", "-p"]
+SANITIZED_ENV_KEYS = set()
 
 
 def prepare_launch_env(env: Dict[str, str]) -> None:
-    codex_home = env.get("CODEX_HOME", "")
-    if not codex_home:
-        return
-
-    target_dir = Path(codex_home)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    shared_home = Path.home() / ".codex"
-    for name in ("auth.json", "config.toml"):
-        source = shared_home / name
-        if source.exists():
-            _link_or_copy(source, target_dir / name)
+    return None
 
 
 def classify_runtime_error(stderr: str) -> str:
     text = (stderr or "").lower()
-    if "failed to connect to websocket" in text or "api.openai.com/v1/responses" in text or "stream disconnected before completion" in text:
-        return "network_error"
-    if "auth" in text and ("login" in text or "token" in text or "credential" in text):
+    if "anthropic_api_key" in text or "authentication" in text or "login" in text or "unauthorized" in text:
         return "auth_error"
+    if "network" in text or "timed out" in text or "econn" in text or "socket" in text:
+        return "network_error"
     return "runtime_error"
 
 

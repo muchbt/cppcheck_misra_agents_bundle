@@ -213,13 +213,13 @@ def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
             f"cwd: {cwd_mode}",
         )
 
-    if provider_name == "codex":
-        prefix = getattr(provider, "NON_INTERACTIVE_COMMAND_PREFIX", [])
+    prefix = getattr(provider, "NON_INTERACTIVE_COMMAND_PREFIX", [])
+    if prefix:
         if argv[: len(prefix)] != prefix:
             return make_result(
                 "error",
                 "agent_launch_interactive_not_supported",
-                "当前 codex 配置仍是交互式 TUI 风格启动方式。",
+                f"当前 {provider_name} 配置仍是交互式或不受支持的启动方式。",
                 f"期望前缀: {' '.join(prefix)}; 当前命令: {' '.join(argv)}",
             )
 
@@ -281,6 +281,20 @@ def check_agent_staging_dir(config: Any, root: Path = ROOT) -> Dict[str, Any]:
 
 def check_agent_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     provider_name = _get_agent_provider_name(config)
+    if provider_name == "claude":
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            return make_result(
+                "ok",
+                "agent_auth_ok",
+                "检测到 Claude Code 的环境认证。",
+                "已检测到 ANTHROPIC_API_KEY。",
+            )
+        return make_result(
+            "warning",
+            "agent_auth_manual_check",
+            "Claude Code 认证状态需要人工确认。",
+            "请确认本机已通过 `claude auth login` 完成登录，或在运行环境中提供 ANTHROPIC_API_KEY。",
+        )
     if provider_name != "codex":
         return make_result(
             "ok",
@@ -324,6 +338,13 @@ def check_agent_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
 
 def check_agent_network(config: Any) -> Dict[str, Any]:
     provider_name = _get_agent_provider_name(config)
+    if provider_name == "claude":
+        return make_result(
+            "ok",
+            "agent_network_ok",
+            "未发现 Claude Code 的显式网络阻断环境变量。",
+            "真实运行仍依赖本机对 Claude 服务的外网访问能力。",
+        )
     if provider_name != "codex":
         return make_result(
             "ok",

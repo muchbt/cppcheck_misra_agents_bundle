@@ -192,6 +192,47 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["code"], "agent_staging_dir_ok")
         self.assertIn("只写 staging", result["detail"])
 
+    def test_check_agent_launch_accepts_claude_print_prefix(self) -> None:
+        config = {
+            "agent": {
+                "provider": "claude",
+                "launch": {
+                    "argv": ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits"],
+                    "prompt_via": "stdin",
+                    "cwd": "project_root",
+                    "env": {},
+                    "requires_tty": False,
+                    "output": {"mode": "exit_code"},
+                },
+                "capabilities": {"non_interactive": True, "workspace_write_required": True},
+                "auto_bootstrap_compat": True,
+            }
+        }
+
+        with patch.object(doctor.shutil, "which", return_value="/usr/bin/claude"):
+            result = doctor.check_agent_launch(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_launch_ok")
+
+    def test_check_agent_auth_reports_claude_manual_check_without_env(self) -> None:
+        config = {"agent": {"provider": "claude", "launch": {"env": {}}}}
+
+        with patch.dict(os.environ, {}, clear=True):
+            result = doctor.check_agent_auth(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "warning")
+        self.assertEqual(result["code"], "agent_auth_manual_check")
+
+    def test_check_agent_auth_reports_claude_api_key(self) -> None:
+        config = {"agent": {"provider": "claude", "launch": {"env": {}}}}
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False):
+            result = doctor.check_agent_auth(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_auth_ok")
+
     def test_check_agent_auth_reports_missing_auth(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

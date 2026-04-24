@@ -104,11 +104,12 @@ class CodexProviderTests(unittest.TestCase):
             )
 
             codex_provider = importlib.import_module("providers.codex")
+            provider_base = importlib.import_module("providers.base")
 
             with patch.object(codex_provider, "RUNTIME_DIR", runtime_dir), patch.object(
-                codex_provider, "PROMPTS_DIR", prompts_dir
+                provider_base, "PROMPTS_DIR", prompts_dir
             ), patch.object(
-                codex_provider, "resolve_agent_staging_dir", return_value=staging_dir
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
             ):
                 spec = codex_provider.build_launch_spec(config, chunk)
 
@@ -125,6 +126,59 @@ class CodexProviderTests(unittest.TestCase):
         self.assertIn(".agents/staging/chunk_001/chunk_result.json", spec["prompt"])
         self.assertIn(".agents/staging/chunk_001/chunk_result.md", spec["prompt"])
         self.assertNotIn(".agents/runtime/results/chunk_001_result.json", spec["prompt"])
+        self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
+
+
+class ClaudeProviderTests(unittest.TestCase):
+    def test_claude_provider_builds_non_interactive_launch_spec(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "claude"
+        config["agent"]["launch"]["argv"] = [
+            "claude",
+            "-p",
+            "--output-format",
+            "text",
+            "--permission-mode",
+            "acceptEdits",
+        ]
+        config["agent"]["launch"]["env"] = {}
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n{chunk_result_json_path}\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(json.dumps(chunk), encoding="utf-8")
+
+            claude_provider = importlib.import_module("providers.claude")
+            provider_base = importlib.import_module("providers.base")
+            with patch.object(claude_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                provider_base, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
+            ):
+                spec = claude_provider.build_launch_spec(config, chunk)
+
+        self.assertEqual(spec["argv"][:2], ["claude", "-p"])
+        self.assertIn("--add-dir", spec["argv"])
+        self.assertIn(str(staging_dir / "chunk_001"), spec["argv"])
+        self.assertEqual(spec["prompt_via"], "stdin")
+        self.assertIn(".agents/staging/chunk_001/chunk_result.json", spec["prompt"])
         self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
 
 
@@ -254,6 +308,7 @@ class AgentRunnerTests(unittest.TestCase):
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
         chunk = {"chunk_index": 1}
         agent_runner = importlib.import_module("agent_runner")
+        codex_provider = importlib.import_module("providers.codex")
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -272,22 +327,24 @@ class AgentRunnerTests(unittest.TestCase):
             ), patch.object(
                 agent_runner,
                 "get_provider",
-                return_value=SimpleNamespace(
-                    build_launch_spec=lambda current_config, current_chunk: {
-                        "argv": ["codex", "exec", "--full-auto"],
-                        "prompt_via": "stdin",
-                        "cwd_mode": "project_root",
-                        "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
-                        "requires_tty": False,
-                        "output_mode": "exit_code",
-                        "prompt": "prompt body",
-                        "staging_dir": str(root / ".agents" / "staging" / "chunk_001"),
-                    }
-                ),
+                return_value=codex_provider,
             ), patch.object(
-                agent_runner.Path,
+                codex_provider.Path,
                 "home",
                 return_value=fake_home,
+            ), patch.object(
+                codex_provider,
+                "build_launch_spec",
+                return_value={
+                    "argv": ["codex", "exec", "--full-auto"],
+                    "prompt_via": "stdin",
+                    "cwd_mode": "project_root",
+                    "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
+                    "requires_tty": False,
+                    "output_mode": "exit_code",
+                    "prompt": "prompt body",
+                    "staging_dir": str(root / ".agents" / "staging" / "chunk_001"),
+                },
             ), patch.object(agent_runner.subprocess, "run") as run_mock:
                 staging_dir = root / ".agents" / "staging" / "chunk_001"
                 common.save_json(root / ".agents" / "runtime" / "issue_status.json", {})
@@ -309,9 +366,10 @@ class AgentRunnerTests(unittest.TestCase):
 
     def test_build_launch_env_strips_inherited_network_disable_flag(self) -> None:
         agent_runner = importlib.import_module("agent_runner")
+        codex_provider = importlib.import_module("providers.codex")
 
         with patch.dict(agent_runner.os.environ, {"CODEX_SANDBOX_NETWORK_DISABLED": "1"}, clear=False):
-            env = agent_runner.build_launch_env({"CODEX_HOME": ".agents/runtime/agent-home"})
+            env = agent_runner.build_launch_env({"CODEX_HOME": ".agents/runtime/agent-home"}, codex_provider)
 
         self.assertNotIn("CODEX_SANDBOX_NETWORK_DISABLED", env)
 
