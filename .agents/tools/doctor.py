@@ -8,11 +8,12 @@ import shlex
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from providers import get_provider
 from common import (
     ROOT,
+    CONFIG_DIR,
     archive_size_bytes,
     get_selected_agent_config,
     get_selected_agent_provider_name,
@@ -20,10 +21,23 @@ from common import (
     read_text,
     resolve_agent_staging_dir,
     validate_pipeline_config,
+    validate_rule_policy,
 )
 
 PROMPT_LENGTH_WARNING_THRESHOLD = 6000
 UNFINISHED_STATUSES = {"ready", "running", "partial", "failed"}
+
+# Check function type alias
+CheckFunc = Callable[..., Dict[str, Any]]
+
+# Plugin registry: provider name -> list of check functions
+# Special key "_common" contains checks that run for all providers
+CHECK_REGISTRY: Dict[str, List[CheckFunc]] = {
+    "_common": [],
+    "claude": [],
+    "codex": [],
+    "opencode": [],
+}
 
 
 def make_result(level: str, code: str, message: str, detail: str) -> Dict[str, Any]:
@@ -107,6 +121,30 @@ def check_pipeline_config(config: Any) -> Dict[str, Any]:
         "ok",
         "pipeline_config_ok",
         "pipeline.json 配置通过检查。",
+        "配置项完整。",
+    )
+
+
+def check_rule_policy(policy: Any) -> Dict[str, Any]:
+    errors, warnings = validate_rule_policy(policy)
+    if errors:
+        return make_result(
+            "error",
+            "rule_policy_invalid",
+            "rule_policy.json 配置有误。",
+            "; ".join(errors),
+        )
+    if warnings:
+        return make_result(
+            "warning",
+            "rule_policy_warning",
+            "rule_policy.json 配置存在警告。",
+            "; ".join(warnings),
+        )
+    return make_result(
+        "ok",
+        "rule_policy_ok",
+        "rule_policy.json 配置通过检查。",
         "配置项完整。",
     )
 
@@ -400,7 +438,7 @@ def check_agent_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     )
 
 
-def check_agent_network(config: Any) -> Dict[str, Any]:
+def check_agent_network(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     provider_name = _get_agent_provider_name(config)
     if provider_name == "claude":
         return make_result(
@@ -582,8 +620,16 @@ def resolve_cppcheck_xml_path(root: Path, config: Any) -> Path:
     return path if path.is_absolute() else root / path
 
 
+def register_check(provider: str, func: CheckFunc) -> None:
+    """Register a check function for a specific provider."""
+    if provider not in CHECK_REGISTRY:
+        CHECK_REGISTRY[provider] = []
+    CHECK_REGISTRY[provider].append(func)
+
+
 def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
     config_path = root / ".agents" / "config" / "pipeline.json"
+    policy_path = root / ".agents" / "config" / "rule_policy.json"
     progress_path = root / ".agents" / "runtime" / "progress.json"
     prompt_path = root / ".agents" / "prompts" / "fix_chunk_prompt.txt"
     runs_dir = root / ".agents" / "runs"
@@ -599,6 +645,17 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
             "pipeline.json 不是有效的 JSON。",
             f"路径: {config_path}; 详情: {exc}",
         )
+    policy_error = None
+    try:
+        policy = load_json(policy_path, {})
+    except (OSError, json.JSONDecodeError) as exc:
+        policy = {}
+        policy_error = make_result(
+            "error",
+            "rule_policy_json_invalid",
+            "rule_policy.json 不是有效的 JSON。",
+            f"路径: {policy_path}; 详情: {exc}",
+        )
     progress_error = None
     try:
         progress = load_json(progress_path, {})
@@ -611,6 +668,7 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
             f"路径: {progress_path}; 详情: {exc}",
         )
 
+    # Run common checks first
     results = [
         check_python_version(),
         check_cppcheck_xml(resolve_cppcheck_xml_path(root, config)),
@@ -620,19 +678,24 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
         results.insert(2, config_error)
     else:
         results.insert(2, check_pipeline_config(config))
-        results.extend(
-            [
-                check_agent_launch(config, root),
-                check_agent_staging_dir(config, root),
-                check_agent_skill_visibility(config, root),
-                check_agent_auth(config, root),
-                check_agent_network(config),
-                check_custom_verification_command(config),
-            ]
-        )
+        # Run common checks (agent-level)
+        for check_func in CHECK_REGISTRY["_common"]:
+            results.append(check_func(config, root))
+        # Run provider-specific checks
+        provider_name = _get_agent_provider_name(config)
+        provider_checks = CHECK_REGISTRY.get(provider_name, [])
+        for check_func in provider_checks:
+            results.append(check_func(config, root))
+        # Run additional common checks (config-level)
+        results.append(check_custom_verification_command(config))
+
+    if policy_error is not None:
+        results.append(policy_error)
+    else:
+        results.append(check_rule_policy(policy))
 
     if progress_error is not None:
-        results.insert(4, progress_error)
+        results.append(progress_error)
     else:
         results.extend(
             [
@@ -649,6 +712,25 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
     )
 
     return results
+
+
+# Register checks after function definitions
+# Common checks (run for all providers)
+register_check("_common", check_agent_launch)
+register_check("_common", check_agent_staging_dir)
+
+# Claude-specific checks
+register_check("claude", check_agent_skill_visibility)
+register_check("claude", check_agent_auth)
+register_check("claude", check_agent_network)
+
+# Codex-specific checks
+register_check("codex", check_agent_skill_visibility)
+register_check("codex", check_agent_auth)
+register_check("codex", check_agent_network)
+
+# Opencode-specific checks (placeholder for future expansion)
+# register_check("opencode", ...)
 
 
 def print_checks(results: List[Dict[str, Any]]) -> None:
