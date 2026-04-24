@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -12,6 +13,13 @@ from common import RUNTIME_DIR, ROOT, append_pipeline_event, load_json
 
 VALID_STRATEGIES = {"conservative", "all_auto"}
 UNFINISHED_STATUSES = {"ready", "running", "partial", "failed"}
+USER_STATUS_MAP = {
+    "done": "DONE",
+    "partial": "NEEDS_CONTEXT",
+    "failed": "BLOCKED",
+    "ready": "NEEDS_CONTEXT",
+    "running": "NEEDS_CONTEXT",
+}
 RESUME_IGNORED_ERROR_CODES = {"cppcheck_xml_missing", "cppcheck_xml_invalid"}
 STAGE_MODULES = {
     "split": "split_cppcheck_xml",
@@ -32,6 +40,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--misra-only", action="store_true")
     parser.add_argument("--include-failed", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="预览模式：split 后打印 chunk 摘要，不启动 agent。")
+    parser.add_argument("--status", action="store_true", help="查询当前运行进度并输出人类可读摘要。")
     return parser.parse_args(sys.argv[1:] if argv is None else argv)
 
 
@@ -49,6 +58,66 @@ def safe_load_progress(path: Path) -> Dict[str, Any]:
 
 def has_unfinished_runtime(progress: Dict[str, Any]) -> bool:
     return str(progress.get("status", "")).strip() in UNFINISHED_STATUSES
+
+
+def get_current_commit_sha(root: Path = ROOT) -> str:
+    """Get the current git commit SHA, return empty string if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()[:8]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return ""
+
+
+def compute_user_status(progress: Dict[str, Any], failed_count: int) -> str:
+    """Compute user-facing status from internal progress status."""
+    internal_status = str(progress.get("status", "")).strip()
+    base_status = USER_STATUS_MAP.get(internal_status, "NEEDS_CONTEXT")
+    # If done but has failed chunks, report DONE_WITH_CONCERNS
+    if internal_status == "done" and failed_count > 0:
+        return "DONE_WITH_CONCERNS"
+    return base_status
+
+
+def print_status_summary(runtime_dir: Path = RUNTIME_DIR, root: Path = ROOT) -> int:
+    """Print human-readable progress summary and return exit code."""
+    progress_path = runtime_dir / "progress.json"
+    progress = safe_load_progress(progress_path)
+
+    if not progress:
+        print("[oneshot] --status: 无运行记录 (progress.json 不存在或为空)")
+        return 0
+
+    run_id = str(progress.get("run_id", "")).strip() or "unknown"
+    total = int(progress.get("total_chunks", 0))
+    completed = len(progress.get("completed_chunks", []) or [])
+    failed = len(progress.get("failed_chunks", []) or [])
+    internal_status = str(progress.get("status", "")).strip() or "unknown"
+    strategy = str(progress.get("fix_strategy", "")).strip() or "unknown"
+    commit_sha = get_current_commit_sha(root)
+
+    user_status = compute_user_status(progress, failed)
+
+    print(f"[oneshot] --status 查询结果:")
+    print(f"  run_id: {run_id}")
+    print(f"  status: {user_status}")
+    print(f"  strategy: {strategy}")
+    print(f"  progress: {completed}/{total} chunks completed")
+    if failed > 0:
+        print(f"  failed_chunks: {failed}")
+    if commit_sha:
+        print(f"  commit: {commit_sha}")
+    print()
+
+    return 0
 
 
 def run_module_stage(module_name: str, argv: List[str]) -> int:
@@ -190,6 +259,11 @@ def print_dry_run_summary(runtime_dir: Path) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
+
+    # Handle --status early: just print progress summary and exit
+    if args.status:
+        return print_status_summary(RUNTIME_DIR, ROOT)
+
     if args.fresh and args.resume:
         print("[oneshot] --fresh 和 --resume 不能同时使用。")
         return 2

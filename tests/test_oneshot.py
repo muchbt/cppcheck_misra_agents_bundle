@@ -257,6 +257,106 @@ class OneshotTests(unittest.TestCase):
         self.assertIn("total_issues: 2", output)
         self.assertIn("chunk_001: 2 issues, 1 file(s)", output)
 
+    def test_status_with_no_progress_json(self) -> None:
+        """--status should report no run record when progress.json doesn't exist."""
+        stdout = io.StringIO()
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), redirect_stdout(stdout):
+            rc = oneshot.main(["--status"])
+
+        output = stdout.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("无运行记录", output)
+
+    def test_status_shows_done_when_completed(self) -> None:
+        """--status should show DONE when all chunks completed without failures."""
+        self.write_progress("done", {
+            "completed_chunks": [1, 2, 3],
+            "failed_chunks": [],
+            "total_chunks": 3,
+        })
+        stdout = io.StringIO()
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), patch.object(
+            oneshot, "get_current_commit_sha", return_value="a5332505"
+        ), redirect_stdout(stdout):
+            rc = oneshot.main(["--status"])
+
+        output = stdout.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("run_id: 20260423-001", output)
+        self.assertIn("status: DONE", output)
+        self.assertIn("progress: 3/3", output)
+        self.assertIn("commit: a5332505", output)
+
+    def test_status_shows_done_with_concerns_when_has_failed_chunks(self) -> None:
+        """--status should show DONE_WITH_CONCERNS when done but has failed chunks."""
+        self.write_progress("done", {
+            "completed_chunks": [1, 2],
+            "failed_chunks": [3],
+            "total_chunks": 3,
+        })
+        stdout = io.StringIO()
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), redirect_stdout(stdout):
+            rc = oneshot.main(["--status"])
+
+        output = stdout.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("status: DONE_WITH_CONCERNS", output)
+        self.assertIn("failed_chunks: 1", output)
+
+    def test_status_shows_blocked_when_failed(self) -> None:
+        """--status should show BLOCKED when status is failed."""
+        self.write_progress("failed", {
+            "completed_chunks": [1],
+            "failed_chunks": [2],
+            "total_chunks": 3,
+        })
+        stdout = io.StringIO()
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), redirect_stdout(stdout):
+            rc = oneshot.main(["--status"])
+
+        output = stdout.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("status: BLOCKED", output)
+
+    def test_status_shows_needs_context_for_unfinished_statuses(self) -> None:
+        """--status should show NEEDS_CONTEXT for ready, running, partial."""
+        for status in ("ready", "running", "partial"):
+            with self.subTest(status=status):
+                self.write_progress(status)
+                stdout = io.StringIO()
+                with patch.object(oneshot, "ROOT", self.root), patch.object(
+                    oneshot, "RUNTIME_DIR", self.runtime_dir
+                ), redirect_stdout(stdout):
+                    rc = oneshot.main(["--status"])
+
+                output = stdout.getvalue()
+                self.assertEqual(rc, 0)
+                self.assertIn("status: NEEDS_CONTEXT", output)
+
+    def test_status_exits_early_without_running_other_stages(self) -> None:
+        """--status should not run any pipeline stages, just print summary."""
+        self.write_progress("ready")
+        stage_calls = []
+        stdout = io.StringIO()
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), patch.object(
+            oneshot, "run_stage", side_effect=lambda stage, argv: stage_calls.append((stage, argv)) or 0
+        ), redirect_stdout(stdout):
+            rc = oneshot.main(["--status"])
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(stage_calls, [])  # No stages should be called
+        self.assertIn("--status 查询结果", stdout.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
