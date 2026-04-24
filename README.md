@@ -94,7 +94,7 @@
 - `Claude Code` 的认证默认依赖本机 `claude auth login` 状态或运行环境中的 `ANTHROPIC_API_KEY`
 - 运行时会优先复用 `~/.codex/auth.json` 和 `~/.codex/config.toml`，同步到工作区 `CODEX_HOME`
 - 运行时会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`，避免用户手动解除该环境变量
-- `Claude Code` 会从项目内 `.claude/skills/` 或用户全局 `~/.claude/skills/` 加载 skill；推荐始终生成项目内兼容层，避免不同机器行为不一致
+- `Claude Code` 通过 `--append-system-prompt` CLI 参数注入 cppcheck-misra-fix skill 指令，同时保留 `.claude/skills/` 目录作为 skill 元数据来源；推荐始终生成项目内兼容层，避免不同机器行为不一致
 - 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误
 
 ## 推荐用法
