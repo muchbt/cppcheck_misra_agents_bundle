@@ -97,6 +97,12 @@
 - `Claude Code` 通过 `--append-system-prompt` CLI 参数注入 cppcheck-misra-fix skill 指令，同时保留 `.claude/skills/` 目录作为 skill 元数据来源；推荐始终生成项目内兼容层，避免不同机器行为不一致
 - 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误
 
+**Provider 环境配置策略差异：**
+
+- `codex`：需要 `CODEX_HOME` 指向工作区内可写目录，用于存放认证文件 (`auth.json`) 和配置 (`config.toml`)。运行时会自动从 `~/.codex/` 复制到工作区。
+- `claude`：认证依赖本机 `claude auth login` 或环境变量 `ANTHROPIC_API_KEY`，不需要额外工作区目录配置。`env` 字段可保持为空对象 `{}`。
+- 后续新增 provider（如 `opencode`）可能需要同时管理 `XDG_DATA_HOME` 和 `XDG_STATE_HOME`。
+
 ## 推荐用法
 
 首次接入、环境异常、命令失败时，先运行：
