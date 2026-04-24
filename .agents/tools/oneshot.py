@@ -73,34 +73,33 @@ def run_stage(stage: str, argv: List[str]) -> int:
     return run_module_stage(module_name, argv)
 
 
+def _log_stage_event(
+    stage: str, event_suffix: str, message: str, argv: List[str],
+    level: Optional[str] = None, returncode: Optional[int] = None
+) -> None:
+    """Helper to log stage events with common parameters."""
+    kwargs = {
+        "event": f"{stage}_stage_{event_suffix}",
+        "stage": "oneshot",
+        "message": message,
+        "data": {"argv": argv},
+    }
+    if level is not None:
+        kwargs["level"] = level
+    if returncode is not None:
+        kwargs["returncode"] = returncode
+    append_pipeline_event(RUNTIME_DIR, **kwargs)
+
+
 def execute_stage(stage: str, argv: List[str]) -> int:
+    """Run a stage with logging. Returns exit code."""
     print(f"[oneshot] 正在执行 {stage} 阶段...")
-    append_pipeline_event(
-        RUNTIME_DIR,
-        event=f"{stage}_stage_started",
-        stage="oneshot",
-        message=f"oneshot 开始执行 {stage} 阶段。",
-        data={"argv": argv},
-    )
+    _log_stage_event(stage, "started", f"oneshot 开始执行 {stage} 阶段。", argv)
     rc = run_stage(stage, argv)
     if rc == 0:
-        append_pipeline_event(
-            RUNTIME_DIR,
-            event=f"{stage}_stage_completed",
-            stage="oneshot",
-            message=f"oneshot 完成 {stage} 阶段。",
-            data={"argv": argv},
-        )
-        return 0
-    append_pipeline_event(
-        RUNTIME_DIR,
-        event=f"{stage}_stage_failed",
-        stage="oneshot",
-        level="error",
-        message=f"oneshot 执行 {stage} 阶段失败。",
-        returncode=rc,
-        data={"argv": argv},
-    )
+        _log_stage_event(stage, "completed", f"oneshot 完成 {stage} 阶段。", argv)
+    else:
+        _log_stage_event(stage, "failed", f"oneshot 执行 {stage} 阶段失败。", argv, level="error", returncode=rc)
     return rc
 
 
