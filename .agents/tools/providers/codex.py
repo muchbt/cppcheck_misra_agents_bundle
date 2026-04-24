@@ -7,6 +7,7 @@ from typing import Any, Dict
 from common import RUNTIME_DIR
 from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
 
+PROVIDER_NAME = "codex"
 SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
 NON_INTERACTIVE_COMMAND_PREFIX = ["codex", "exec"]
 SANITIZED_ENV_KEYS = {"CODEX_SANDBOX_NETWORK_DISABLED"}

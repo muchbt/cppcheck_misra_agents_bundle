@@ -5,6 +5,7 @@ from typing import Any, Dict
 from common import RUNTIME_DIR
 from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
 
+PROVIDER_NAME = "claude"
 SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
 NON_INTERACTIVE_COMMAND_PREFIX = ["claude", "-p"]
 SANITIZED_ENV_KEYS = set()
