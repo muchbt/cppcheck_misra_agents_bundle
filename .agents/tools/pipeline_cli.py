@@ -14,6 +14,7 @@ COMMANDS = {
     "bootstrap": ("bootstrap_agents", "Generate agent compatibility files."),
     "doctor": ("doctor", "Run pipeline diagnostics."),
     "oneshot": ("oneshot", "Run the one-shot agent entrypoint."),
+    "policy": ("policy_init", "Initialize policy configuration from templates."),
 }
 
 

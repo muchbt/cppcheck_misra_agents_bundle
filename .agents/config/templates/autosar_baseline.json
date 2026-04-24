@@ -1,0 +1,335 @@
+{
+  "$schema": "../rule_policy.schema.json",
+  "_description": "AUTOSAR baseline policy - RTE/MCAL/BSW components require manual review",
+  "default": {
+    "action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": ["autosar", "unknown"],
+    "risk_reason": "AUTOSAR baseline: unknown contexts require manual review."
+  },
+  "actions": {
+    "misra-c2012-8.9": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "scope"],
+      "risk_reason": "Scope changes in AUTOSAR environment require architecture review."
+    },
+    "misra-c2012-17.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "return_value"],
+      "risk_reason": "Return-value handling affects RTE behavior."
+    },
+    "misra-c2012-9.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "initialization"],
+      "risk_reason": "Initialization in RTE/MCAL affects system startup."
+    },
+    "misra-c2012-17.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "pointer"],
+      "risk_reason": "Pointer manipulation in AUTOSAR environment needs review."
+    },
+    "misra-c2012-17.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "pointer"],
+      "risk_reason": "Pointer manipulation in AUTOSAR environment needs review."
+    },
+    "misra-c2012-18.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "array"],
+      "risk_reason": "Array access in RTE buffers needs review."
+    },
+    "misra-c2012-18.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "array"],
+      "risk_reason": "Array access in RTE buffers needs review."
+    },
+    "misra-c2012-18.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "array"],
+      "risk_reason": "Array access in RTE buffers needs review."
+    },
+    "misra-c2012-11.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "cast"],
+      "risk_reason": "Function pointer casts in BSW callbacks need review."
+    },
+    "misra-c2012-11.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "cast"],
+      "risk_reason": "Pointer casts in AUTOSAR types need review."
+    },
+    "misra-c2012-21.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "memory"],
+      "risk_reason": "Memory allocation forbidden in AUTOSAR safety-critical code."
+    },
+    "misra-c2012-21.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "memory"],
+      "risk_reason": "Memory deallocation forbidden in AUTOSAR safety-critical code."
+    },
+    "misra-c2012-14.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "loop"],
+      "risk_reason": "Loop counters in MCAL timing-critical code need review."
+    },
+    "misra-c2012-14.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "loop"],
+      "risk_reason": "Loop structure in RTE event processing needs review."
+    },
+    "misra-c2012-15.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "goto"],
+      "risk_reason": "Goto usage forbidden in AUTOSAR safety-critical code."
+    },
+    "misra-c2012-15.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "exit"],
+      "risk_reason": "Multiple function exits affect RTE call tracking."
+    },
+    "misra-c2012-16.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "switch"],
+      "risk_reason": "Switch fallthrough in state machine needs review."
+    },
+    "misra-c2012-16.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "switch"],
+      "risk_reason": "Switch condition in RTE dispatch needs review."
+    },
+    "misra-c2012-20.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "macro"],
+      "risk_reason": "Macro parameters in BSW configuration macros need review."
+    },
+    "misra-c2012-20.12": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "macro"],
+      "risk_reason": "Macro usage in AUTOSAR configuration macros needs review."
+    },
+    "misra-c2012-22.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "resource"],
+      "risk_reason": "Resource management in AUTOSAR environment needs review."
+    },
+    "misra-c2012-22.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "resource"],
+      "risk_reason": "Resource management in AUTOSAR environment needs review."
+    },
+    "misra-c2012-22.10": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "error"],
+      "risk_reason": "Error handling in AUTOSAR Dem module needs review."
+    },
+    "misra-c2012-2.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "dead_code"],
+      "risk_reason": "Dead code removal in BSW may affect configuration."
+    },
+    "misra-c2012-2.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "parameter"],
+      "risk_reason": "Unused parameters in RTE API need interface review."
+    },
+    "misra-c2012-8.13": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "pointer"],
+      "risk_reason": "Pointer const in RTE interface parameters needs review."
+    },
+    "misra-c2012-13.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "logical"],
+      "risk_reason": "Logical operators in BSW conditions need review."
+    },
+    "misra-c2012-10.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "type_conversion"],
+      "risk_reason": "Type conversion in AUTOSAR types needs review."
+    },
+    "misra-c2012-10.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["autosar", "type_conversion"],
+      "risk_reason": "Type conversion in AUTOSAR types needs review."
+    }
+  },
+  "patterns": [
+    {
+      "match_contains": "rte_",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["rte", "autosar"],
+      "risk_reason": "AUTOSAR RTE paths require integration review."
+    },
+    {
+      "match_contains": "Rte_",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["rte", "autosar"],
+      "risk_reason": "AUTOSAR RTE paths require integration review."
+    },
+    {
+      "match_contains": "RTE_",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["rte", "autosar"],
+      "risk_reason": "AUTOSAR RTE paths require integration review."
+    },
+    {
+      "match_contains": "mcal",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["mcal", "autosar"],
+      "risk_reason": "MCAL paths can affect hardware abstraction behavior."
+    },
+    {
+      "match_contains": "MCAL",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["mcal", "autosar"],
+      "risk_reason": "MCAL paths can affect hardware abstraction behavior."
+    },
+    {
+      "match_contains": "bsw",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["bsw", "autosar"],
+      "risk_reason": "BSW paths require architecture review."
+    },
+    {
+      "match_contains": "BSW",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["bsw", "autosar"],
+      "risk_reason": "BSW paths require architecture review."
+    },
+    {
+      "match_contains": "canif",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["canif", "autosar"],
+      "risk_reason": "CAN interface changes need communication stack review."
+    },
+    {
+      "match_contains": "CanIf",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["canif", "autosar"],
+      "risk_reason": "CAN interface changes need communication stack review."
+    },
+    {
+      "match_contains": "com",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["com", "autosar"],
+      "risk_reason": "COM module changes need communication stack review."
+    },
+    {
+      "match_contains": "dem",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["dem", "autosar"],
+      "risk_reason": "DEM module changes need diagnostic stack review."
+    },
+    {
+      "match_contains": "det",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["det", "autosar"],
+      "risk_reason": "DET module changes need error handling review."
+    },
+    {
+      "match_contains": "ecu",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["ecu", "autosar"],
+      "risk_reason": "ECU abstraction layer changes need review."
+    },
+    {
+      "match_contains": "schm",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["schm", "autosar"],
+      "risk_reason": "Scheduler module changes need timing review."
+    },
+    {
+      "match_contains": "os",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["os", "autosar"],
+      "risk_reason": "OS module changes need scheduling review."
+    },
+    {
+      "match_contains": "volatile",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["volatile", "hardware"],
+      "risk_reason": "Volatile-related changes may affect hardware or concurrency semantics."
+    },
+    {
+      "match_contains": "interrupt",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["interrupt", "autosar"],
+      "risk_reason": "Interrupt path changes need manual timing and safety review."
+    },
+    {
+      "match_contains": "ISR",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["interrupt", "autosar"],
+      "risk_reason": "ISR changes need manual timing and safety review."
+    },
+    {
+      "match_contains": "register",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["register", "hardware"],
+      "risk_reason": "Register access changes may affect hardware behavior."
+    },
+    {
+      "match_contains": "config",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["config", "autosar"],
+      "risk_reason": "Configuration changes need architecture review."
+    },
+    {
+      "match_contains": "Config",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["config", "autosar"],
+      "risk_reason": "Configuration changes need architecture review."
+    }
+  ]
+}

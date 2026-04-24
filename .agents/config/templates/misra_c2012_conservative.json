@@ -1,0 +1,1028 @@
+{
+  "$schema": "../rule_policy.schema.json",
+  "_description": "Conservative MISRA C:2012 policy - All rules require manual review",
+  "default": {
+    "action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": ["misra", "conservative"],
+    "risk_reason": "Conservative policy: all MISRA rules require manual review."
+  },
+  "actions": {
+    "misra-c2012-2.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "unreachable"],
+      "risk_reason": "Unreachable code may indicate logic errors."
+    },
+    "misra-c2012-2.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "dead_code"],
+      "risk_reason": "Dead code removal needs careful analysis."
+    },
+    "misra-c2012-2.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "unused"],
+      "risk_reason": "Unused type declarations may be intentional."
+    },
+    "misra-c2012-2.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "unused"],
+      "risk_reason": "Unused macro may be intentional for configuration."
+    },
+    "misra-c2012-2.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "unused"],
+      "risk_reason": "Unused macro may be intentional for configuration."
+    },
+    "misra-c2012-2.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "unused"],
+      "risk_reason": "Unused label may indicate incomplete refactoring."
+    },
+    "misra-c2012-2.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "parameter"],
+      "risk_reason": "Unused parameter may be for interface compatibility."
+    },
+    "misra-c2012-3.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "comment"],
+      "risk_reason": "Comment character sequence needs review."
+    },
+    "misra-c2012-3.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "comment"],
+      "risk_reason": "Line splicing in comments can cause issues."
+    },
+    "misra-c2012-4.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "escape"],
+      "risk_reason": "Escape sequences need careful review."
+    },
+    "misra-c2012-4.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "trigraph"],
+      "risk_reason": "Trigraphs should not be used."
+    },
+    "misra-c2012-5.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Identifier naming needs review."
+    },
+    "misra-c2012-5.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Identifier naming needs review."
+    },
+    "misra-c2012-5.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Identifier naming needs review."
+    },
+    "misra-c2012-5.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Macro identifier needs review."
+    },
+    "misra-c2012-5.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Macro identifier needs review."
+    },
+    "misra-c2012-5.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Typedef identifier needs review."
+    },
+    "misra-c2012-5.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Tag identifier needs review."
+    },
+    "misra-c2012-5.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Identifier naming needs review."
+    },
+    "misra-c2012-5.9": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "identifier"],
+      "risk_reason": "Identifier naming needs review."
+    },
+    "misra-c2012-6.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "bit"],
+      "risk_reason": "Bit-field type needs review."
+    },
+    "misra-c2012-6.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "bit"],
+      "risk_reason": "Bit-field usage needs review."
+    },
+    "misra-c2012-7.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "octal"],
+      "risk_reason": "Octal constants need review."
+    },
+    "misra-c2012-7.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "constant"],
+      "risk_reason": "Constant suffix needs review."
+    },
+    "misra-c2012-7.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "constant"],
+      "risk_reason": "Literal suffix needs review."
+    },
+    "misra-c2012-7.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "constant"],
+      "risk_reason": "Constant type needs review."
+    },
+    "misra-c2012-8.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type"],
+      "risk_reason": "Type definition needs review."
+    },
+    "misra-c2012-8.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type"],
+      "risk_reason": "Type definition needs review."
+    },
+    "misra-c2012-8.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type"],
+      "risk_reason": "Type definition needs review."
+    },
+    "misra-c2012-8.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type"],
+      "risk_reason": "Type definition needs review."
+    },
+    "misra-c2012-8.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type"],
+      "risk_reason": "Type definition needs review."
+    },
+    "misra-c2012-8.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type"],
+      "risk_reason": "Type definition needs review."
+    },
+    "misra-c2012-8.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "scope"],
+      "risk_reason": "Scope definition needs review."
+    },
+    "misra-c2012-8.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "scope"],
+      "risk_reason": "Scope definition needs review."
+    },
+    "misra-c2012-8.9": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "scope"],
+      "risk_reason": "Scope definition needs review."
+    },
+    "misra-c2012-8.10": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "linkage"],
+      "risk_reason": "Linkage definition needs review."
+    },
+    "misra-c2012-8.11": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "const"],
+      "risk_reason": "Const definition needs review."
+    },
+    "misra-c2012-8.12": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "enum"],
+      "risk_reason": "Enum definition needs review."
+    },
+    "misra-c2012-8.13": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer definition needs review."
+    },
+    "misra-c2012-8.14": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "struct"],
+      "risk_reason": "Struct definition needs review."
+    },
+    "misra-c2012-9.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "initialization"],
+      "risk_reason": "Initialization needs review."
+    },
+    "misra-c2012-9.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "initialization"],
+      "risk_reason": "Initialization needs review."
+    },
+    "misra-c2012-9.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "initialization"],
+      "risk_reason": "Initialization needs review."
+    },
+    "misra-c2012-9.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "initialization"],
+      "risk_reason": "Initialization needs review."
+    },
+    "misra-c2012-9.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "initialization"],
+      "risk_reason": "Initialization needs review."
+    },
+    "misra-c2012-10.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-10.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-10.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-10.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-10.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-10.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-10.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-10.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type_conversion"],
+      "risk_reason": "Type conversion needs review."
+    },
+    "misra-c2012-11.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-11.9": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "cast"],
+      "risk_reason": "Cast operation needs review."
+    },
+    "misra-c2012-12.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "operator"],
+      "risk_reason": "Operator precedence needs review."
+    },
+    "misra-c2012-12.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "operator"],
+      "risk_reason": "Operator usage needs review."
+    },
+    "misra-c2012-12.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "comma"],
+      "risk_reason": "Comma operator usage needs review."
+    },
+    "misra-c2012-12.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "evaluation"],
+      "risk_reason": "Evaluation order needs review."
+    },
+    "misra-c2012-12.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "sizeof"],
+      "risk_reason": "Sizeof usage needs review."
+    },
+    "misra-c2012-13.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "side_effect"],
+      "risk_reason": "Side effect in initializer needs review."
+    },
+    "misra-c2012-13.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "side_effect"],
+      "risk_reason": "Side effect order needs review."
+    },
+    "misra-c2012-13.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "evaluation"],
+      "risk_reason": "Evaluation order needs review."
+    },
+    "misra-c2012-13.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "assignment"],
+      "risk_reason": "Assignment in condition needs review."
+    },
+    "misra-c2012-13.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "logical"],
+      "risk_reason": "Logical operator usage needs review."
+    },
+    "misra-c2012-13.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "sizeof"],
+      "risk_reason": "Sizeof operand needs review."
+    },
+    "misra-c2012-14.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "float"],
+      "risk_reason": "Float loop counter needs review."
+    },
+    "misra-c2012-14.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "loop"],
+      "risk_reason": "Loop structure needs review."
+    },
+    "misra-c2012-14.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "loop"],
+      "risk_reason": "Loop control needs review."
+    },
+    "misra-c2012-14.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "loop"],
+      "risk_reason": "Loop condition needs review."
+    },
+    "misra-c2012-15.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "goto"],
+      "risk_reason": "Goto usage needs review."
+    },
+    "misra-c2012-15.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "goto"],
+      "risk_reason": "Goto usage needs review."
+    },
+    "misra-c2012-15.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "goto"],
+      "risk_reason": "Goto usage needs review."
+    },
+    "misra-c2012-15.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "goto"],
+      "risk_reason": "Goto usage needs review."
+    },
+    "misra-c2012-15.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "exit"],
+      "risk_reason": "Function exit needs review."
+    },
+    "misra-c2012-15.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "block"],
+      "risk_reason": "Block structure needs review."
+    },
+    "misra-c2012-15.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch structure needs review."
+    },
+    "misra-c2012-16.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch structure needs review."
+    },
+    "misra-c2012-16.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch case needs review."
+    },
+    "misra-c2012-16.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch fallthrough needs review."
+    },
+    "misra-c2012-16.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch default needs review."
+    },
+    "misra-c2012-16.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch default needs review."
+    },
+    "misra-c2012-16.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch structure needs review."
+    },
+    "misra-c2012-16.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "switch"],
+      "risk_reason": "Switch condition needs review."
+    },
+    "misra-c2012-17.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer usage needs review."
+    },
+    "misra-c2012-17.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer usage needs review."
+    },
+    "misra-c2012-17.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer arithmetic needs review."
+    },
+    "misra-c2012-17.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer arithmetic needs review."
+    },
+    "misra-c2012-17.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "function"],
+      "risk_reason": "Function parameter needs review."
+    },
+    "misra-c2012-17.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer usage needs review."
+    },
+    "misra-c2012-17.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "return_value"],
+      "risk_reason": "Return value handling needs review."
+    },
+    "misra-c2012-17.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "parameter"],
+      "risk_reason": "Parameter modification needs review."
+    },
+    "misra-c2012-18.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "array"],
+      "risk_reason": "Array access needs review."
+    },
+    "misra-c2012-18.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "array"],
+      "risk_reason": "Array access needs review."
+    },
+    "misra-c2012-18.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "array"],
+      "risk_reason": "Array access needs review."
+    },
+    "misra-c2012-18.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "operator"],
+      "risk_reason": "Pointer arithmetic needs review."
+    },
+    "misra-c2012-18.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer usage needs review."
+    },
+    "misra-c2012-18.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "array"],
+      "risk_reason": "Array declaration needs review."
+    },
+    "misra-c2012-18.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "array"],
+      "risk_reason": "Array declaration needs review."
+    },
+    "misra-c2012-18.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "array"],
+      "risk_reason": "Array declaration needs review."
+    },
+    "misra-c2012-19.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "assignment"],
+      "risk_reason": "Assignment needs review."
+    },
+    "misra-c2012-19.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "union"],
+      "risk_reason": "Union usage needs review."
+    },
+    "misra-c2012-20.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "include"],
+      "risk_reason": "Include guard needs review."
+    },
+    "misra-c2012-20.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "include"],
+      "risk_reason": "Include order needs review."
+    },
+    "misra-c2012-20.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "include"],
+      "risk_reason": "Include validity needs review."
+    },
+    "misra-c2012-20.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-20.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-20.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-20.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro parameter needs review."
+    },
+    "misra-c2012-20.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "conditional"],
+      "risk_reason": "Conditional compilation needs review."
+    },
+    "misra-c2012-20.9": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "include"],
+      "risk_reason": "Include guards need review."
+    },
+    "misra-c2012-20.10": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-20.11": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-20.12": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-20.13": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-20.14": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Macro usage needs review."
+    },
+    "misra-c2012-21.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "macro"],
+      "risk_reason": "Standard library macro usage needs review."
+    },
+    "misra-c2012-21.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "reserved"],
+      "risk_reason": "Reserved identifier usage needs review."
+    },
+    "misra-c2012-21.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "memory"],
+      "risk_reason": "Memory allocation needs review."
+    },
+    "misra-c2012-21.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "memory"],
+      "risk_reason": "Memory deallocation needs review."
+    },
+    "misra-c2012-21.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "signal"],
+      "risk_reason": "Signal handling needs review."
+    },
+    "misra-c2012-21.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-21.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-21.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-21.9": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-21.10": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "time"],
+      "risk_reason": "Time usage needs review."
+    },
+    "misra-c2012-21.11": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "time"],
+      "risk_reason": "Time usage needs review."
+    },
+    "misra-c2012-21.12": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "exception"],
+      "risk_reason": "Exception handling needs review."
+    },
+    "misra-c2012-21.13": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "type"],
+      "risk_reason": "Type usage needs review."
+    },
+    "misra-c2012-21.14": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-21.15": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "string"],
+      "risk_reason": "String usage needs review."
+    },
+    "misra-c2012-21.16": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "string"],
+      "risk_reason": "String usage needs review."
+    },
+    "misra-c2012-21.17": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "string"],
+      "risk_reason": "String usage needs review."
+    },
+    "misra-c2012-21.18": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "string"],
+      "risk_reason": "String usage needs review."
+    },
+    "misra-c2012-21.19": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "string"],
+      "risk_reason": "String usage needs review."
+    },
+    "misra-c2012-21.20": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "string"],
+      "risk_reason": "String usage needs review."
+    },
+    "misra-c2012-21.21": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "string"],
+      "risk_reason": "String usage needs review."
+    },
+    "misra-c2012-22.1": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "resource"],
+      "risk_reason": "Resource management needs review."
+    },
+    "misra-c2012-22.2": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "resource"],
+      "risk_reason": "Resource management needs review."
+    },
+    "misra-c2012-22.3": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.4": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.5": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "pointer"],
+      "risk_reason": "Pointer usage needs review."
+    },
+    "misra-c2012-22.6": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.7": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.8": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.9": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.10": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "error"],
+      "risk_reason": "Error handling needs review."
+    },
+    "misra-c2012-22.11": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.12": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-22.13": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "file"],
+      "risk_reason": "File handling needs review."
+    },
+    "misra-c2012-22.14": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-22.15": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-22.16": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "io"],
+      "risk_reason": "I/O usage needs review."
+    },
+    "misra-c2012-22.17": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "memory"],
+      "risk_reason": "Memory usage needs review."
+    },
+    "misra-c2012-22.18": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["misra", "memory"],
+      "risk_reason": "Memory usage needs review."
+    }
+  },
+  "patterns": [
+    {
+      "match_contains": "volatile",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["volatile", "hardware"],
+      "risk_reason": "Volatile-related changes may affect hardware or concurrency semantics."
+    },
+    {
+      "match_contains": "interrupt",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["interrupt"],
+      "risk_reason": "Interrupt path changes need manual timing and safety review."
+    },
+    {
+      "match_contains": "register",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["register", "hardware"],
+      "risk_reason": "Register access changes may affect hardware behavior."
+    },
+    {
+      "match_contains": "rte_",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["rte", "autosar"],
+      "risk_reason": "AUTOSAR RTE paths require integration review."
+    },
+    {
+      "match_contains": "mcal",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["mcal", "autosar"],
+      "risk_reason": "MCAL paths can affect hardware abstraction behavior."
+    },
+    {
+      "match_contains": "bsw",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["bsw", "autosar"],
+      "risk_reason": "BSW paths require architecture review."
+    }
+  ]
+}

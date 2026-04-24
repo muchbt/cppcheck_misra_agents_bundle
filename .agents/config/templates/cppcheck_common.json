@@ -1,0 +1,196 @@
+{
+  "$schema": "../rule_policy.schema.json",
+  "_description": "Cppcheck native rule policy - Common cppcheck error/warning strategies",
+  "default": {
+    "action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": ["cppcheck", "unknown"],
+    "risk_reason": "Unknown cppcheck error type requires manual review."
+  },
+  "actions": {
+    "unusedVariable": {
+      "action": "auto_fix",
+      "risk_level": "low",
+      "risk_tags": ["cppcheck", "unused"],
+      "risk_reason": "Unused variable removal is typically safe."
+    },
+    "unreadVariable": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "unused"],
+      "risk_reason": "Unread variable may be intentional for debugging or assertion."
+    },
+    "constVariable": {
+      "action": "auto_fix",
+      "risk_level": "low",
+      "risk_tags": ["cppcheck", "const"],
+      "risk_reason": "Const qualification addition is typically safe."
+    },
+    "uninitvar": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "initialization"],
+      "risk_reason": "Uninitialized variable can cause undefined behavior."
+    },
+    "uninitStructMember": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "initialization"],
+      "risk_reason": "Struct member initialization needs verification of intended initial values."
+    },
+    "nullPointer": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "pointer"],
+      "risk_reason": "Null pointer dereference can cause crashes."
+    },
+    "nullPointerRedundantCheck": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "pointer"],
+      "risk_reason": "Redundant null check removal needs verification of logic."
+    },
+    "bufferAccessOutOfBounds": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "buffer"],
+      "risk_reason": "Buffer access out of bounds can cause memory corruption."
+    },
+    "arrayIndexOutOfBounds": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "array"],
+      "risk_reason": "Array index out of bounds can cause memory corruption."
+    },
+    "memoryLeak": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "memory"],
+      "risk_reason": "Memory leak fix needs verification of ownership semantics."
+    },
+    "resourceLeak": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "resource"],
+      "risk_reason": "Resource leak fix needs verification of ownership semantics."
+    },
+    "doubleFree": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "memory"],
+      "risk_reason": "Double free can cause memory corruption."
+    },
+    "deallocDealloc": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "memory"],
+      "risk_reason": "Multiple deallocation can cause memory corruption."
+    },
+    "useClosedFile": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "file"],
+      "risk_reason": "Using closed file can cause undefined behavior."
+    },
+    "leakNoVarFunctionCall": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "memory"],
+      "risk_reason": "Memory leak in function call needs verification."
+    },
+    "leakReturnValNotUsed": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "memory"],
+      "risk_reason": "Unreturned allocation needs verification."
+    },
+    "returnLocalVariable": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "return"],
+      "risk_reason": "Returning local variable address can cause undefined behavior."
+    },
+    "returnReference": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "return"],
+      "risk_reason": "Returning reference to local can cause undefined behavior."
+    },
+    "autoVariables": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "pointer"],
+      "risk_reason": "Returning address of auto variable can cause undefined behavior."
+    },
+    "danglingTemporaryLifetime": {
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "lifetime"],
+      "risk_reason": "Dangling lifetime reference can cause undefined behavior."
+    },
+    "comparisonError": {
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "comparison"],
+      "risk_reason": "Comparison error fix needs verification of intended logic."
+    }
+  },
+  "patterns": [
+    {
+      "match_contains": "volatile",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["volatile", "hardware"],
+      "risk_reason": "Volatile-related changes may affect hardware or concurrency semantics."
+    },
+    {
+      "match_contains": "interrupt",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["interrupt"],
+      "risk_reason": "Interrupt path changes need manual timing and safety review."
+    },
+    {
+      "match_contains": "register",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["register", "hardware"],
+      "risk_reason": "Register access changes may affect hardware behavior."
+    },
+    {
+      "match_contains": "malloc",
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "memory"],
+      "risk_reason": "Dynamic memory allocation in embedded systems needs review."
+    },
+    {
+      "match_contains": "free",
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "memory"],
+      "risk_reason": "Dynamic memory deallocation in embedded systems needs review."
+    },
+    {
+      "match_contains": "memcpy",
+      "action": "careful_fix",
+      "risk_level": "medium",
+      "risk_tags": ["cppcheck", "buffer"],
+      "risk_reason": "Memory copy operations need size verification."
+    },
+    {
+      "match_contains": "strcpy",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "string"],
+      "risk_reason": "String copy without bounds checking can cause buffer overflow."
+    },
+    {
+      "match_contains": "sprintf",
+      "action": "needs_manual_review",
+      "risk_level": "high",
+      "risk_tags": ["cppcheck", "format"],
+      "risk_reason": "Format string functions without bounds checking can cause buffer overflow."
+    }
+  ]
+}
