@@ -591,6 +591,152 @@ def check_archive_size(runs_dir: Path) -> Dict[str, Any]:
     )
 
 
+# ============================================================================
+# OpenCode-specific checks
+# ============================================================================
+
+
+def check_opencode_executable(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    """Check if opencode executable is available."""
+    provider_name = _get_agent_provider_name(config)
+    if provider_name != "opencode":
+        return make_result(
+            "ok",
+            "opencode_executable_not_applicable",
+            "当前 provider 不是 opencode，跳过可执行文件检查。",
+            f"provider: {provider_name or '未设置'}",
+        )
+
+    launch = _get_agent_launch(config)
+    argv = launch.get("argv", []) if isinstance(launch, dict) else []
+
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item.strip() for item in argv):
+        return make_result(
+            "error",
+            "opencode_launch_argv_invalid",
+            "opencode launch.argv 配置无效。",
+            "launch.argv 必须是非空字符串数组。",
+        )
+
+    executable = argv[0]
+    if shutil.which(executable) is None:
+        return make_result(
+            "error",
+            "opencode_executable_missing",
+            "未找到 opencode 可执行程序。",
+            f"命令: {executable}",
+        )
+
+    return make_result(
+        "ok",
+        "opencode_executable_ok",
+        "opencode 可执行程序已就绪。",
+        f"命令: {' '.join(argv)}",
+    )
+
+
+def check_opencode_xdg_dirs(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    """Check if OpenCode XDG directories exist and are writable."""
+    provider_name = _get_agent_provider_name(config)
+    if provider_name != "opencode":
+        return make_result(
+            "ok",
+            "opencode_xdg_dirs_not_applicable",
+            "当前 provider 不是 opencode，跳过 XDG 目录检查。",
+            f"provider: {provider_name or '未设置'}",
+        )
+
+    xdg_data_dir = root / ".opencode" / "data"
+    xdg_state_dir = root / ".opencode" / "state"
+
+    errors = []
+    details = []
+
+    # Check XDG_DATA_HOME
+    data_error = _ensure_writable_dir(xdg_data_dir)
+    if data_error:
+        errors.append(f"XDG_DATA_HOME ({xdg_data_dir}): {data_error}")
+    else:
+        details.append(f"XDG_DATA_HOME: {xdg_data_dir}")
+
+    # Check XDG_STATE_HOME
+    state_error = _ensure_writable_dir(xdg_state_dir)
+    if state_error:
+        errors.append(f"XDG_STATE_HOME ({xdg_state_dir}): {state_error}")
+    else:
+        details.append(f"XDG_STATE_HOME: {xdg_state_dir}")
+
+    if errors:
+        return make_result(
+            "error",
+            "opencode_xdg_dirs_unwritable",
+            "opencode XDG 目录不可写。",
+            "; ".join(errors),
+        )
+
+    return make_result(
+        "ok",
+        "opencode_xdg_dirs_ok",
+        "opencode XDG 目录可写。",
+        "; ".join(details),
+    )
+
+
+def check_opencode_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    """Check OpenCode authentication status."""
+    provider_name = _get_agent_provider_name(config)
+    if provider_name != "opencode":
+        return make_result(
+            "ok",
+            "opencode_auth_not_applicable",
+            "当前 provider 不是 opencode，跳过认证检查。",
+            f"provider: {provider_name or '未设置'}",
+        )
+
+    # Check for common API key environment variables
+    auth_env_vars = [
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+    ]
+    detected_keys = [key for key in auth_env_vars if os.environ.get(key)]
+
+    # Check for opencode config files
+    xdg_data_dir = root / ".opencode" / "data"
+    xdg_state_dir = root / ".opencode" / "state"
+
+    config_candidates = [
+        xdg_data_dir / "config.json",
+        xdg_state_dir / "auth.json",
+        Path.home() / ".config" / "opencode" / "config.json",
+        Path.home() / ".opencode" / "config.json",
+    ]
+    existing_configs = [str(p) for p in config_candidates if p.exists()]
+
+    if detected_keys:
+        return make_result(
+            "ok",
+            "opencode_auth_env_ok",
+            "检测到 OpenCode 可用的环境认证变量。",
+            f"已检测到: {', '.join(detected_keys)}",
+        )
+
+    if existing_configs:
+        return make_result(
+            "ok",
+            "opencode_auth_config_ok",
+            "检测到 OpenCode 配置文件。",
+            f"配置文件: {', '.join(existing_configs)}",
+        )
+
+    return make_result(
+        "warning",
+        "opencode_auth_manual_check",
+        "OpenCode 认证状态需要人工确认。",
+        "请确认已通过 OpenCode CLI 完成认证配置，或设置相应的 API 密钥环境变量。",
+    )
+
+
 def check_prompt_length(path: Path) -> Dict[str, Any]:
     text = read_text(path, "")
     if len(text) > PROMPT_LENGTH_WARNING_THRESHOLD:
@@ -729,8 +875,10 @@ register_check("codex", check_agent_skill_visibility)
 register_check("codex", check_agent_auth)
 register_check("codex", check_agent_network)
 
-# Opencode-specific checks (placeholder for future expansion)
-# register_check("opencode", ...)
+# OpenCode-specific checks
+register_check("opencode", check_opencode_executable)
+register_check("opencode", check_opencode_xdg_dirs)
+register_check("opencode", check_opencode_auth)
 
 
 def print_checks(results: List[Dict[str, Any]]) -> None:
