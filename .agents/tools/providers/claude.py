@@ -10,10 +10,7 @@ NON_INTERACTIVE_COMMAND_PREFIX = ["claude", "-p"]
 SANITIZED_ENV_KEYS = set()
 CLAUDE_APPEND_SYSTEM_PROMPT = (
     "Use the local cppcheck-misra-fix skill from the current workspace when available. "
-    "The staging output contract is strict: issue_status_delta.json must use either "
-    "a flat {issue_key: patch} object or a wrapper containing status_changes / issue_status_changes; "
-    "file_change_delta.json must use either a flat {file: data} object or a wrapper containing file_changes. "
-    "Keep field names stable and deterministic."
+    "Follow the staging output format contract defined in the cppcheck-misra-fix SKILL.md file."
 )
 
 

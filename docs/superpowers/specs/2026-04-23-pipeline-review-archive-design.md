@@ -50,7 +50,7 @@ python3 .agents/tools/pipeline_cli.py oneshot --strategy conservative
    - 若存在未完成运行，默认续跑，并提示当前 `run_id`、已完成 chunk、失败 chunk、剩余 chunk。
    - 续跑时以已有 `progress.json` 的 `fix_strategy` 为准；若用户显式传入不同的 `--strategy`，直接退出，并提示使用 `--fresh --strategy <目标策略>`。
    - 若用户传入 `--fresh`，开始新运行，执行 split 并清空当前 runtime。
-   - 若用户传入 `--resume`，行为与默认续跑一致，用于脚本中表达意图。
+   - 若用户传入 `--resume`，行为与默认续跑一致，用于脚本中表达意图。（已实现，commit 655cb77）
 
 3. 新运行时执行 `split`：解析 `cppcheck.xml`，生成 chunk，创建或使用指定 `run_id`。
 4. 执行 `run`：逐 chunk 调用 agent，成功产出 result JSON 后调用轻量验证逻辑。
