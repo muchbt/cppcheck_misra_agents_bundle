@@ -5,10 +5,11 @@
 - 解析 `cppcheck.xml`
 - 识别普通 cppcheck 与 MISRA 结果
 - 按文件聚类并切 chunk
-- 调用本地 agent（默认 Codex CLI）
-- 记录 issue 状态、文件修改点、chunk 结果
-- 支持断点续跑
-- 通过 `.agents/` 统一管理，并自动生成 Codex 兼容层
+- 调用本地 agent（默认 `codex` CLI）
+- 记录 issue 状态、修改点、chunk 结果、统一运行日志
+- 支持按 `年月日-序号` 的 `run_id` 归档
+- 支持 `oneshot` 统一入口和默认续跑
+- 通过 `.agents/` 统一管理，并自动生成兼容层
 
 ## 目录
 
@@ -16,23 +17,136 @@
 - `.agents/prompts/*.txt`：prompt 模板
 - `.agents/skills/*`：主 skill 源
 - `.agents/tools/*.py`：工具脚本
-- `.agents/runtime/*`：运行时状态与结果
-- `.agents/reports/*`：汇总报告
+- `.agents/runtime/*`：当前运行态、chunk、结果、日志
+- `.agents/reports/*`：当前运行的中文报告
+- `.agents/runs/<run_id>/*`：历史归档
 
-## 快速开始
+## Agent 配置
 
-1. 把整个目录内容放到你的工程根目录
-2. 确保工程根目录下存在 `cppcheck.xml`
-3. 运行：
+`pipeline.json` 中的 `agent` 必须使用结构化配置，不再支持旧的 `type` / `command` 字符串模型。
 
-```bash
-python3 .agents/tools/bootstrap_agents.py --mode merge
-python3 .agents/tools/split_cppcheck_xml.py --strategy conservative
-python3 .agents/tools/run_fix_pipeline.py --strategy conservative
-python3 .agents/tools/merge_results.py
+当前配置内置了已兼容的 provider。用户日常只需要修改 `agent.provider`，其余 provider 配置保持不动。
+
+默认配置如下：
+
+```json
+"agent": {
+  "provider": "codex",
+  "staging_dir": ".agents/staging",
+  "providers": {
+    "codex": {
+      "launch": {
+        "argv": ["codex", "exec", "--full-auto"],
+        "prompt_via": "stdin",
+        "cwd": "project_root",
+        "env": {
+          "CODEX_HOME": ".agents/runtime/agent-home"
+        },
+        "requires_tty": false,
+        "output": {
+          "mode": "exit_code"
+        }
+      },
+      "capabilities": {
+        "non_interactive": true,
+        "workspace_write_required": true
+      }
+    },
+    "claude": {
+      "launch": {
+        "argv": ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits"],
+        "prompt_via": "stdin",
+        "cwd": "project_root",
+        "env": {},
+        "requires_tty": false,
+        "output": {
+          "mode": "exit_code"
+        }
+      },
+      "capabilities": {
+        "non_interactive": true,
+        "workspace_write_required": true
+      }
+    }
+  },
+  "auto_bootstrap_compat": true
+}
 ```
 
-也可以使用统一入口：
+切换到 `Claude Code` 时，只需要把：
+
+```json
+"provider": "codex"
+```
+
+改成：
+
+```json
+"provider": "claude"
+```
+
+要求如下：
+
+- 必须使用非交互命令形式；对 `codex` 来说，应使用 `codex exec`
+- 对 `Claude Code` 来说，应使用 `claude -p` 一类非交互入口
+- `prompt_via` 当前推荐 `stdin`
+- `CODEX_HOME` 这类运行目录应映射到工作区内可写路径
+- `Claude Code` 的认证默认依赖本机 `claude auth login` 状态或运行环境中的 `ANTHROPIC_API_KEY`
+- 运行时会优先复用 `~/.codex/auth.json` 和 `~/.codex/config.toml`，同步到工作区 `CODEX_HOME`
+- 运行时会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`，避免用户手动解除该环境变量
+- `Claude Code` 会从项目内 `.claude/skills/` 或用户全局 `~/.claude/skills/` 加载 skill；推荐始终生成项目内兼容层，避免不同机器行为不一致
+- 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误
+
+## 推荐用法
+
+首次接入、环境异常、命令失败时，先运行：
+
+```bash
+python3 .agents/tools/pipeline_cli.py doctor
+```
+
+日常使用推荐直接运行：
+
+```bash
+python3 .agents/tools/pipeline_cli.py oneshot
+```
+
+`oneshot` 会自动完成：
+
+1. 预检查
+2. `split`
+3. `run`
+4. `merge`
+
+如果检测到已有未完成运行，`oneshot` 会默认续跑，并打印当前 `run_id`、状态和进度摘要。
+
+## fresh 与续跑
+
+默认情况下，只要 `.agents/runtime/progress.json` 的状态是 `ready`、`running`、`partial` 或 `failed`，`oneshot` 就会续跑。
+
+强制从头开始时使用：
+
+```bash
+python3 .agents/tools/pipeline_cli.py oneshot --fresh
+```
+
+需要显式切换策略时，也应配合 `--fresh`：
+
+```bash
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
+```
+
+需要指定本次 fresh 运行的编号时：
+
+```bash
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --run-id 20260423-001
+```
+
+如果在续跑模式传入与当前运行态不一致的 `--strategy` 或 `--run-id`，命令会提前退出，并提示改用 `--fresh`。
+
+## 分步命令
+
+需要拆开执行时，可继续使用统一入口：
 
 ```bash
 python3 .agents/tools/pipeline_cli.py split --strategy conservative
@@ -40,71 +154,111 @@ python3 .agents/tools/pipeline_cli.py run --strategy conservative
 python3 .agents/tools/pipeline_cli.py merge
 ```
 
+也可以直接调用工具脚本：
+
+```bash
+python3 .agents/tools/split_cppcheck_xml.py --strategy conservative
+python3 .agents/tools/run_fix_pipeline.py --strategy conservative
+python3 .agents/tools/merge_results.py
+```
+
 Windows 下可用：
 
 ```bat
-py .agents\tools\bootstrap_agents.py --mode merge
-py .agents\tools\split_cppcheck_xml.py --strategy conservative
-py .agents\tools\run_fix_pipeline.py --strategy conservative
-py .agents\tools\merge_results.py
+py .agents\tools\pipeline_cli.py doctor
+py .agents\tools\pipeline_cli.py oneshot
 ```
 
 ## 自动修复策略
 
 默认策略是 `conservative`：
 
-- 只让 agent 修复高置信度、局部可判定的问题
+- 只自动修复高置信度、局部可判定的问题
 - 高风险 MISRA / volatile / interrupt / register / RTE / MCAL 等问题标记为 `needs_manual_review`
 
-如需让 agent 尝试修复所有问题，可显式使用 `all_auto`：
+如需让 agent 尝试修复更多问题，可显式使用 `all_auto`：
 
 ```bash
-python3 .agents/tools/split_cppcheck_xml.py --strategy all_auto
-python3 .agents/tools/run_fix_pipeline.py --strategy all_auto
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
 ```
 
-或使用统一入口：
+`all_auto` 会把高风险问题也分发给 agent，但结果必须保留 `risk_level`、`risk_reason` 和 `review_required_after_fix=true`。高风险自动修复不代表免人工复核。
+
+## 运行日志
+
+当前运行的日志位于：
+
+- `.agents/runtime/pipeline.log`
+- `.agents/runtime/run_log.jsonl`
+
+其中：
+
+- `pipeline.log` 适合人工快速阅读
+- `run_log.jsonl` 适合脚本消费和后续扩展
+
+`split`、`run`、`oneshot` 都会写统一事件日志。fresh split 会重置当前运行的日志文件。
+
+## 中文报告
+
+每次 `merge` 会生成：
+
+- `.agents/reports/final_summary.md`
+- `.agents/reports/final_summary.json`
+- `.agents/reports/review_checklist.md`
+- `.agents/reports/run_manifest.json`
+
+其中：
+
+- `final_summary.md` 面向人工 review，使用简体中文，并在首次出现时保留关键英文原文，例如“需人工复核（needs manual review）”
+- `review_checklist.md` 会列出需重点人工复核的问题、文件、规则、状态和 `edit_id`
+- `run_manifest.json` 会记录 `run_id`、开始/结束/归档时间、输入 XML、策略、chunk 统计和报告路径
+
+## 归档
+
+每次 `merge` 后，当前运行会复制到：
+
+```text
+.agents/runs/<run_id>/
+```
+
+归档内容包括：
+
+- `runtime/`：运行态 JSON、chunk、结果
+- `reports/`：中文总结、复核清单、manifest
+- `logs/`：`pipeline.log` 与 `run_log.jsonl`
+
+## 验证说明
+
+`verify_chunk.py` 默认只记录轻量验证结果。
+
+如果 `pipeline.json` 中没有配置 `verification.custom_command`，报告会明确写“未执行工程级验证”，不会把轻量验证表述成工程级验证成功。
+
+如果配置了 `verification.custom_command`，对应结果会记录在每个 chunk 的 `verification` 字段中，并汇总进中文报告。
+
+## bootstrap_agents.py
+
+用于同步兼容层：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py split --strategy all_auto
-python3 .agents/tools/pipeline_cli.py run --strategy all_auto
+python3 .agents/tools/bootstrap_agents.py --mode merge
 ```
 
-Windows 下：
+模式说明：
 
-```bat
-py .agents\tools\split_cppcheck_xml.py --strategy all_auto
-py .agents\tools\run_fix_pipeline.py --strategy all_auto
-```
-
-`all_auto` 会把高风险问题也分发给 agent，但必须在结果中标记 `risk_level=high`、`risk_reason` 和 `review_required_after_fix=true`。高风险自动修复不代表免人工复核。
-
-## bootstrap_agents.py 模式
-
-- `--mode merge`：默认；对 `AGENTS.md` 使用标记块替换/追加，对 `.codex/skills/.../SKILL.md` 执行同步覆盖
+- `--mode merge`：默认；对 `AGENTS.md` 使用标记块替换/追加，对 `.codex/skills/.../SKILL.md` 和 `.claude/skills/.../SKILL.md` 执行同步覆盖
 - `--mode overwrite`：重建兼容层
 - `--dry-run`：只显示将变更哪些文件，不写盘
 
 ## 兼容层说明
 
-`.agents/` 是主目录。为了兼容 Codex：
+`.agents/` 是主目录。当前兼容层包括：
 
 - 生成项目根目录 `AGENTS.md`
 - 生成项目根目录 `.codex/skills/cppcheck-misra-fix/SKILL.md`
-
-## 结果文件
-
-- `.agents/runtime/issues_master.json`
-- `.agents/runtime/issue_status.json`
-- `.agents/runtime/file_change_index.json`
-- `.agents/runtime/progress.json`
-- `.agents/runtime/chunks/chunk_XXX.json`
-- `.agents/runtime/results/chunk_XXX_result.json`
-- `.agents/reports/final_summary.md`
-- `.agents/reports/final_summary.json`
+- 生成项目根目录 `.claude/skills/cppcheck-misra-fix/SKILL.md`
 
 ## 注意
 
 - 本方案默认只自动修复高置信度、局部可判定的问题
-- 高风险 MISRA / volatile / interrupt / register / RTE 等问题默认标记为 `needs_manual_review`
-- `verify_chunk.py` 默认只做轻量验证；如需工程级编译验证，请在配置中开启自定义命令
+- 高风险路径默认标记为 `needs_manual_review`
+- 涉及环境异常、命令缺失、输入文件问题时，先运行 `doctor`

@@ -2,17 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from pathlib import Path
+from typing import Any, Dict
 
 from common import CONFIG_DIR, RESULTS_DIR, ROOT, load_json, run_command, save_json
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Lightweight verification for one chunk result.")
-    parser.add_argument("chunk_index", type=int)
-    args = parser.parse_args()
-
+def verify_chunk_result(chunk_index: int) -> Dict[str, Any]:
     config = load_json(CONFIG_DIR / "pipeline.json", {})
-    result_path = RESULTS_DIR / f"chunk_{args.chunk_index:03d}_result.json"
+    result_path = RESULTS_DIR / f"chunk_{chunk_index:03d}_result.json"
     result = load_json(result_path, {})
 
     verification = {
@@ -29,7 +27,6 @@ def main() -> None:
         if Path(custom_cmd).exists():
             proc = run_command([custom_cmd], cwd=ROOT)
         else:
-            import shlex
             proc = run_command(shlex.split(custom_cmd), cwd=ROOT)
         verification["command"] = custom_cmd
         verification["returncode"] = proc.returncode
@@ -40,6 +37,14 @@ def main() -> None:
 
     result["verification"] = verification
     save_json(result_path, result)
+    return verification
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Lightweight verification for one chunk result.")
+    parser.add_argument("chunk_index", type=int)
+    args = parser.parse_args()
+    verification = verify_chunk_result(args.chunk_index)
     print(json.dumps(verification, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":

@@ -17,6 +17,24 @@ from common import (
     write_text,
 )
 
+def ensure_parent_dir(path: Path) -> None:
+    parent = path.parent
+    if parent.exists() and parent.is_dir():
+        return
+
+    current = parent
+    while current != ROOT and not current.exists():
+        current = current.parent
+
+    if current.exists() and current.is_file():
+        if current.name == ".codex" and current.stat().st_size == 0:
+            current.unlink()
+            current.mkdir(parents=True, exist_ok=True)
+        else:
+            raise SystemExit(f"Cannot create directory '{parent}': '{current}' is a file.")
+
+    parent.mkdir(parents=True, exist_ok=True)
+
 def build_agents_md_block() -> str:
     return """## Static analysis / cppcheck / MISRA workflow
 
@@ -36,6 +54,10 @@ def build_agents_md_block() -> str:
   - AUTOSAR RTE/MCAL/BSW high-risk paths
   - public interfaces / propagated header changes
 - In all_auto mode, high-risk issues may be fixed, but must be marked with risk_level, risk_reason, and review_required_after_fix=true
+- Prefer completing work inside the current workspace
+- If one issue is blocked, record the blocker and continue with other safe issues in the same chunk
+- Do not wait indefinitely for sandbox, tool, or environment side effects; write blockers into runtime state and result files
+- Ask users only when explicit authorization is required and no safe workspace-only path exists
 - After edits, update:
   - .agents/runtime/issue_status.json
   - .agents/runtime/file_change_index.json
@@ -61,14 +83,23 @@ def sync_agents_md(mode: str, dry_run: bool) -> None:
 
 def sync_skill(mode: str, dry_run: bool) -> None:
     agent_map = load_json(CONFIG_DIR / "agent_map.json", {})
-    skill_target = ROOT / agent_map["agents"]["codex"]["bootstrap"]["skill_target"]
     skill_source = SKILLS_DIR / "cppcheck-misra-fix" / "SKILL.md"
     src = read_text(skill_source, "")
-    old = read_text(skill_target, "")
-    changed = src != old
-    print(f"[SKILL.md] target={skill_target} changed={changed} mode={mode} dry_run={dry_run}")
-    if changed and not dry_run:
-        write_text(skill_target, src)
+    for provider_name, data in sorted(agent_map.get("agents", {}).items()):
+        bootstrap = data.get("bootstrap", {}) if isinstance(data, dict) else {}
+        skill_target_value = bootstrap.get("skill_target", "")
+        if not isinstance(skill_target_value, str) or not skill_target_value.strip():
+            continue
+        skill_target = ROOT / skill_target_value
+        old = read_text(skill_target, "")
+        changed = src != old
+        print(
+            f"[SKILL.md] provider={provider_name} target={skill_target} "
+            f"changed={changed} mode={mode} dry_run={dry_run}"
+        )
+        if changed and not dry_run:
+            ensure_parent_dir(skill_target)
+            write_text(skill_target, src)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Bootstrap .agents compatibility files.")
@@ -90,15 +121,19 @@ def main() -> None:
     sync_skill(args.mode, args.dry_run)
 
     compat_agents = AGENTS_DIR / "compat" / "AGENTS.md"
-    compat_skill = AGENTS_DIR / "compat" / ".codex" / "skills" / "cppcheck-misra-fix" / "SKILL.md"
+    compat_codex_skill = AGENTS_DIR / "compat" / ".codex" / "skills" / "cppcheck-misra-fix" / "SKILL.md"
+    compat_claude_skill = AGENTS_DIR / "compat" / ".claude" / "skills" / "cppcheck-misra-fix" / "SKILL.md"
 
     if args.dry_run:
         print(f"[DRY-RUN] would sync compat AGENTS to {compat_agents}")
-        print(f"[DRY-RUN] would sync compat SKILL to {compat_skill}")
+        print(f"[DRY-RUN] would sync compat SKILL to {compat_codex_skill}")
+        print(f"[DRY-RUN] would sync compat SKILL to {compat_claude_skill}")
         return
 
     write_text(compat_agents, read_text(ROOT / "AGENTS.md", ""))
-    write_text(compat_skill, read_text(SKILLS_DIR / "cppcheck-misra-fix" / "SKILL.md", ""))
+    skill_text = read_text(SKILLS_DIR / "cppcheck-misra-fix" / "SKILL.md", "")
+    write_text(compat_codex_skill, skill_text)
+    write_text(compat_claude_skill, skill_text)
     print("Bootstrap completed.")
 
 if __name__ == "__main__":

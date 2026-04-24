@@ -41,8 +41,55 @@
     "custom_command": ""
   },
   "agent": {
-    "type": "codex",
-    "command": "codex",
+    "provider": "codex",
+    "staging_dir": ".agents/staging",
+    "providers": {
+      "codex": {
+        "launch": {
+          "argv": [
+            "codex",
+            "exec",
+            "--full-auto"
+          ],
+          "prompt_via": "stdin",
+          "cwd": "project_root",
+          "env": {
+            "CODEX_HOME": ".agents/runtime/agent-home"
+          },
+          "requires_tty": false,
+          "output": {
+            "mode": "exit_code"
+          }
+        },
+        "capabilities": {
+          "non_interactive": true,
+          "workspace_write_required": true
+        }
+      },
+      "claude": {
+        "launch": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "text",
+            "--permission-mode",
+            "acceptEdits"
+          ],
+          "prompt_via": "stdin",
+          "cwd": "project_root",
+          "env": {},
+          "requires_tty": false,
+          "output": {
+            "mode": "exit_code"
+          }
+        },
+        "capabilities": {
+          "non_interactive": true,
+          "workspace_write_required": true
+        }
+      }
+    },
     "auto_bootstrap_compat": true
   }
 }
