@@ -265,6 +265,122 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
 
     return errors, warnings
 
+
+VALID_RULE_ACTIONS = {"fix", "skip", "needs_manual_review", "careful_fix", "auto_fix"}
+VALID_RISK_LEVELS = {"low", "medium", "high"}
+
+
+def validate_rule_policy(config: Any) -> Tuple[List[str], List[str]]:
+    """Validate rule_policy.json configuration.
+
+    Args:
+        config: The parsed rule_policy JSON object.
+
+    Returns:
+        Tuple of (errors, warnings) lists.
+    """
+    errors: List[str] = []
+    warnings: List[str] = []
+
+    if not isinstance(config, dict):
+        return ["rule_policy config must be a JSON object"], warnings
+
+    # Validate default exists and is valid
+    default = config.get("default")
+    if default is None:
+        errors.append("missing required field: default")
+    else:
+        default_errors = _validate_action_config(default, "default")
+        errors.extend(default_errors)
+
+    # Validate actions
+    actions = config.get("actions")
+    if actions is None:
+        errors.append("missing required field: actions")
+    elif not isinstance(actions, dict):
+        errors.append("actions must be an object")
+    else:
+        for rule_id, action_config in actions.items():
+            if not isinstance(rule_id, str) or not rule_id.strip():
+                errors.append("actions keys must be non-empty strings")
+                continue
+            if not isinstance(action_config, dict):
+                errors.append(f"actions.{rule_id} must be an object")
+                continue
+            action_errors = _validate_action_config(action_config, f"actions.{rule_id}")
+            errors.extend(action_errors)
+
+    # Validate patterns
+    patterns = config.get("patterns")
+    if patterns is None:
+        errors.append("missing required field: patterns")
+    elif not isinstance(patterns, list):
+        errors.append("patterns must be an array")
+    else:
+        for idx, pattern_config in enumerate(patterns):
+            if not isinstance(pattern_config, dict):
+                errors.append(f"patterns[{idx}] must be an object")
+                continue
+            pattern_errors = _validate_pattern_config(pattern_config, f"patterns[{idx}]")
+            errors.extend(pattern_errors)
+
+    return errors, warnings
+
+
+def _validate_action_config(config: Dict[str, Any], path: str) -> List[str]:
+    """Validate an action configuration object."""
+    errors: List[str] = []
+
+    action = config.get("action")
+    if action is None:
+        errors.append(f"{path}.action is required")
+    elif not isinstance(action, str):
+        errors.append(f"{path}.action must be a string")
+    elif action not in VALID_RULE_ACTIONS:
+        valid_actions = ", ".join(sorted(VALID_RULE_ACTIONS))
+        errors.append(f"{path}.action must be one of: {valid_actions}")
+
+    risk_level = config.get("risk_level")
+    if risk_level is not None:
+        if not isinstance(risk_level, str):
+            errors.append(f"{path}.risk_level must be a string")
+        elif risk_level not in VALID_RISK_LEVELS:
+            valid_levels = ", ".join(sorted(VALID_RISK_LEVELS))
+            errors.append(f"{path}.risk_level must be one of: {valid_levels}")
+
+    risk_tags = config.get("risk_tags")
+    if risk_tags is not None:
+        if not isinstance(risk_tags, list):
+            errors.append(f"{path}.risk_tags must be an array")
+        elif not all(isinstance(tag, str) and tag.strip() for tag in risk_tags):
+            errors.append(f"{path}.risk_tags must be an array of non-empty strings")
+
+    risk_reason = config.get("risk_reason")
+    if risk_reason is not None and not isinstance(risk_reason, str):
+        errors.append(f"{path}.risk_reason must be a string")
+
+    return errors
+
+
+def _validate_pattern_config(config: Dict[str, Any], path: str) -> List[str]:
+    """Validate a pattern configuration object."""
+    errors: List[str] = []
+
+    match_contains = config.get("match_contains")
+    if match_contains is None:
+        errors.append(f"{path}.match_contains is required")
+    elif not isinstance(match_contains, str):
+        errors.append(f"{path}.match_contains must be a string")
+    elif not match_contains.strip():
+        errors.append(f"{path}.match_contains must be a non-empty string")
+
+    # Reuse action config validation for the rest
+    action_errors = _validate_action_config(config, path)
+    errors.extend(action_errors)
+
+    return errors
+
+
 def append_pipeline_event(
     runtime_dir: Path,
     event: str,

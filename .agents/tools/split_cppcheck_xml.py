@@ -22,6 +22,7 @@ from common import (
     normalize_msg,
     reset_runtime_logs,
     save_json,
+    validate_rule_policy,
 )
 
 VALID_STRATEGIES = {"conservative", "all_auto"}
@@ -222,6 +223,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     config = load_json(CONFIG_DIR / "pipeline.json", {})
     policy = load_json(CONFIG_DIR / "rule_policy.json", {})
+    policy_errors, policy_warnings = validate_rule_policy(policy)
+    if policy_errors:
+        for err in policy_errors:
+            print(f"rule_policy.json validation error: {err}")
+        raise SystemExit(f"rule_policy.json validation failed with {len(policy_errors)} errors")
+
     strategy = resolve_strategy(config, args.strategy)
     run_id = args.run_id or next_run_id()
     if not RUN_ID_RE.match(run_id):

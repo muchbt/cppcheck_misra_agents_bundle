@@ -172,6 +172,87 @@ class CommonRuntimeTests(unittest.TestCase):
             self.assertTrue((archive_dir / "runtime" / "chunks").is_dir())
             self.assertTrue((archive_dir / "runtime" / "results").is_dir())
 
+    def test_validate_rule_policy_is_python_38_compatible(self) -> None:
+        hints = get_type_hints(common.validate_rule_policy)
+        self.assertEqual(hints["return"], Tuple[List[str], List[str]])
+
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        errors, warnings = common.validate_rule_policy(config)
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_invalid_action(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        broken = deepcopy(config)
+        broken["actions"]["unusedVariable"]["action"] = "invalid_action"
+
+        errors, warnings = common.validate_rule_policy(broken)
+        self.assertIn("actions.unusedVariable.action must be one of: auto_fix, careful_fix, fix, needs_manual_review, skip", errors)
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_missing_default(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        broken = deepcopy(config)
+        del broken["default"]
+
+        errors, warnings = common.validate_rule_policy(broken)
+        self.assertIn("missing required field: default", errors)
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_missing_default_action(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        broken = deepcopy(config)
+        del broken["default"]["action"]
+
+        errors, warnings = common.validate_rule_policy(broken)
+        self.assertIn("default.action is required", errors)
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_invalid_pattern_match_contains(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        broken = deepcopy(config)
+        broken["patterns"][0]["match_contains"] = ""
+
+        errors, warnings = common.validate_rule_policy(broken)
+        self.assertIn("patterns[0].match_contains must be a non-empty string", errors)
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_invalid_risk_level(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        broken = deepcopy(config)
+        broken["actions"]["nullPointer"]["risk_level"] = "critical"
+
+        errors, warnings = common.validate_rule_policy(broken)
+        self.assertIn("actions.nullPointer.risk_level must be one of: high, low, medium", errors)
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_non_object_config(self) -> None:
+        errors, warnings = common.validate_rule_policy("not a dict")
+        self.assertIn("rule_policy config must be a JSON object", errors)
+        self.assertEqual(warnings, [])
+
+        errors, warnings = common.validate_rule_policy([])
+        self.assertIn("rule_policy config must be a JSON object", errors)
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_missing_actions(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        broken = deepcopy(config)
+        del broken["actions"]
+
+        errors, warnings = common.validate_rule_policy(broken)
+        self.assertIn("missing required field: actions", errors)
+        self.assertEqual(warnings, [])
+
+    def test_validate_rule_policy_rejects_missing_patterns(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "rule_policy.json", {})
+        broken = deepcopy(config)
+        del broken["patterns"]
+
+        errors, warnings = common.validate_rule_policy(broken)
+        self.assertIn("missing required field: patterns", errors)
+        self.assertEqual(warnings, [])
+
 
 if __name__ == "__main__":
     unittest.main()
