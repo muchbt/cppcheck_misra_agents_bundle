@@ -145,6 +145,118 @@ class OneshotTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(stage_calls[0], ("split", ["--run-id", "20260423-123"]))
 
+    def test_dry_run_prints_summary_and_exits_after_split(self) -> None:
+        """--dry-run should print chunk summary after split without running agents."""
+        stage_calls = []
+        stdout = io.StringIO()
+        chunks_dir = self.runtime_dir / "chunks"
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create mock chunk files
+        common.save_json(chunks_dir / "chunk_001.json", {
+            "chunk_index": 1,
+            "issue_count": 5,
+            "files": ["src/file1.c", "src/file2.c"],
+            "contains_high_risk": False,
+            "requires_review_after_fix_count": 0,
+        })
+        common.save_json(chunks_dir / "chunk_002.json", {
+            "chunk_index": 2,
+            "issue_count": 3,
+            "files": ["src/file3.c"],
+            "contains_high_risk": True,
+            "requires_review_after_fix_count": 2,
+        })
+        common.save_json(self.runtime_dir / "progress.json", {
+            "run_id": "20260424-001",
+            "fix_strategy": "conservative",
+            "total_chunks": 2,
+            "status": "ready",
+        })
+        common.save_json(self.runtime_dir / "issues_master.json", [
+            {"issue_key": "test:1:rule", "file": "src/file1.c"},
+            {"issue_key": "test:2:rule", "file": "src/file2.c"},
+            {"issue_key": "test:3:rule", "file": "src/file3.c"},
+            {"issue_key": "test:4:rule", "file": "src/file3.c"},
+            {"issue_key": "test:5:rule", "file": "src/file3.c"},
+            {"issue_key": "test:6:rule", "file": "src/file3.c"},
+            {"issue_key": "test:7:rule", "file": "src/file3.c"},
+            {"issue_key": "test:8:rule", "file": "src/file3.c"},
+        ])
+
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), patch.object(
+            oneshot, "collect_precheck_results", return_value=self.ok_checks()
+        ), patch.object(
+            oneshot.doctor, "print_checks"
+        ), patch.object(
+            oneshot, "run_stage", side_effect=lambda stage, argv: stage_calls.append((stage, argv)) or 0
+        ), redirect_stdout(stdout):
+            rc = oneshot.main(["--fresh", "--dry-run"])
+
+        output = stdout.getvalue()
+        self.assertEqual(rc, 0)
+        # Should only have split stage, not run/merge
+        self.assertEqual([name for name, _ in stage_calls], ["split"])
+        # Should print dry-run summary
+        self.assertIn("DRY-RUN PREVIEW", output)
+        self.assertIn("total_issues: 8", output)
+        self.assertIn("total_chunks: 2", output)
+        self.assertIn("chunk_001: 5 issues, 2 file(s)", output)
+        self.assertIn("chunk_002: 3 issues, 1 file(s)", output)
+        self.assertIn("HIGH_RISK", output)
+        self.assertIn("NEEDS_REVIEW:2", output)
+        self.assertIn("DRY-RUN complete", output)
+        self.assertIn("No agents were started", output)
+
+    def test_dry_run_with_resume_mode_uses_existing_chunks(self) -> None:
+        """--dry-run in resume mode should show existing chunks without re-splitting."""
+        stage_calls = []
+        stdout = io.StringIO()
+        chunks_dir = self.runtime_dir / "chunks"
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create existing runtime state
+        common.save_json(chunks_dir / "chunk_001.json", {
+            "chunk_index": 1,
+            "issue_count": 2,
+            "files": ["src/existing.c"],
+            "contains_high_risk": False,
+            "requires_review_after_fix_count": 0,
+        })
+        common.save_json(self.runtime_dir / "progress.json", {
+            "run_id": "20260424-002",
+            "fix_strategy": "conservative",
+            "total_chunks": 1,
+            "status": "ready",
+            "completed_chunks": [],
+        })
+        common.save_json(self.runtime_dir / "issues_master.json", [
+            {"issue_key": "test:1:rule", "file": "src/existing.c"},
+            {"issue_key": "test:2:rule", "file": "src/existing.c"},
+        ])
+
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), patch.object(
+            oneshot, "collect_precheck_results", return_value=self.ok_checks()
+        ), patch.object(
+            oneshot.doctor, "print_checks"
+        ), patch.object(
+            oneshot, "run_stage", side_effect=lambda stage, argv: stage_calls.append((stage, argv)) or 0
+        ), redirect_stdout(stdout):
+            rc = oneshot.main(["--dry-run"])
+
+        output = stdout.getvalue()
+        self.assertEqual(rc, 0)
+        # Should not run any stages (resume mode doesn't run split, dry-run skips run/merge)
+        self.assertEqual(stage_calls, [])
+        # Should print dry-run summary from existing chunks
+        self.assertIn("DRY-RUN PREVIEW", output)
+        self.assertIn("total_issues: 2", output)
+        self.assertIn("chunk_001: 2 issues, 1 file(s)", output)
+
 
 if __name__ == "__main__":
     unittest.main()

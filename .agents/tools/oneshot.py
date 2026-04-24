@@ -31,6 +31,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--rule-id", action="append", default=[])
     parser.add_argument("--misra-only", action="store_true")
     parser.add_argument("--include-failed", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="预览模式：split 后打印 chunk 摘要，不启动 agent。")
     return parser.parse_args(sys.argv[1:] if argv is None else argv)
 
 
@@ -140,6 +141,53 @@ def filter_blockers(results: List[Dict[str, Any]], mode: str) -> List[Dict[str, 
     return blockers
 
 
+def print_dry_run_summary(runtime_dir: Path) -> None:
+    """Print a summary of chunks after split for --dry-run mode."""
+    progress = safe_load_progress(runtime_dir / "progress.json")
+    issues = load_json(runtime_dir / "issues_master.json", [])
+    total_chunks = progress.get("total_chunks", 0)
+    total_issues = len(issues) if isinstance(issues, list) else 0
+    run_id = progress.get("run_id", "unknown")
+    strategy = progress.get("fix_strategy", "unknown")
+
+    print("\n[oneshot] === DRY-RUN PREVIEW ===")
+    print(f"[oneshot] run_id: {run_id}")
+    print(f"[oneshot] strategy: {strategy}")
+    print(f"[oneshot] total_issues: {total_issues}")
+    print(f"[oneshot] total_chunks: {total_chunks}")
+    print()
+
+    # Load and summarize each chunk
+    chunks_dir = runtime_dir / "chunks"
+    if chunks_dir.exists():
+        chunk_files = sorted(chunks_dir.glob("chunk_*.json"))
+        for chunk_file in chunk_files:
+            chunk_data = load_json(chunk_file, {})
+            if not isinstance(chunk_data, dict):
+                continue
+            chunk_idx = chunk_data.get("chunk_index", "?")
+            issue_count = chunk_data.get("issue_count", 0)
+            files = chunk_data.get("files", [])
+            high_risk = chunk_data.get("contains_high_risk", False)
+            review_count = chunk_data.get("requires_review_after_fix_count", 0)
+
+            status_flags = []
+            if high_risk:
+                status_flags.append("HIGH_RISK")
+            if review_count > 0:
+                status_flags.append(f"NEEDS_REVIEW:{review_count}")
+
+            flags_str = f" [{', '.join(status_flags)}]" if status_flags else ""
+            print(f"[oneshot] chunk_{chunk_idx:03d}: {issue_count} issues, {len(files)} file(s){flags_str}")
+            for f in files[:5]:
+                print(f"    - {f}")
+            if len(files) > 5:
+                print(f"    ... and {len(files) - 5} more file(s)")
+
+    print("\n[oneshot] DRY-RUN complete. No agents were started.")
+    print("[oneshot] To execute, run without --dry-run or use --fresh.\n")
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     if args.fresh and args.resume:
@@ -226,6 +274,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
             print("[oneshot] 执行失败。建议先运行 `python3 .agents/tools/pipeline_cli.py doctor`。")
             return rc
+
+    # --dry-run: print chunk summary and exit without starting agents
+    if args.dry_run:
+        append_pipeline_event(
+            RUNTIME_DIR,
+            event="oneshot_dry_run",
+            stage="oneshot",
+            message="oneshot dry-run 预览模式，跳过 run/merge。",
+            data={"mode": mode},
+        )
+        print_dry_run_summary(RUNTIME_DIR)
+        return 0
 
     rc = execute_stage("run", build_run_args(args, progress_status))
     if rc != 0:
