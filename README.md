@@ -9,7 +9,7 @@
 - 记录 issue 状态、修改点、chunk 结果、统一运行日志
 - 支持按 `年月日-序号` 的 `run_id` 归档
 - 支持 `oneshot` 统一入口和默认续跑
-- 通过 `.agents/` 统一管理，并自动生成 Codex 兼容层
+- 通过 `.agents/` 统一管理，并自动生成兼容层
 
 ## 目录
 
@@ -25,53 +25,64 @@
 
 `pipeline.json` 中的 `agent` 必须使用结构化配置，不再支持旧的 `type` / `command` 字符串模型。
 
-默认的 `codex` 非交互配置如下：
+当前配置内置了已兼容的 provider。用户日常只需要修改 `agent.provider`，其余 provider 配置保持不动。
+
+默认配置如下：
 
 ```json
 "agent": {
   "provider": "codex",
-  "launch": {
-    "argv": ["codex", "exec", "--full-auto"],
-    "prompt_via": "stdin",
-    "cwd": "project_root",
-    "env": {
-      "CODEX_HOME": ".agents/runtime/agent-home"
+  "staging_dir": ".agents/staging",
+  "providers": {
+    "codex": {
+      "launch": {
+        "argv": ["codex", "exec", "--full-auto"],
+        "prompt_via": "stdin",
+        "cwd": "project_root",
+        "env": {
+          "CODEX_HOME": ".agents/runtime/agent-home"
+        },
+        "requires_tty": false,
+        "output": {
+          "mode": "exit_code"
+        }
+      },
+      "capabilities": {
+        "non_interactive": true,
+        "workspace_write_required": true
+      }
     },
-    "requires_tty": false,
-    "output": {
-      "mode": "exit_code"
+    "claude": {
+      "launch": {
+        "argv": ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits"],
+        "prompt_via": "stdin",
+        "cwd": "project_root",
+        "env": {},
+        "requires_tty": false,
+        "output": {
+          "mode": "exit_code"
+        }
+      },
+      "capabilities": {
+        "non_interactive": true,
+        "workspace_write_required": true
+      }
     }
-  },
-  "capabilities": {
-    "non_interactive": true,
-    "workspace_write_required": true
   },
   "auto_bootstrap_compat": true
 }
 ```
 
-`Claude Code` 的最小非交互配置可使用：
+切换到 `Claude Code` 时，只需要把：
 
 ```json
-"agent": {
-  "provider": "claude",
-  "staging_dir": ".agents/staging",
-  "launch": {
-    "argv": ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits"],
-    "prompt_via": "stdin",
-    "cwd": "project_root",
-    "env": {},
-    "requires_tty": false,
-    "output": {
-      "mode": "exit_code"
-    }
-  },
-  "capabilities": {
-    "non_interactive": true,
-    "workspace_write_required": true
-  },
-  "auto_bootstrap_compat": true
-}
+"provider": "codex"
+```
+
+改成：
+
+```json
+"provider": "claude"
 ```
 
 要求如下：
@@ -83,6 +94,7 @@
 - `Claude Code` 的认证默认依赖本机 `claude auth login` 状态或运行环境中的 `ANTHROPIC_API_KEY`
 - 运行时会优先复用 `~/.codex/auth.json` 和 `~/.codex/config.toml`，同步到工作区 `CODEX_HOME`
 - 运行时会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`，避免用户手动解除该环境变量
+- `Claude Code` 会从项目内 `.claude/skills/` 或用户全局 `~/.claude/skills/` 加载 skill；推荐始终生成项目内兼容层，避免不同机器行为不一致
 - 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误
 
 ## 推荐用法
@@ -233,16 +245,17 @@ python3 .agents/tools/bootstrap_agents.py --mode merge
 
 模式说明：
 
-- `--mode merge`：默认；对 `AGENTS.md` 使用标记块替换/追加，对 `.codex/skills/.../SKILL.md` 执行同步覆盖
+- `--mode merge`：默认；对 `AGENTS.md` 使用标记块替换/追加，对 `.codex/skills/.../SKILL.md` 和 `.claude/skills/.../SKILL.md` 执行同步覆盖
 - `--mode overwrite`：重建兼容层
 - `--dry-run`：只显示将变更哪些文件，不写盘
 
 ## 兼容层说明
 
-`.agents/` 是主目录。为了兼容 Codex：
+`.agents/` 是主目录。当前兼容层包括：
 
 - 生成项目根目录 `AGENTS.md`
 - 生成项目根目录 `.codex/skills/cppcheck-misra-fix/SKILL.md`
+- 生成项目根目录 `.claude/skills/cppcheck-misra-fix/SKILL.md`
 
 ## 注意
 

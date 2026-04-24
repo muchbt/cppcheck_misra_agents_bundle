@@ -3,12 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict
 
-from common import PROMPTS_DIR, read_text, relative, resolve_agent_staging_dir
+from common import PROMPTS_DIR, get_selected_agent_config, read_text, relative, resolve_agent_staging_dir
 
 
 LaunchSpec = Dict[str, Any]
 ExecutionResult = Dict[str, Any]
 ProviderSpec = Dict[str, Any]
+
+
+def get_selected_launch(config: Dict[str, Any]) -> Dict[str, Any]:
+    return get_selected_agent_config(config).get("launch", {})
 
 
 def build_strategy_instructions(chunk: Dict[str, Any]) -> str:

@@ -14,6 +14,8 @@ from providers import get_provider
 from common import (
     ROOT,
     archive_size_bytes,
+    get_selected_agent_config,
+    get_selected_agent_provider_name,
     load_json,
     read_text,
     resolve_agent_staging_dir,
@@ -132,22 +134,30 @@ def _ensure_writable_dir(path: Path) -> str:
 
 
 def _get_agent_provider_name(config: Any) -> str:
-    agent = config.get("agent", {}) if isinstance(config, dict) else {}
-    provider_name = agent.get("provider", "") if isinstance(agent, dict) else ""
-    return str(provider_name).strip()
+    if isinstance(config, dict):
+        return get_selected_agent_provider_name(config)
+    return ""
 
 
 def _get_agent_launch(config: Any) -> Dict[str, Any]:
-    agent = config.get("agent", {}) if isinstance(config, dict) else {}
-    launch = agent.get("launch", {}) if isinstance(agent, dict) else {}
+    if not isinstance(config, dict):
+        return {}
+    launch = get_selected_agent_config(config).get("launch", {})
     return launch if isinstance(launch, dict) else {}
+
+
+def _get_agent_capabilities(config: Any) -> Dict[str, Any]:
+    if not isinstance(config, dict):
+        return {}
+    capabilities = get_selected_agent_config(config).get("capabilities", {})
+    return capabilities if isinstance(capabilities, dict) else {}
 
 
 def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     agent = config.get("agent", {}) if isinstance(config, dict) else {}
     provider_name = agent.get("provider", "") if isinstance(agent, dict) else ""
-    launch = agent.get("launch", {}) if isinstance(agent, dict) else {}
-    capabilities = agent.get("capabilities", {}) if isinstance(agent, dict) else {}
+    launch = _get_agent_launch(config)
+    capabilities = _get_agent_capabilities(config)
 
     if not isinstance(provider_name, str) or not provider_name.strip():
         return make_result(
@@ -276,6 +286,60 @@ def check_agent_staging_dir(config: Any, root: Path = ROOT) -> Dict[str, Any]:
         "agent_staging_dir_ok",
         "agent staging 目录可写。",
         f"路径: {staging_dir}; agent 只写 staging，权威 runtime 由主流程导入维护。",
+    )
+
+
+def check_agent_skill_visibility(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    provider_name = _get_agent_provider_name(config)
+    skill_source = root / ".agents" / "skills" / "cppcheck-misra-fix" / "SKILL.md"
+    local_skill_targets = {
+        "codex": root / ".codex" / "skills" / "cppcheck-misra-fix" / "SKILL.md",
+        "claude": root / ".claude" / "skills" / "cppcheck-misra-fix" / "SKILL.md",
+    }
+    global_skill_targets = {
+        "codex": Path.home() / ".codex" / "skills" / "cppcheck-misra-fix" / "SKILL.md",
+        "claude": Path.home() / ".claude" / "skills" / "cppcheck-misra-fix" / "SKILL.md",
+    }
+
+    if provider_name not in local_skill_targets:
+        return make_result(
+            "ok",
+            "agent_skill_not_applicable",
+            "当前 provider 无需本地 skill 可见性检查。",
+            f"provider: {provider_name or '未设置'}",
+        )
+
+    if not skill_source.exists():
+        return make_result(
+            "error",
+            "agent_skill_source_missing",
+            "未找到主 skill 源文件。",
+            f"路径: {skill_source}",
+        )
+
+    local_skill = local_skill_targets[provider_name]
+    if local_skill.exists():
+        return make_result(
+            "ok",
+            "agent_skill_ok",
+            "当前 provider 的项目内 skill 兼容层已就绪。",
+            f"provider: {provider_name}; 路径: {local_skill}",
+        )
+
+    global_skill = global_skill_targets[provider_name]
+    if global_skill.exists():
+        return make_result(
+            "warning",
+            "agent_skill_global_only",
+            "只检测到全局 skill，项目内兼容层缺失。",
+            f"provider: {provider_name}; 全局路径: {global_skill}; 建议执行 bootstrap 生成项目内兼容层。",
+        )
+
+    return make_result(
+        "warning",
+        "agent_skill_missing",
+        "未检测到当前 provider 的 skill 兼容层。",
+        f"provider: {provider_name}; 建议执行 `python3 .agents/tools/pipeline_cli.py bootstrap`。",
     )
 
 
@@ -560,6 +624,7 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
             [
                 check_agent_launch(config, root),
                 check_agent_staging_dir(config, root),
+                check_agent_skill_visibility(config, root),
                 check_agent_auth(config, root),
                 check_agent_network(config),
                 check_custom_verification_command(config),

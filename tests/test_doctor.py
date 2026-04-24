@@ -192,6 +192,14 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["code"], "agent_staging_dir_ok")
         self.assertIn("只写 staging", result["detail"])
 
+    def test_check_agent_skill_visibility_reports_codex_skill_ok(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+
+        result = doctor.check_agent_skill_visibility(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_skill_ok")
+
     def test_check_agent_launch_accepts_claude_print_prefix(self) -> None:
         config = {
             "agent": {
@@ -214,6 +222,34 @@ class DoctorTests(unittest.TestCase):
 
         self.assertEqual(result["level"], "ok")
         self.assertEqual(result["code"], "agent_launch_ok")
+
+    def test_check_agent_skill_visibility_reports_claude_skill_missing(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "claude"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".agents" / "skills" / "cppcheck-misra-fix").mkdir(parents=True)
+            (root / ".agents" / "skills" / "cppcheck-misra-fix" / "SKILL.md").write_text("skill", encoding="utf-8")
+            result = doctor.check_agent_skill_visibility(config, root=root)
+
+        self.assertEqual(result["level"], "warning")
+        self.assertEqual(result["code"], "agent_skill_missing")
+
+    def test_check_agent_skill_visibility_reports_claude_skill_ok(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "claude"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".agents" / "skills" / "cppcheck-misra-fix").mkdir(parents=True)
+            (root / ".agents" / "skills" / "cppcheck-misra-fix" / "SKILL.md").write_text("skill", encoding="utf-8")
+            (root / ".claude" / "skills" / "cppcheck-misra-fix").mkdir(parents=True)
+            (root / ".claude" / "skills" / "cppcheck-misra-fix" / "SKILL.md").write_text("skill", encoding="utf-8")
+            result = doctor.check_agent_skill_visibility(config, root=root)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_skill_ok")
 
     def test_check_agent_auth_reports_claude_manual_check_without_env(self) -> None:
         config = {"agent": {"provider": "claude", "launch": {"env": {}}}}

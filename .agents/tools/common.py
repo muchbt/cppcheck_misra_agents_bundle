@@ -49,6 +49,33 @@ def resolve_agent_staging_dir(config: Dict[str, Any], root: Path = ROOT) -> Path
 def resolve_chunk_staging_dir(config: Dict[str, Any], chunk_index: int, root: Path = ROOT) -> Path:
     return resolve_agent_staging_dir(config, root=root) / f"chunk_{int(chunk_index):03d}"
 
+
+def get_selected_agent_provider_name(config: Dict[str, Any]) -> str:
+    return str(config.get("agent", {}).get("provider", "")).strip()
+
+
+def get_selected_agent_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    agent = config.get("agent", {})
+    if not isinstance(agent, dict):
+        return {}
+
+    provider_name = get_selected_agent_provider_name(config)
+    providers = agent.get("providers", {})
+    selected_provider = {}
+    if isinstance(providers, dict) and isinstance(providers.get(provider_name), dict):
+        selected_provider = providers.get(provider_name, {})
+
+    launch = selected_provider.get("launch", agent.get("launch", {}))
+    capabilities = selected_provider.get("capabilities", agent.get("capabilities", {}))
+    merged = {
+        "provider": provider_name,
+        "staging_dir": agent.get("staging_dir", ""),
+        "launch": launch if isinstance(launch, dict) else {},
+        "capabilities": capabilities if isinstance(capabilities, dict) else {},
+        "auto_bootstrap_compat": bool(agent.get("auto_bootstrap_compat", False)),
+    }
+    return merged
+
 def ensure_dirs() -> None:
     for path in [
         AGENTS_DIR,
@@ -174,7 +201,23 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
             except ValueError:
                 errors.append("agent.staging_dir must resolve under project root")
 
-        launch = agent.get("launch")
+        providers = agent.get("providers")
+        if providers is not None and not isinstance(providers, dict):
+            errors.append("agent.providers must be an object")
+        elif isinstance(providers, dict):
+            if provider not in providers:
+                errors.append("agent.providers must include the selected agent.provider")
+            for name, provider_config in providers.items():
+                if not isinstance(name, str) or not name.strip():
+                    errors.append("agent.providers keys must be non-empty strings")
+                    continue
+                if not isinstance(provider_config, dict):
+                    errors.append(f"agent.providers.{name} must be an object")
+                    continue
+
+        selected_agent = get_selected_agent_config(config)
+
+        launch = selected_agent.get("launch", {})
         if not isinstance(launch, dict):
             errors.append("agent.launch must be an object")
         else:
@@ -209,7 +252,7 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
                 if mode not in {"exit_code", "stdout_json", "file"}:
                     errors.append("agent.launch.output.mode must be one of: exit_code, stdout_json, file")
 
-        capabilities = agent.get("capabilities")
+        capabilities = selected_agent.get("capabilities", {})
         if not isinstance(capabilities, dict):
             errors.append("agent.capabilities must be an object")
         else:
@@ -423,6 +466,141 @@ def merge_file_change_index(base: Dict[str, Any], delta: Dict[str, Any]) -> Dict
     return merged
 
 
+def _as_string_list(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def normalize_file_change_delta(
+    base_file_change_index: Dict[str, Any],
+    file_change_delta: Dict[str, Any],
+    chunk_index: int,
+) -> Dict[str, Any]:
+    file_changes = file_change_delta.get("file_changes")
+    if isinstance(file_changes, list):
+        normalized: Dict[str, Any] = {}
+        for item in file_changes:
+            if not isinstance(item, dict):
+                raise ValueError("file_changes entry must be an object")
+            file_path = str(item.get("file", "")).strip()
+            if not file_path:
+                raise ValueError("file_changes entry must include file")
+
+            current_entry = normalized.get(file_path, {"edits": []})
+            preview_entry = {
+                "edits": [
+                    *base_file_change_index.get(file_path, {}).get("edits", []),
+                    *current_entry.get("edits", []),
+                ]
+            }
+            edit_id = next_edit_id(file_path, {file_path: preview_entry})
+            related_issue_keys = _as_string_list(item.get("linked_issues"))
+            if not related_issue_keys:
+                related_issue_keys = _as_string_list(item.get("linked_issue_keys"))
+            edit = {
+                "edit_id": edit_id,
+                "summary": str(item.get("summary", "")).strip()
+                or str(item.get("edit_summary", "")).strip()
+                or str(item.get("change_type", "")).strip()
+                or "staging imported change",
+                "chunk_index": int(chunk_index),
+                "related_issue_keys": related_issue_keys,
+            }
+            lines_modified = item.get("lines_modified")
+            if isinstance(lines_modified, list):
+                edit["lines_modified"] = list(lines_modified)
+            else:
+                lines_before = item.get("lines_before")
+                lines_after = item.get("lines_after")
+                if lines_before is not None:
+                    edit["lines_before"] = lines_before
+                if lines_after is not None:
+                    edit["lines_after"] = lines_after
+            change_type = str(item.get("change_type", "")).strip()
+            if change_type:
+                edit["change_type"] = change_type
+
+            current_entry["edits"] = [*current_entry.get("edits", []), edit]
+            normalized[file_path] = current_entry
+        return normalized
+
+    normalized = {}
+    for file_path, delta_entry in file_change_delta.items():
+        if file_path == "chunk_index":
+            continue
+        if not isinstance(delta_entry, dict):
+            raise ValueError(f"file_change_index entry must be an object: {file_path}")
+        normalized[file_path] = delta_entry
+    return normalized
+
+
+def _build_issue_edit_index(file_change_delta: Dict[str, Any]) -> Dict[str, List[str]]:
+    issue_edit_ids: Dict[str, List[str]] = {}
+    for file_data in file_change_delta.values():
+        if not isinstance(file_data, dict):
+            continue
+        for edit in file_data.get("edits", []):
+            if not isinstance(edit, dict):
+                continue
+            edit_id = str(edit.get("edit_id", "")).strip()
+            if not edit_id:
+                continue
+            for issue_key in _as_string_list(edit.get("related_issue_keys")):
+                issue_edit_ids.setdefault(issue_key, []).append(edit_id)
+    return issue_edit_ids
+
+
+def normalize_issue_status_delta(
+    issue_status_delta: Dict[str, Any],
+    file_change_delta: Dict[str, Any],
+    chunk_index: int,
+) -> Dict[str, Any]:
+    status_changes = issue_status_delta.get("status_changes")
+    if not isinstance(status_changes, list):
+        status_changes = issue_status_delta.get("issue_status_changes")
+    if isinstance(status_changes, list):
+        issue_edit_ids = _build_issue_edit_index(file_change_delta)
+        normalized: Dict[str, Any] = {}
+        for item in status_changes:
+            if not isinstance(item, dict):
+                raise ValueError("status_changes entry must be an object")
+            issue_key = str(item.get("issue_key", "")).strip()
+            if not issue_key:
+                raise ValueError("status_changes entry must include issue_key")
+            patch: Dict[str, Any] = {
+                "chunk_index": int(chunk_index),
+                "edit_ids": issue_edit_ids.get(issue_key, []),
+            }
+            new_status = str(item.get("new_status", "")).strip() or str(item.get("status_after", "")).strip()
+            if new_status:
+                patch["status"] = new_status
+            for key in ("risk_level", "risk_reason", "requires_review_after_fix", "verified"):
+                if key in item:
+                    patch[key] = item.get(key)
+            reason = (
+                str(item.get("reason", "")).strip()
+                or str(item.get("blocker_reason", "")).strip()
+                or str(item.get("message", "")).strip()
+            )
+            if reason:
+                patch["reason"] = reason
+            normalized[issue_key] = patch
+        return normalized
+
+    normalized = {}
+    for issue_key, patch in issue_status_delta.items():
+        if issue_key == "chunk_index":
+            continue
+        if not isinstance(patch, dict):
+            raise ValueError(f"issue_status entry must be an object: {issue_key}")
+        normalized[issue_key] = patch
+    return normalized
+
+
 def import_chunk_staging_artifacts(
     staging_dir: Path,
     chunk_index: int,
@@ -444,12 +622,14 @@ def import_chunk_staging_artifacts(
             raise FileNotFoundError(f"missing staging artifact: {path}")
 
     issue_status = _load_required_json_object(runtime_dir / "issue_status.json")
-    issue_status_delta = _load_required_json_object(issue_status_delta_path)
+    raw_issue_status_delta = _load_required_json_object(issue_status_delta_path)
+    file_change_index = _load_required_json_object(runtime_dir / "file_change_index.json")
+    raw_file_change_delta = _load_required_json_object(file_change_delta_path)
+    file_change_delta = normalize_file_change_delta(file_change_index, raw_file_change_delta, chunk_index)
+    issue_status_delta = normalize_issue_status_delta(raw_issue_status_delta, file_change_delta, chunk_index)
     issue_status.update(issue_status_delta)
     save_json(runtime_dir / "issue_status.json", issue_status)
 
-    file_change_index = _load_required_json_object(runtime_dir / "file_change_index.json")
-    file_change_delta = _load_required_json_object(file_change_delta_path)
     merged_file_change_index = merge_file_change_index(file_change_index, file_change_delta)
     save_json(runtime_dir / "file_change_index.json", merged_file_change_index)
 

@@ -134,6 +134,77 @@ class AgentStagingConfigTests(unittest.TestCase):
                     results_dir=results_dir,
                 )
 
+    def test_import_chunk_staging_artifacts_accepts_wrapped_agent_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / ".agents" / "runtime"
+            results_dir = runtime_dir / "results"
+            staging_dir = root / ".agents" / "staging" / "chunk_001"
+            results_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            common.save_json(
+                runtime_dir / "issue_status.json",
+                {
+                    "issue-a": {
+                        "status": "pending",
+                        "edit_ids": [],
+                    }
+                },
+            )
+            common.save_json(runtime_dir / "file_change_index.json", {})
+            common.save_json(
+                staging_dir / "issue_status_delta.json",
+                {
+                    "chunk_index": 1,
+                    "status_changes": [
+                        {
+                            "issue_key": "issue-a",
+                            "new_status": "fixed",
+                            "risk_level": "low",
+                            "risk_reason": None,
+                            "requires_review_after_fix": False,
+                        }
+                    ],
+                },
+            )
+            common.save_json(
+                staging_dir / "file_change_delta.json",
+                {
+                    "chunk_index": 1,
+                    "file_changes": [
+                        {
+                            "file": "src/a.c",
+                            "change_type": "modified",
+                            "lines_modified": [3],
+                            "linked_issues": ["issue-a"],
+                            "summary": "Removed unused variable",
+                        }
+                    ],
+                },
+            )
+            common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 1})
+            (staging_dir / "chunk_result.md").write_text("# chunk 1\n", encoding="utf-8")
+
+            common.import_chunk_staging_artifacts(
+                staging_dir,
+                1,
+                runtime_dir=runtime_dir,
+                results_dir=results_dir,
+            )
+
+            issue_status = common.load_json(runtime_dir / "issue_status.json", {})
+            file_change_index = common.load_json(runtime_dir / "file_change_index.json", {})
+
+        self.assertEqual(issue_status["issue-a"]["status"], "fixed")
+        self.assertEqual(issue_status["issue-a"]["chunk_index"], 1)
+        self.assertEqual(issue_status["issue-a"]["edit_ids"], ["src/a.c#001"])
+        self.assertEqual(file_change_index["src/a.c"]["edits"][0]["edit_id"], "src/a.c#001")
+        self.assertEqual(
+            file_change_index["src/a.c"]["edits"][0]["related_issue_keys"],
+            ["issue-a"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

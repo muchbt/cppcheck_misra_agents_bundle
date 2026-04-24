@@ -55,7 +55,8 @@ class AgentConfigValidationTests(unittest.TestCase):
         errors, warnings = common.validate_pipeline_config(config)
 
         self.assertIn("agent.provider must be a non-empty string", errors)
-        self.assertIn("agent.launch must be an object", errors)
+        self.assertIn("agent.staging_dir must be a non-empty string", errors)
+        self.assertIn("agent.launch.argv must be a non-empty list of strings", errors)
         self.assertEqual(warnings, [])
 
     def test_validate_pipeline_config_accepts_structured_agent(self) -> None:
@@ -133,7 +134,7 @@ class ClaudeProviderTests(unittest.TestCase):
     def test_claude_provider_builds_non_interactive_launch_spec(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
         config["agent"]["provider"] = "claude"
-        config["agent"]["launch"]["argv"] = [
+        config["agent"]["providers"]["claude"]["launch"]["argv"] = [
             "claude",
             "-p",
             "--output-format",
@@ -141,7 +142,7 @@ class ClaudeProviderTests(unittest.TestCase):
             "--permission-mode",
             "acceptEdits",
         ]
-        config["agent"]["launch"]["env"] = {}
+        config["agent"]["providers"]["claude"]["launch"]["env"] = {}
         chunk = {
             "chunk_index": 1,
             "fix_strategy": "conservative",
@@ -177,6 +178,7 @@ class ClaudeProviderTests(unittest.TestCase):
         self.assertEqual(spec["argv"][:2], ["claude", "-p"])
         self.assertIn("--add-dir", spec["argv"])
         self.assertIn(str(staging_dir / "chunk_001"), spec["argv"])
+        self.assertIn("--append-system-prompt", spec["argv"])
         self.assertEqual(spec["prompt_via"], "stdin")
         self.assertIn(".agents/staging/chunk_001/chunk_result.json", spec["prompt"])
         self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))

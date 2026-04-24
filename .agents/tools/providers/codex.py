@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from common import RUNTIME_DIR
-from .base import build_chunk_prompt, build_chunk_staging_paths
+from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
 
 SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
 NON_INTERACTIVE_COMMAND_PREFIX = ["codex", "exec"]
@@ -45,7 +45,7 @@ def classify_runtime_error(stderr: str) -> str:
 
 
 def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
-    launch = config["agent"]["launch"]
+    launch = get_selected_launch(config)
     chunk_index = int(chunk.get("chunk_index", 0))
     staging_paths = build_chunk_staging_paths(config, chunk_index)
     argv = list(launch["argv"])
