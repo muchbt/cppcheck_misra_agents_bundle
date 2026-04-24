@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -334,6 +335,293 @@ class PolicyInitTests(unittest.TestCase):
         self.assertEqual(result, 0)
         output = mock_stdout.getvalue()
         self.assertIn("Available templates:", output)
+
+    # New tests for policy list --rule-id subcommand
+
+    def test_policy_list_rule_id_pattern(self) -> None:
+        """Test 'policy list --rule-id' with pattern matching."""
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            result = policy_init.main(["list", "--rule-id", "misra*"])
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("Default Policy:", output)
+        self.assertIn("misra-c2012-2.2:", output)
+        self.assertIn("misra-c2012-8.9:", output)
+        self.assertIn("misra-c2012-17.7:", output)
+        self.assertIn("Patterns", output)
+
+    def test_policy_list_rule_id_no_match(self) -> None:
+        """Test 'policy list --rule-id' with no matching rules."""
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            result = policy_init.main(["list", "--rule-id", "nonexistent*"])
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("Default Policy:", output)
+        # No rules section when no matching
+        self.assertNotIn("Rules (", output)
+
+    def test_policy_list_rule_id_contains_match(self) -> None:
+        """Test 'policy list --rule-id' with substring matching."""
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            result = policy_init.main(["list", "--rule-id", "variable"])
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("unusedVariable:", output)
+        self.assertIn("unreadVariable:", output)
+        self.assertIn("constVariable:", output)
+
+    # New tests for policy test subcommand
+
+    def test_policy_test_action_match(self) -> None:
+        """Test 'policy test' with exact rule ID match."""
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            result = policy_init.main(
+                ["test", "--rule-id", "unusedVariable", "--file", "/src/test.c"]
+            )
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("Match source: actions", output)
+        self.assertIn("Matched rule ID: unusedVariable", output)
+        self.assertIn("action: auto_fix", output)
+
+    def test_policy_test_pattern_match(self) -> None:
+        """Test 'policy test' with pattern matching."""
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            result = policy_init.main(
+                ["test", "--rule-id", "unknownRule", "--file", "/src/volatile.c"]
+            )
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("Match source: patterns", output)
+        self.assertIn("Matched pattern: 'volatile'", output)
+        self.assertIn("action: needs_manual_review", output)
+
+    def test_policy_test_default_fallback(self) -> None:
+        """Test 'policy test' with default fallback."""
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            result = policy_init.main(
+                ["test", "--rule-id", "unknownRule", "--file", "/src/normal.c"]
+            )
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("Match source: default", output)
+        self.assertIn("action: needs_manual_review", output)
+
+    def test_policy_test_missing_policy_file(self) -> None:
+        """Test 'policy test' with missing policy file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            nonexistent = Path(tmp) / "nonexistent.json"
+            with patch("sys.stderr", new_callable=StringIO):
+                result = policy_init.main(
+                    [
+                        "-p",
+                        str(nonexistent),
+                        "test",
+                        "--rule-id",
+                        "unusedVariable",
+                        "--file",
+                        "/src/test.c",
+                    ]
+                )
+            self.assertEqual(result, 1)
+
+    # New tests for policy add subcommand
+
+    def test_policy_add_new_rule(self) -> None:
+        """Test 'policy add' with a new rule."""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            # Copy existing policy
+            shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
+
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                result = policy_init.main(
+                    [
+                        "-p",
+                        str(policy_path),
+                        "add",
+                        "--rule-id",
+                        "newTestRule",
+                        "--action",
+                        "auto_fix",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("Added rule 'newTestRule'", output)
+            self.assertIn("action: auto_fix", output)
+
+            # Verify rule was added
+            with open(policy_path) as f:
+                data = json.load(f)
+            self.assertIn("newTestRule", data["actions"])
+            self.assertEqual(data["actions"]["newTestRule"]["action"], "auto_fix")
+
+    def test_policy_add_existing_rule_without_force(self) -> None:
+        """Test 'policy add' rejects existing rule without --force."""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
+
+            with patch("sys.stderr", new_callable=StringIO):
+                result = policy_init.main(
+                    [
+                        "-p",
+                        str(policy_path),
+                        "add",
+                        "--rule-id",
+                        "unusedVariable",
+                        "--action",
+                        "skip",
+                    ]
+                )
+
+            self.assertEqual(result, 1)
+
+    def test_policy_add_existing_rule_with_force(self) -> None:
+        """Test 'policy add' with --force overwrites existing rule."""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
+
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                result = policy_init.main(
+                    [
+                        "-p",
+                        str(policy_path),
+                        "add",
+                        "--rule-id",
+                        "unusedVariable",
+                        "--action",
+                        "skip",
+                        "--force",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("Updated rule 'unusedVariable'", output)
+
+            # Verify rule was updated
+            with open(policy_path) as f:
+                data = json.load(f)
+            self.assertEqual(data["actions"]["unusedVariable"]["action"], "skip")
+
+    def test_policy_add_with_all_options(self) -> None:
+        """Test 'policy add' with all optional parameters."""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
+
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                result = policy_init.main(
+                    [
+                        "-p",
+                        str(policy_path),
+                        "add",
+                        "--rule-id",
+                        "testRule",
+                        "--action",
+                        "careful_fix",
+                        "--risk-level",
+                        "medium",
+                        "--risk-tags",
+                        "testing,experimental",
+                        "--risk-reason",
+                        "Test reason",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("risk_level: medium", output)
+            self.assertIn("risk_tags: testing, experimental", output)
+            self.assertIn("risk_reason: Test reason", output)
+
+    def test_policy_add_auto_risk_level(self) -> None:
+        """Test 'policy add' auto-assigns risk_level based on action."""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
+
+            # auto_fix should get low
+            policy_init.main(
+                ["-p", str(policy_path), "add", "--rule-id", "testAuto", "--action", "auto_fix"]
+            )
+            with open(policy_path) as f:
+                data = json.load(f)
+            self.assertEqual(data["actions"]["testAuto"]["risk_level"], "low")
+
+            # careful_fix should get medium
+            policy_init.main(
+                ["-p", str(policy_path), "add", "--rule-id", "testCareful", "--action", "careful_fix", "--force"]
+            )
+            with open(policy_path) as f:
+                data = json.load(f)
+            self.assertEqual(data["actions"]["testCareful"]["risk_level"], "medium")
+
+            # skip should get high
+            policy_init.main(
+                ["-p", str(policy_path), "add", "--rule-id", "testSkip", "--action", "skip"]
+            )
+            with open(policy_path) as f:
+                data = json.load(f)
+            self.assertEqual(data["actions"]["testSkip"]["risk_level"], "high")
+
+    def test_parse_args_test_subcommand(self) -> None:
+        """Test parse_args for 'test' subcommand."""
+        args = policy_init.parse_args(
+            ["test", "--rule-id", "unusedVariable", "--file", "/src/test.c"]
+        )
+        self.assertEqual(args.subcommand, "test")
+        self.assertEqual(args.rule_id, "unusedVariable")
+        self.assertEqual(args.file, "/src/test.c")
+
+    def test_parse_args_add_subcommand(self) -> None:
+        """Test parse_args for 'add' subcommand."""
+        args = policy_init.parse_args(
+            ["add", "--rule-id", "testRule", "--action", "auto_fix"]
+        )
+        self.assertEqual(args.subcommand, "add")
+        self.assertEqual(args.rule_id, "testRule")
+        self.assertEqual(args.action, "auto_fix")
+
+    def test_parse_args_add_with_options(self) -> None:
+        """Test parse_args for 'add' subcommand with all options."""
+        args = policy_init.parse_args(
+            [
+                "add",
+                "--rule-id",
+                "testRule",
+                "--action",
+                "careful_fix",
+                "--risk-level",
+                "medium",
+                "--risk-tags",
+                "tag1,tag2",
+                "--risk-reason",
+                "test reason",
+                "--force",
+            ]
+        )
+        self.assertEqual(args.risk_level, "medium")
+        self.assertEqual(args.risk_tags, "tag1,tag2")
+        self.assertEqual(args.risk_reason, "test reason")
+        self.assertTrue(args.force)
+
+    def test_parse_args_policy_file(self) -> None:
+        """Test parse_args for --policy-file option."""
+        args = policy_init.parse_args(
+            ["-p", "/custom/policy.json", "list", "--rule-id", "misra*"]
+        )
+        self.assertEqual(args.policy_file, "/custom/policy.json")
 
 
 if __name__ == "__main__":
