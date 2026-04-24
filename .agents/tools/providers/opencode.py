@@ -2,18 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from common import RUNTIME_DIR
+from common import ROOT, RUNTIME_DIR
 from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
 
 PROVIDER_NAME = "opencode"
 SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
 NON_INTERACTIVE_COMMAND_PREFIX = ["opencode"]
 SANITIZED_ENV_KEYS = set()
-
-OPENCODE_APPEND_SYSTEM_PROMPT = (
-    "Use the local cppcheck-misra-fix skill from the current workspace when available. "
-    "Follow the staging output format contract defined in the cppcheck-misra-fix SKILL.md file."
-)
 
 
 def prepare_launch_env(env: Dict[str, str]) -> None:
@@ -22,7 +17,6 @@ def prepare_launch_env(env: Dict[str, str]) -> None:
     Sets XDG_DATA_HOME and XDG_STATE_HOME to workspace-local directories
     to keep OpenCode state isolated to the project workspace.
     """
-    from common import ROOT
     env["XDG_DATA_HOME"] = str(ROOT / ".opencode" / "data")
     env["XDG_STATE_HOME"] = str(ROOT / ".opencode" / "state")
 
