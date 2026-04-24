@@ -174,6 +174,97 @@ class ReportsArchiveTests(unittest.TestCase):
             self.assertTrue((archive_dir / "reports" / "run_manifest.json").is_file())
             self.assertTrue((archive_dir / "logs" / "pipeline.log").is_file())
 
+    def test_merge_results_counts_flat_file_change_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / ".agents" / "runtime"
+            reports_dir = root / ".agents" / "reports"
+            runs_dir = root / ".agents" / "runs"
+            config_dir = root / ".agents" / "config"
+            results_dir = runtime_dir / "results"
+
+            config_dir.mkdir(parents=True)
+            results_dir.mkdir(parents=True)
+
+            common.save_json(
+                config_dir / "pipeline.json",
+                {
+                    "input": {"cppcheck_xml": "cppcheck.xml"},
+                    "verification": {"custom_command": "", "mode": "light"},
+                },
+            )
+            common.save_json(
+                runtime_dir / "progress.json",
+                {
+                    "run_id": "20260424-902",
+                    "started_at": "2026-04-24T15:03:52+08:00",
+                    "last_chunk_finished_at": "2026-04-24T15:04:59+08:00",
+                    "xml_file": "cppcheck.xml",
+                    "fix_strategy": "conservative",
+                    "total_chunks": 1,
+                    "completed_chunks": [1],
+                    "failed_chunks": [],
+                    "status": "done",
+                },
+            )
+            common.save_json(
+                runtime_dir / "issue_status.json",
+                {
+                    "claude_acceptance.c:2:unusedVariable:37f29621": {
+                        "status": "fixed",
+                        "file": "claude_acceptance.c",
+                        "line": 2,
+                        "rule_id": "unusedVariable",
+                        "fix_strategy": "conservative",
+                        "risk_level": "low",
+                        "edit_ids": [],
+                    }
+                },
+            )
+            common.save_json(
+                runtime_dir / "file_change_index.json",
+                {
+                    "claude_acceptance.c": {
+                        "lines_removed": [2],
+                        "change_summary": "Removed unused variable 'x' declaration",
+                        "verified": True,
+                    }
+                },
+            )
+            common.save_json(
+                results_dir / "chunk_001_result.json",
+                {
+                    "chunk_index": 1,
+                    "verification": {
+                        "performed": True,
+                        "passed": True,
+                        "mode": "light",
+                        "notes": "light verification only; no custom command configured",
+                        "command": "",
+                        "returncode": 0,
+                    },
+                },
+            )
+            (runtime_dir / "pipeline.log").write_text("pipeline log\n", encoding="utf-8")
+            (runtime_dir / "run_log.jsonl").write_text("{\"event\": \"x\"}\n", encoding="utf-8")
+
+            with patch.object(merge_results, "RUNTIME_DIR", runtime_dir), patch.object(
+                merge_results, "REPORTS_DIR", reports_dir
+            ), patch.object(
+                merge_results, "RUNS_DIR", runs_dir
+            ), patch.object(
+                merge_results, "now_iso", return_value="2026-04-24T15:05:00+08:00"
+            ):
+                rc = merge_results.main()
+
+            self.assertEqual(rc, 0)
+
+            summary_md = (reports_dir / "final_summary.md").read_text(encoding="utf-8")
+            checklist_md = (reports_dir / "review_checklist.md").read_text(encoding="utf-8")
+
+            self.assertIn("claude_acceptance.c：1 处修改", summary_md)
+            self.assertIn("Removed unused variable 'x' declaration", checklist_md)
+
 
 if __name__ == "__main__":
     unittest.main()

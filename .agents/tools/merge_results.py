@@ -16,6 +16,25 @@ from common import (
     write_text,
 )
 
+
+def count_file_changes(file_data: Dict[str, Any]) -> int:
+    edits = file_data.get("edits", [])
+    if isinstance(edits, list) and edits:
+        return len(edits)
+
+    count = 0
+    for key in ("lines_added", "lines_removed", "lines_changed"):
+        value = file_data.get(key, [])
+        if isinstance(value, list):
+            count += len(value)
+    if count:
+        return count
+
+    if str(file_data.get("change_summary", "")).strip():
+        return 1
+    return 0
+
+
 def build_report_paths() -> Dict[str, str]:
     return {
         "final_summary_md": ".agents/reports/final_summary.md",
@@ -171,7 +190,7 @@ def build_review_markdown(
     lines.extend(["", "## 修改文件"])
     if summary.get("touched_files"):
         for file_path in summary["touched_files"]:
-            edit_count = len(file_change_index.get(file_path, {}).get("edits", []))
+            edit_count = count_file_changes(file_change_index.get(file_path, {}))
             lines.append(f"- {file_path}：{edit_count} 处修改")
     else:
         lines.append("- 本次没有记录到文件修改。")
@@ -216,14 +235,19 @@ def build_review_checklist(
     if file_change_index:
         for file_path, data in sorted(file_change_index.items()):
             lines.append(f"- 文件：{file_path}")
-            for edit in data.get("edits", []):
-                edit_id = edit.get("edit_id", "")
-                summary_text = edit.get("summary", "")
-                chunk_index = edit.get("chunk_index", "")
-                related = ", ".join(edit.get("related_issue_keys", [])) or "-"
-                lines.append(
-                    f"  - {edit_id}：{summary_text}；chunk={chunk_index}；关联问题={related}"
-                )
+            edits = data.get("edits", [])
+            if isinstance(edits, list) and edits:
+                for edit in edits:
+                    edit_id = edit.get("edit_id", "")
+                    summary_text = edit.get("summary", "")
+                    chunk_index = edit.get("chunk_index", "")
+                    related = ", ".join(edit.get("related_issue_keys", [])) or "-"
+                    lines.append(
+                        f"  - {edit_id}：{summary_text}；chunk={chunk_index}；关联问题={related}"
+                    )
+            else:
+                summary_text = str(data.get("change_summary", "")).strip() or "未提供修改摘要"
+                lines.append(f"  - {summary_text}")
     else:
         lines.append("- 没有记录到修改点。")
 
