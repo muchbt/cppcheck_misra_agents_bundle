@@ -91,11 +91,13 @@
    - **位置**：README:97 vs claude.py:38-41
    - **问题**：README 描述 skill 自动加载，实际通过 CLI 参数注入
    - **建议**：更新 README 说明 Claude provider 的实际行为
+   - **状态：已修复**（Task 1, commit b6a51d1）
 
 2. **GAP-002: Staging 输出格式契约未文档化**
    - **位置**：claude.py:11-17 CLAUDE_APPEND_SYSTEM_PROMPT
    - **问题**：JSON 格式要求在代码中硬编码，AGENTS.md 和 skill 文档未包含
    - **建议**：将格式契约写入 skill 文档或 AGENTS.md
+   - **状态：已修复**（Task 2, commits 5ff544c, 383ac8d）
 
 3. **GAP-003: OpenCode provider 整体未实现**
    - **位置**：docs/superpowers/plans/2026-04-24-opencode-phase3.md
@@ -113,6 +115,7 @@
    - **位置**：pipeline.json:56-91
    - **问题**：codex 有 CODEX_HOME，claude env 为空，README 未解释差异原因
    - **建议**：在 README 补充各 provider 环境配置策略说明
+   - **状态：已修复**（Task 3, commit 7c90d3f）
 
 ### 低优先级 GAP（已实现但文档可改进）
 
@@ -120,11 +123,13 @@
    - **位置**：设计文档:53-58 vs oneshot.py
    - **问题**：设计提到 `--resume` 参数，代码未实现（默认行为即为续跑）
    - **建议**：设计文档标注为可选语义增强，非必需功能
+   - **状态：已修复**（Task 5, commit 655cb77）
 
 7. **GAP-007: oneshot --run-id 限制未文档化**
    - **位置**：设计文档:200-205 vs README
    - **问题**：`--run-id` 仅在 `--fresh` 模式有效，README 未明确说明
    - **建议**：README 补充说明限制条件
+   - **状态：已修复**（Task 4, commit 30e0657）
 
 ---
 
