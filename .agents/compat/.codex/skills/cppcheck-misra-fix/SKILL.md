@@ -43,7 +43,7 @@ The staging directory output files must follow these formats:
 - Option B: Wrapper object `{status_changes: [{issue_key, new_status, ...}]}` or `{issue_status_changes: [...]}`
 
 **file_change_delta.json:**
-- Option A: Flat object `{file_path: data}` where data contains edits, change_summary, etc.
+- Option A: Flat object `{file: data}` where data contains edits, change_summary, etc.
 - Option B: Wrapper object `{file_changes: [{file, summary, linked_issues, ...}]}`
 
 Keep field names stable and deterministic. Each edit must include `edit_id`, `summary`, `chunk_index`, and `related_issue_keys`.
