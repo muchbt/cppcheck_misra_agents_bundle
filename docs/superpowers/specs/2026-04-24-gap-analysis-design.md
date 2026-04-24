@@ -31,10 +31,10 @@
 
 | 设计文档位置 | 实现代码位置 | GAP 类型 | 详情 |
 |-------------|-------------|---------|------|
-| 设计文档:53-58 | `oneshot.py` | **部分实现** | 设计要求 `oneshot` 支持 `--resume` 参数（用于脚本中表达意图），但代码未实现该参数。当前默认行为即为续跑，当检测到 `ready/running/partial/failed` 状态时自动恢复执行。**建议**：设计文档中 `--resume` 是可选语义增强，非必需功能，可保持现状或添加显式参数。 |
-| 设计文档:68-95 | `common.py`, `merge_results.py` | **已实现** | 归档目录结构设计已实现：`.agents/runs/<run_id>/` 包含 `runtime/`, `reports/`, `logs/`, `run_manifest.json`。 |
-| 设计文档:159-168 | `doctor.py` | **已实现** | doctor 预检设计已实现，检查：Python 版本、cppcheck.xml、配置、agent 启动参数、staging 目录、skill 可见性、认证、网络、自定义验证命令、归档大小、prompt 长度。 |
-| 设计文档:200-205 | - | **未实现** | 设计提到 `oneshot --run-id` 允许一键入口指定自定义运行 ID。当前代码：`oneshot.py` 支持 `--run-id` 参数，但仅在 `--fresh` 模式下使用，透传给 `split` 阶段。**建议**：已部分实现，文档需更新说明 `--run-id` 仅在 fresh 模式有效。 |
+| 设计文档:53-58 | `oneshot.py` | ✅ **已实现** | 设计要求 `oneshot` 支持 `--resume` 参数（用于脚本中表达意图），现已实现。当检测到 `ready/running/partial/failed` 状态时自动恢复执行。`--fresh`/`--resume` 互斥检查也已实现。 |
+| 设计文档:68-95 | `common.py`, `merge_results.py` | ✅ **已实现** | 归档目录结构设计已实现：`.agents/runs/<run_id>/` 包含 `runtime/`, `reports/`, `logs/`, `run_manifest.json`。 |
+| 设计文档:159-168 | `doctor.py` | ✅ **已实现** | doctor 预检设计已实现，检查：Python 版本、cppcheck.xml、配置、agent 启动参数、staging 目录、skill 可见性、认证、网络、自定义验证命令、归档大小、prompt 长度。 |
+| 设计文档:200-205 | - | ✅ **已实现** | `oneshot --run-id` 允许一键入口指定自定义运行 ID，仅在 `--fresh` 模式下有效，README 已补充限制说明。 |
 | 设计文档:224-289 | `providers/`, `agent_runner.py` | **已实现** | Task 7 结构化 agent 配置模型已实现：`provider`、`launch.argv`、`launch.prompt_via`、`launch.cwd`、`launch.env`、`launch.requires_tty`、`launch.output.mode`、`capabilities`。 |
 | 设计文档:410-422 | `common.py:431-647`, `agent_runner.py:92-108` | **已实现** | staging 模型和导入逻辑已实现：agent 写 staging 目录，runner 在成功后导入到 runtime。 |
 
@@ -42,18 +42,18 @@
 
 | README 描述位置 | 实现代码位置 | GAP 类型 | 详情 |
 |----------------|-------------|---------|------|
-| README:97 | `claude.py:11-17` | **文档不准确** | README 说 "Claude Code 会从项目内 `.claude/skills/` 或用户全局 `~/.claude/skills/` 加载 skill"。实际代码：`claude.py` 通过 `--append-system-prompt` CLI 参数注入 `CLAUDE_APPEND_SYSTEM_PROMPT` 内容，而非依赖 skill 文件自动加载。**建议**：更新 README 说明 Claude provider 通过 CLI 参数注入指令，skill 文件作为备用文档。 |
-| README:96 | `codex.py:12` | **已实现** | README 说运行时 "会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`"。代码：`codex.py` 定义 `SANITIZED_ENV_KEYS = {"CODEX_SANDBOX_NETWORK_DISABLED"}`，`agent_runner.py:22-31` 的 `build_launch_env()` 在启动前移除该变量。 |
-| README:32-74 | `pipeline.json` | **已实现** | agent 配置模型与 README 描述一致，包含 `provider`、`staging_dir`、`providers` 子配置。 |
-| README:125 | `oneshot.py:14-15` | **已实现** | 续跑条件 `ready/running/partial/failed` 与代码 `UNFINISHED_STATUSES` 常量一致。 |
+| README:97 | `claude.py:11-17` | ✅ **已修复** | README 已更新为正确描述：Claude Code 通过 `--append-system-prompt` CLI 参数注入 skill 指令。 |
+| README:96 | `codex.py:12` | ✅ **已实现** | README 说运行时 "会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`"。代码：`codex.py` 定义 `SANITIZED_ENV_KEYS = {"CODEX_SANDBOX_NETWORK_DISABLED"}`，`agent_runner.py:22-31` 的 `build_launch_env()` 在启动前移除该变量。 |
+| README:32-74 | `pipeline.json` | ✅ **已实现** | agent 配置模型与 README 描述一致，包含 `provider`、`staging_dir`、`providers` 子配置。 |
+| README:125 | `oneshot.py:14-15` | ✅ **已实现** | 续跑条件 `ready/running/partial/failed` 与代码 `UNFINISHED_STATUSES` 常量一致。 |
 
 ### 三、AGENTS.md vs 实现代码 GAP
 
 | AGENTS.md 内容 | 实现代码/配置 | GAP 类型 | 详情 |
 |---------------|-------------|---------|------|
-| AGENTS.md:24-27 | `fix_chunk_prompt.txt:12-16`, `staging 模型` | **已实现** | 运行态更新路径已改为 staging 目录：`issue_status_delta.json`, `file_change_delta.json`, `chunk_result.json`, `chunk_result.md`。 |
-| AGENTS.md:11-18 | `split_cppcheck_xml.py:86-118` | **已实现** | conservative 模式规则与代码 `classify_issue()` 逻辑一致，高风险问题标记为 `needs_manual_review`。 |
-| - | `common.py:557-601`, `claude.py:11-17` | **文档缺失** | AGENTS.md 未提及 staging 导入的具体 JSON 格式要求。代码中有两种格式支持：`{issue_key: patch}` flat object 或 `{status_changes: [...]}` wrapper；`{file: data}` flat object 或 `{file_changes: [...]}` wrapper。Claude provider 在 `CLAUDE_APPEND_SYSTEM_PROMPT` 中硬编码了格式说明。**建议**：在 AGENTS.md 或 skill 文档中补充 staging 输出格式契约。 |
+| AGENTS.md:24-27 | `fix_chunk_prompt.txt:12-16`, `staging 模型` | ✅ **已实现** | 运行态更新路径已改为 staging 目录：`issue_status_delta.json`, `file_change_delta.json`, `chunk_result.json`, `chunk_result.md`。 |
+| AGENTS.md:11-18 | `split_cppcheck_xml.py:86-118` | ✅ **已实现** | conservative 模式规则与代码 `classify_issue()` 逻辑一致，高风险问题标记为 `needs_manual_review`。 |
+| - | `common.py:557-601`, `claude.py:11-17` | ✅ **已修复** | AGENTS.md 现引用 SKILL.md 的格式契约，SKILL.md 已包含完整的 staging 输出格式说明（flat/wrapper 两种格式）。 |
 
 ### 四、Phase 3 计划 vs 当前实现 GAP
 

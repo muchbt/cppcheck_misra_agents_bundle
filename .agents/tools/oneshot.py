@@ -153,6 +153,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.fresh and has_unfinished_runtime(progress):
         mode = "resume"
 
+    # Warn if --resume requested but no unfinished runtime exists
+    if args.resume and mode == "fresh":
+        print("[oneshot] 注意：--resume 请求续跑但当前无未完成运行，将执行 fresh 模式。")
+
     progress_status = str(progress.get("status", "")).strip()
     progress_strategy = str(progress.get("fix_strategy", "")).strip()
     progress_run_id = str(progress.get("run_id", "")).strip()

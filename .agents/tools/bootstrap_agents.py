@@ -63,7 +63,7 @@ def build_agents_md_block() -> str:
   - <staging_dir>/chunk_XXX/file_change_delta.json
   - <staging_dir>/chunk_XXX/chunk_result.json
   - <staging_dir>/chunk_XXX/chunk_result.md
-- Follow the staging output format contract defined in the cppcheck-misra-fix SKILL.md
+- Follow the staging output format contract defined in the cppcheck-misra-fix SKILL.md file at `.agents/skills/cppcheck-misra-fix/SKILL.md`
 - Keep a clear mapping from issues to edit points via edit_id and related_issue_keys
 """
 
