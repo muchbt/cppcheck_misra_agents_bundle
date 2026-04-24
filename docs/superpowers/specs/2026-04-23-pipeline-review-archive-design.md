@@ -421,3 +421,36 @@ Task 7 追加测试，覆盖：
 - 将“agent 输出格式”和“流水线权威状态”解耦，降低 sandbox / mount 策略变化带来的失败风险
 
 在上述目标完成后，后续阶段将继续推进 `Claude Code` 的最小接入。当前评估结论是：主流程、staging 模型和非交互执行协议已经具备复用基础，剩余工作集中在新增 `providers/claude.py`、将残留的 `codex` 认证/网络/错误分类逻辑下沉到 provider 层，以及补齐 `doctor`、README 与测试矩阵。
+
+## 三期方向：OpenCode 兼容与探针经验
+
+在完成 `Claude Code` 最小接入后，后续若要接入 `opencode`，应以前期真实探针结果为边界，而不是直接复制现有 provider。
+
+本次 `1 issue / 1 chunk` 探针得到的关键经验：
+
+- `opencode run` 可以进入真实非交互会话，说明当前 `provider -> runner -> staging` 的总体抽象方向可复用。
+- `opencode` 的本地状态不只依赖数据目录；仅隔离 `XDG_DATA_HOME` 不够，还需要同时接管 `XDG_STATE_HOME`。
+- 默认全局状态目录在受限环境下可能因为 SQLite/WAL 或锁文件写入失败而阻断运行，这类问题应在 provider 环境准备阶段处理，而不是等到 `run` 阶段才暴露。
+- 当前环境中的真实外部调用目标是 `https://opencode.ai/zen/v1/messages`；网络失败应被归类为 provider 级 `network_error`。
+- `opencode` 的权限控制不完全等同于 `codex` / `Claude Code`，除命令行参数外，还应预留临时配置文件或环境变量注入能力。
+
+因此，`opencode` 兼容不进入当前阶段实现，而列入三期，作为“第三个执行器”来验证现有抽象是否足够稳固。
+
+### 三期目标
+
+- 新增 `opencode` provider，复用现有结构化 agent 配置、staging 导入链路和 `doctor` 框架。
+- 将 `opencode` 所需的 `XDG_DATA_HOME`、`XDG_STATE_HOME` 等运行目录显式收口到工作区可写路径。
+- 为 `opencode` 增加网络、认证、本地状态目录和权限模型的专用诊断。
+- 验证 `opencode run` 在 `1 issue / 1 chunk` 场景下能稳定生成 staging 结果，或至少给出准确的阻断分类。
+
+### 三期非目标
+
+- 不在三期重写现有 `codex` / `Claude Code` provider。
+- 不在三期引入新的并发调度或多 provider 自动切换策略。
+- 不把当前 `agent.provider` 直接重构成“执行器 provider + 模型 provider”双层模型，除非真实接入 `opencode` 时证明现模型不足。
+
+### 三期前置条件
+
+- 需要先确认 `opencode` 的认证来源与默认模型选择策略，避免在 provider 内硬编码不稳定假设。
+- 需要确认 `opencode` 的 prompt 最佳传递方式；当前探针表明直接参数传递可进入真实会话，但是否需要补 `prompt_via=file` 仍待实现时确认。
+- 需要在 `doctor` 中把“全局状态目录不可写”和“外部网络不可达”分开报告，避免用户把本地状态问题误判为认证问题。
