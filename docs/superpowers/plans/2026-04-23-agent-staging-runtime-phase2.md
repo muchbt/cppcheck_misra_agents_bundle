@@ -180,3 +180,43 @@ python3 .agents/tools/pipeline_cli.py doctor
 git add README.md docs/superpowers/specs/2026-04-23-pipeline-review-archive-design.md
 git commit -m "docs: describe agent staging runtime phase 2"
 ```
+
+---
+
+### Task 6: Claude Code 最小接入（后续阶段）
+
+**Goal:** 在不破坏现有 `codex` 稳定链路的前提下，引入 `Claude Code` provider 的最小接入能力，并把当前残留的 `codex` 特化进一步下沉到 provider 层。
+
+**Files:**
+- Create: `.agents/tools/providers/claude.py`
+- Modify: `.agents/tools/providers/__init__.py`
+- Modify: `.agents/tools/agent_runner.py`
+- Modify: `.agents/tools/doctor.py`
+- Modify: `.agents/config/pipeline.json`
+- Modify: `README.md`
+- Modify: `tests/test_agent_runner.py`
+- Modify: `tests/test_doctor.py`
+
+- [ ] Add a `claude` provider module that can build a non-interactive launch spec and staging paths for one chunk.
+- [ ] Register the new provider in `providers/__init__.py`.
+- [ ] Refactor `agent_runner.py` so provider-specific auth bootstrap, env sanitization, and runtime error classification are no longer hard-coded around `codex`.
+- [ ] Extend `doctor.py` with provider-specific checks for `claude`, while keeping common non-interactive launch validation shared.
+- [ ] Add a documented `claude` structured config example without changing the current default provider.
+- [ ] Add tests covering:
+  - `claude` launch spec generation
+  - `doctor` handling of `claude` provider config
+  - `agent_runner` behavior under `claude` config
+- [ ] Run:
+
+```bash
+python3 -m unittest tests.test_agent_runner tests.test_doctor -v
+```
+
+- [ ] Run one real `1 issue / 1 chunk` acceptance flow with `Claude Code` after the local environment is prepared.
+
+- [ ] Commit:
+
+```bash
+git add .agents/tools/providers/claude.py .agents/tools/providers/__init__.py .agents/tools/agent_runner.py .agents/tools/doctor.py .agents/config/pipeline.json README.md tests/test_agent_runner.py tests/test_doctor.py
+git commit -m "feat: add claude provider support"
+```

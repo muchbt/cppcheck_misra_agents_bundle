@@ -419,3 +419,5 @@ Task 7 追加测试，覆盖：
 - 让 provider / runner 只要求 agent 写 staging 结果
 - 由流水线在 agent 退出后把 staging 结果导入 `.agents/runtime`
 - 将“agent 输出格式”和“流水线权威状态”解耦，降低 sandbox / mount 策略变化带来的失败风险
+
+在上述目标完成后，后续阶段将继续推进 `Claude Code` 的最小接入。当前评估结论是：主流程、staging 模型和非交互执行协议已经具备复用基础，剩余工作集中在新增 `providers/claude.py`、将残留的 `codex` 认证/网络/错误分类逻辑下沉到 provider 层，以及补齐 `doctor`、README 与测试矩阵。
