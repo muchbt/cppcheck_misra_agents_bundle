@@ -70,8 +70,8 @@
 | Provider | 文档描述 | 实现代码 | GAP 详情 |
 |----------|---------|---------|---------|
 | `codex.py` | README:95 描述认证复用 | `codex.py:14-35` `prepare_launch_env()` | **已实现**：代码通过 symlink/copy 将 `~/.codex/auth.json` 和 `~/.codex/config.toml` 同步到工作区 `CODEX_HOME`。 |
-| `claude.py` | README:97 描述 skill 加载 | `claude.py:38-41` `--append-system-prompt` | **不一致**：README 说 skill 自动加载，但代码通过 CLI 参数注入硬编码指令。指令内容包含 staging 输出格式契约，但 skill 文档 `SKILL.md` 未包含这些格式要求。 |
-| `claude.py` | AGENTS.md skill 内容 | `claude.py:11-17` `CLAUDE_APPEND_SYSTEM_PROMPT` | **内容分离**：Claude provider 的实际行为指令在代码中硬编码，与 `.agents/skills/cppcheck-misra-fix/SKILL.md` 内容不完全一致。 |
+| `claude.py` | README:97 描述 skill 加载 | `claude.py:38-41` `--append-system-prompt` | **已修复**：README 已更新实际行为；SKILL.md 已包含 staging 格式契约；claude.py CLAUDE_APPEND_SYSTEM_PROMPT 改为引用 SKILL.md 作为单一来源。 |
+| `claude.py` | AGENTS.md skill 内容 | `claude.py:11-13` `CLAUDE_APPEND_SYSTEM_PROMPT` | **已修复**：Claude provider 指令改为简短引用，指向 SKILL.md 作为权威来源。 |
 
 ### 六、配置文件 vs 文档描述 GAP
 
@@ -110,6 +110,7 @@
    - **位置**：common.py:557-601 vs AGENTS.md
    - **问题**：代码支持多种格式（flat/wrapper），文档未说明
    - **建议**：在 AGENTS.md 补充格式说明
+   - **状态：已修复**（AGENTS.md 已更新 staging delta 路径，SKILL.md 已添加格式契约）
 
 5. **GAP-005: Provider 环境配置策略差异未文档化**
    - **位置**：pipeline.json:56-91

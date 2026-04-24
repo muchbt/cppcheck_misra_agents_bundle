@@ -21,9 +21,11 @@
 - If one issue is blocked, record the blocker and continue with other safe issues in the same chunk
 - Do not wait indefinitely for sandbox, tool, or environment side effects; write blockers into runtime state and result files
 - Ask users only when explicit authorization is required and no safe workspace-only path exists
-- After edits, update:
-  - .agents/runtime/issue_status.json
-  - .agents/runtime/file_change_index.json
-  - .agents/runtime/results/chunk_XXX_result.json
-- Keep a clear mapping from issues to edit points
+- After edits, write the current chunk's staging delta files only (do not overwrite canonical runtime files directly):
+  - <staging_dir>/chunk_XXX/issue_status_delta.json
+  - <staging_dir>/chunk_XXX/file_change_delta.json
+  - <staging_dir>/chunk_XXX/chunk_result.json
+  - <staging_dir>/chunk_XXX/chunk_result.md
+- Follow the staging output format contract defined in the cppcheck-misra-fix SKILL.md
+- Keep a clear mapping from issues to edit points via edit_id and related_issue_keys
 <!-- END AUTO-GENERATED: cppcheck-misra-fix -->
