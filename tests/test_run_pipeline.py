@@ -163,6 +163,58 @@ class SplitAndRunPipelineTests(unittest.TestCase):
             self.assertTrue(completed["data"]["verification_passed"])
             self.assertEqual(str(results_dir / "chunk_001_result.json"), completed["data"]["imported_result_json"])
 
+    def test_run_pipeline_failure_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = Path(tmp) / "runtime"
+            results_dir = runtime_dir / "results"
+            chunks_dir = runtime_dir / "chunks"
+            runtime_dir.mkdir(parents=True)
+            results_dir.mkdir()
+            chunks_dir.mkdir()
+
+            common.save_json(
+                runtime_dir / "progress.json",
+                {
+                    "run_id": "20260423-002",
+                    "total_chunks": 1,
+                    "completed_chunks": [],
+                    "failed_chunks": [],
+                    "current_chunk": None,
+                    "fix_strategy": "conservative",
+                    "status": "ready",
+                },
+            )
+            common.save_json(
+                chunks_dir / "chunk_001.json",
+                {
+                    "chunk_index": 1,
+                    "chunk_total": 1,
+                    "issues": [{"rule_id": "misra-c2012-1.1", "is_misra": True}],
+                },
+            )
+
+            def fake_run_chunk_agent(config: dict, chunk: dict) -> dict:
+                return {
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "Error: something went wrong in the agent execution...",
+                    "error_kind": "agent_error",
+                    "prompt": "prompt body",
+                    "imported_paths": {},
+                }
+
+            stdout = io.StringIO()
+            with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
+                run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "run_chunk_agent", side_effect=fake_run_chunk_agent
+            ), redirect_stdout(stdout):
+                rc = run_fix_pipeline.main([])
+
+            self.assertEqual(rc, 1)
+            output = stdout.getvalue()
+            self.assertIn("[run] Chunk 1 失败: agent_error - Error: something went wrong in the agent execution...", output)
+
 
 if __name__ == "__main__":
     unittest.main()

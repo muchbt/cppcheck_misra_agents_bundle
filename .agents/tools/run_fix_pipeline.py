@@ -273,6 +273,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
             exhausted = attempt >= max_attempts
             mark_failure(progress, idx, rc, attempt, exhausted)
+            if result.get("returncode") != 0:
+                stderr_preview = (result.get("stderr") or "")[:200]
+                print(f"[run] Chunk {idx} 失败: {result.get('error_kind', 'unknown')} - {stderr_preview}")
             save_json(progress_path, progress)
 
         if not success:
