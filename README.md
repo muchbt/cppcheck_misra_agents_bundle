@@ -67,6 +67,22 @@
         "non_interactive": true,
         "workspace_write_required": true
       }
+    },
+    "opencode": {
+      "launch": {
+        "argv": ["opencode"],
+        "prompt_via": "stdin",
+        "cwd": "project_root",
+        "env": {},
+        "requires_tty": false,
+        "output": {
+          "mode": "exit_code"
+        }
+      },
+      "capabilities": {
+        "non_interactive": true,
+        "workspace_write_required": true
+      }
     }
   },
   "auto_bootstrap_compat": true
@@ -85,13 +101,27 @@
 "provider": "claude"
 ```
 
+切换到 `OpenCode` 时，只需要把：
+
+```json
+"provider": "codex"
+```
+
+改成：
+
+```json
+"provider": "opencode"
+```
+
 要求如下：
 
 - 必须使用非交互命令形式；对 `codex` 来说，应使用 `codex exec`
 - 对 `Claude Code` 来说，应使用 `claude -p` 一类非交互入口
+- 对 `OpenCode` 来说，应使用 `opencode` 命令，运行时会自动设置 `XDG_DATA_HOME` 和 `XDG_STATE_HOME` 到工作区内的 `.opencode/` 目录
 - `prompt_via` 当前推荐 `stdin`
 - `CODEX_HOME` 这类运行目录应映射到工作区内可写路径
 - `Claude Code` 的认证默认依赖本机 `claude auth login` 状态或运行环境中的 `ANTHROPIC_API_KEY`
+- `OpenCode` 的认证依赖 OpenCode CLI 的全局配置，状态目录会自动隔离到工作区
 - 运行时会优先复用 `~/.codex/auth.json` 和 `~/.codex/config.toml`，同步到工作区 `CODEX_HOME`
 - 运行时会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`，避免用户手动解除该环境变量
 - `Claude Code` 通过 `--append-system-prompt` CLI 参数注入 cppcheck-misra-fix skill 指令，同时保留 `.claude/skills/` 目录作为 skill 元数据来源；推荐始终生成项目内兼容层，避免不同机器行为不一致
@@ -101,7 +131,7 @@
 
 - `codex`：需要 `CODEX_HOME` 指向工作区内可写目录，用于存放认证文件 (`auth.json`) 和配置 (`config.toml`)。运行时会自动从 `~/.codex/` 复制到工作区。
 - `claude`：认证依赖本机 `claude auth login` 或环境变量 `ANTHROPIC_API_KEY`，不需要额外工作区目录配置。`env` 字段可保持为空对象 `{}`。
-- 后续新增 provider（如 `opencode`）可能需要同时管理 `XDG_DATA_HOME` 和 `XDG_STATE_HOME`。
+- `opencode`：运行时会自动设置 `XDG_DATA_HOME` 和 `XDG_STATE_HOME` 环境变量，分别指向工作区内的 `.opencode/data` 和 `.opencode/state` 目录。这样可以将 OpenCode 的状态（如配置、缓存、日志）隔离在项目工作区内，避免污染用户全局 `~/.local/share/` 和 `~/.local/state/` 目录。认证依赖 OpenCode CLI 的全局配置，无需在 `env` 中额外指定。
 
 ## 推荐用法
 
