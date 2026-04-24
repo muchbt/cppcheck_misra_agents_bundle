@@ -94,8 +94,14 @@
 - `Claude Code` 的认证默认依赖本机 `claude auth login` 状态或运行环境中的 `ANTHROPIC_API_KEY`
 - 运行时会优先复用 `~/.codex/auth.json` 和 `~/.codex/config.toml`，同步到工作区 `CODEX_HOME`
 - 运行时会自动移除继承下来的 `CODEX_SANDBOX_NETWORK_DISABLED`，避免用户手动解除该环境变量
-- `Claude Code` 会从项目内 `.claude/skills/` 或用户全局 `~/.claude/skills/` 加载 skill；推荐始终生成项目内兼容层，避免不同机器行为不一致
+- `Claude Code` 通过 `--append-system-prompt` CLI 参数注入 cppcheck-misra-fix skill 指令，同时保留 `.claude/skills/` 目录作为 skill 元数据来源；推荐始终生成项目内兼容层，避免不同机器行为不一致
 - 如果配置仍依赖交互式 TUI、TTY 或不可写运行目录，`doctor` 会直接报阻塞错误
+
+**Provider 环境配置策略差异：**
+
+- `codex`：需要 `CODEX_HOME` 指向工作区内可写目录，用于存放认证文件 (`auth.json`) 和配置 (`config.toml`)。运行时会自动从 `~/.codex/` 复制到工作区。
+- `claude`：认证依赖本机 `claude auth login` 或环境变量 `ANTHROPIC_API_KEY`，不需要额外工作区目录配置。`env` 字段可保持为空对象 `{}`。
+- 后续新增 provider（如 `opencode`）可能需要同时管理 `XDG_DATA_HOME` 和 `XDG_STATE_HOME`。
 
 ## 推荐用法
 
@@ -141,6 +147,8 @@ python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
 ```bash
 python3 .agents/tools/pipeline_cli.py oneshot --fresh --run-id 20260423-001
 ```
+
+注意：`--run-id` 参数仅在 `--fresh` 模式下有效。续跑模式会使用已有 `progress.json` 中的 `run_id`，传入不一致的 `--run-id` 会触发错误提示。
 
 如果在续跑模式传入与当前运行态不一致的 `--strategy` 或 `--run-id`，命令会提前退出，并提示改用 `--fresh`。
 

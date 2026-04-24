@@ -23,6 +23,7 @@ STAGE_MODULES = {
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="一键执行 split -> run -> merge，可自动续跑。")
     parser.add_argument("--fresh", action="store_true", help="忽略已有运行状态，强制从 split 重新开始。")
+    parser.add_argument("--resume", action="store_true", help="显式续跑模式，与默认续跑行为一致，用于脚本中表达意图。")
     parser.add_argument("--strategy", choices=sorted(VALID_STRATEGIES), default=None)
     parser.add_argument("--run-id", default=None, help="仅 fresh 模式允许传入，格式 YYYYMMDD-XXX。")
     parser.add_argument("--max-chunks", type=int, default=None)
@@ -142,6 +143,9 @@ def filter_blockers(results: List[Dict[str, Any]], mode: str) -> List[Dict[str, 
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
+    if args.fresh and args.resume:
+        print("[oneshot] --fresh 和 --resume 不能同时使用。")
+        return 2
     progress_path = RUNTIME_DIR / "progress.json"
     progress = safe_load_progress(progress_path)
 
