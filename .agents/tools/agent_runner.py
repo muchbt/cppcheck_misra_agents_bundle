@@ -109,13 +109,21 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
     else:
         imported_paths = {}
 
+    # Classify error if execution failed
+    error_kind = ""
+    if completed.returncode != 0:
+        classify_fn = getattr(provider, "classify_runtime_error", None)
+        if callable(classify_fn):
+            error_kind = classify_fn(completed.stderr)
+        else:
+            # Fallback for providers without classify_runtime_error method
+            error_kind = "runtime_error"
+
     return {
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
-        "error_kind": ""
-        if completed.returncode == 0
-        else getattr(provider, "classify_runtime_error", lambda stderr: "runtime_error")(completed.stderr),
+        "error_kind": error_kind,
         "prompt": prompt,
         "imported_paths": imported_paths,
     }
