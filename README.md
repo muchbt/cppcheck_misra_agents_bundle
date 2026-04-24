@@ -148,6 +148,8 @@ python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
 python3 .agents/tools/pipeline_cli.py oneshot --fresh --run-id 20260423-001
 ```
 
+注意：`--run-id` 参数仅在 `--fresh` 模式下有效。续跑模式会使用已有 `progress.json` 中的 `run_id`，传入不一致的 `--run-id` 会触发错误提示。
+
 如果在续跑模式传入与当前运行态不一致的 `--strategy` 或 `--run-id`，命令会提前退出，并提示改用 `--fresh`。
 
 ## 分步命令
