@@ -6,8 +6,8 @@ from common import ERROR_KIND_AUTH_ERROR, ERROR_KIND_NETWORK_ERROR, ERROR_KIND_R
 from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
 
 PROVIDER_NAME = "opencode"
-SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
-NON_INTERACTIVE_COMMAND_PREFIX = ["opencode"]
+SUPPORTED_PROMPT_VIA = {"arg"}
+NON_INTERACTIVE_COMMAND_PREFIX = ["opencode", "run"]
 SANITIZED_ENV_KEYS = set()
 
 
@@ -52,8 +52,6 @@ def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str
     chunk_index = int(chunk.get("chunk_index", 0))
     staging_paths = build_chunk_staging_paths(config, chunk_index)
     argv = list(launch["argv"])
-    if "--add-dir" not in argv:
-        argv.extend(["--add-dir", str(staging_paths["chunk_dir"])])
     return {
         "argv": argv,
         "prompt_via": launch["prompt_via"],

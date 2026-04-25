@@ -18,8 +18,10 @@ class PipelineCliTests(unittest.TestCase):
     def test_command_map_exposes_doctor_and_oneshot(self) -> None:
         self.assertIn("doctor", pipeline_cli.COMMANDS)
         self.assertIn("oneshot", pipeline_cli.COMMANDS)
+        self.assertIn("validate-real", pipeline_cli.COMMANDS)
         self.assertEqual(pipeline_cli.COMMANDS["doctor"][0], "doctor")
         self.assertEqual(pipeline_cli.COMMANDS["oneshot"][0], "oneshot")
+        self.assertEqual(pipeline_cli.COMMANDS["validate-real"][0], "validate_real")
 
     def test_main_dispatches_subcommand_args(self) -> None:
         seen = {}
@@ -53,6 +55,12 @@ class PipelineCliTests(unittest.TestCase):
         args = pipeline_cli.parse_args(["doctor"])
 
         self.assertEqual(args.command, "doctor")
+
+    def test_parse_args_accepts_validate_real(self) -> None:
+        args = pipeline_cli.parse_args(["validate-real", "--provider", "claude"])
+
+        self.assertEqual(args.command, "validate-real")
+        self.assertEqual(args.args, ["--provider", "claude"])
 
 
 if __name__ == "__main__":

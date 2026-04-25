@@ -13,6 +13,7 @@ COMMANDS = {
     "verify": ("verify_chunk", "Verify one chunk result."),
     "bootstrap": ("bootstrap_agents", "Generate agent compatibility files."),
     "doctor": ("doctor", "Run pipeline diagnostics."),
+    "validate-real": ("validate_real", "Run real 1 issue / 1 chunk provider validation."),
     "oneshot": ("oneshot", "Run the one-shot agent entrypoint."),
     "policy": ("policy_init", "Initialize policy configuration from templates."),
 }

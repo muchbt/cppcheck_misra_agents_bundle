@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -9,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT_OVERRIDE_ENV = "PIPELINE_PROJECT_ROOT"
+ROOT_OVERRIDE_VALUE = os.environ.get(ROOT_OVERRIDE_ENV, "").strip()
+ROOT = Path(ROOT_OVERRIDE_VALUE).resolve() if ROOT_OVERRIDE_VALUE else Path(__file__).resolve().parents[2]
 AGENTS_DIR = ROOT / ".agents"
 CONFIG_DIR = AGENTS_DIR / "config"
 PROMPTS_DIR = AGENTS_DIR / "prompts"

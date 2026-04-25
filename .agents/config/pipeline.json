@@ -49,7 +49,8 @@
           "argv": [
             "codex",
             "exec",
-            "--full-auto"
+            "--full-auto",
+            "--skip-git-repo-check"
           ],
           "prompt_via": "stdin",
           "cwd": "project_root",
@@ -92,9 +93,11 @@
       "opencode": {
         "launch": {
           "argv": [
-            "opencode"
+            "opencode",
+            "run",
+            "--dangerously-skip-permissions"
           ],
-          "prompt_via": "stdin",
+          "prompt_via": "arg",
           "cwd": "project_root",
           "env": {},
           "requires_tty": false,

@@ -227,6 +227,30 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["level"], "ok")
         self.assertEqual(result["code"], "agent_launch_ok")
 
+    def test_check_agent_launch_accepts_codex_skip_git_repo_check(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "codex"
+
+        with patch.object(doctor.shutil, "which", return_value="/usr/bin/codex"), patch.object(
+            doctor, "_ensure_writable_dir", return_value=""
+        ):
+            result = doctor.check_agent_launch(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_launch_ok")
+        self.assertIn("--skip-git-repo-check", result["detail"])
+
+    def test_check_agent_launch_accepts_opencode_run_prefix(self) -> None:
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "opencode"
+
+        with patch.object(doctor.shutil, "which", return_value="/usr/bin/opencode"):
+            result = doctor.check_agent_launch(config, root=REPO_ROOT)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_launch_ok")
+        self.assertIn("opencode run", result["detail"])
+
     def test_check_agent_skill_visibility_reports_claude_skill_missing(self) -> None:
         config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
         config["agent"]["provider"] = "claude"
@@ -295,6 +319,22 @@ class DoctorTests(unittest.TestCase):
 
         self.assertEqual(result["level"], "warning")
         self.assertEqual(result["code"], "agent_network_env_sanitized")
+
+    def test_check_opencode_auth_reports_shared_auth_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_home = root / "home"
+            auth_dir = fake_home / ".local" / "share" / "opencode"
+            auth_dir.mkdir(parents=True)
+            (auth_dir / "auth.json").write_text("{}", encoding="utf-8")
+            config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+            config["agent"]["provider"] = "opencode"
+
+            with patch.object(doctor.Path, "home", return_value=fake_home):
+                result = doctor.check_opencode_auth(config, root=root)
+
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "opencode_auth_config_ok")
 
     def test_check_custom_verification_command_reports_missing_executable(self) -> None:
         config = {"verification": {"custom_command": "missing-verify"}}

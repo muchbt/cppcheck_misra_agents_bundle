@@ -66,7 +66,7 @@ class AgentConfigValidationTests(unittest.TestCase):
         self.assertIn("opencode", config["agent"]["providers"])
         self.assertEqual(
             config["agent"]["providers"]["opencode"]["launch"]["argv"],
-            ["opencode"],
+            ["opencode", "run", "--dangerously-skip-permissions"],
         )
 
         errors, warnings = common.validate_pipeline_config(config)
@@ -123,7 +123,9 @@ class CodexProviderTests(unittest.TestCase):
                 spec = codex_provider.build_launch_spec(config, chunk)
 
         self.assertEqual(spec["argv"][:3], ["codex", "exec", "--full-auto"])
-        self.assertEqual(spec["argv"][3:5], ["--add-dir", str(staging_dir / "chunk_001")])
+        self.assertIn("--skip-git-repo-check", spec["argv"])
+        add_dir_index = spec["argv"].index("--add-dir")
+        self.assertEqual(spec["argv"][add_dir_index : add_dir_index + 2], ["--add-dir", str(staging_dir / "chunk_001")])
         self.assertEqual(spec["prompt_via"], "stdin")
         self.assertEqual(spec["cwd_mode"], "project_root")
         self.assertFalse(spec["requires_tty"])
@@ -213,6 +215,46 @@ class OpenCodeProviderTests(unittest.TestCase):
         assert classify_runtime_error("dial tcp: connect: connection refused") == "network_error"
         assert classify_runtime_error("POST https://opencode.ai/zen/v1/messages timed out") == "network_error"
         assert classify_runtime_error("Unknown error") == "runtime_error"
+
+    def test_opencode_provider_builds_run_launch_spec(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "opencode"
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n{chunk_result_json_path}\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(json.dumps(chunk), encoding="utf-8")
+
+            opencode_provider = importlib.import_module("providers.opencode")
+            provider_base = importlib.import_module("providers.base")
+            with patch.object(opencode_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                provider_base, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
+            ):
+                spec = opencode_provider.build_launch_spec(config, chunk)
+
+        self.assertEqual(spec["argv"][:2], ["opencode", "run"])
+        self.assertNotIn("--add-dir", spec["argv"])
+        self.assertEqual(spec["prompt_via"], "arg")
+        self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
 
 
 class AgentRunnerTests(unittest.TestCase):

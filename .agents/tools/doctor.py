@@ -709,6 +709,7 @@ def check_opencode_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
         xdg_data_dir / "config.json",
         xdg_state_dir / "auth.json",
         Path.home() / ".config" / "opencode" / "config.json",
+        Path.home() / ".local" / "share" / "opencode" / "auth.json",
         Path.home() / ".opencode" / "config.json",
     ]
     existing_configs = [str(p) for p in config_candidates if p.exists()]
