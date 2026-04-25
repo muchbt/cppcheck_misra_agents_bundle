@@ -235,5 +235,234 @@ class SplitAndRunPipelineTests(unittest.TestCase):
             self.assertIn("[run] 错误摘要: Error: something went wrong in the agent execution...", output)
 
 
+class ExecutionLogTests(unittest.TestCase):
+    """Tests for write_chunk_execution_log and extract_error_summary."""
+
+    def test_write_chunk_execution_log_format(self) -> None:
+        """Test log file format on first attempt."""
+        with tempfile.TemporaryDirectory() as tmp:
+            logs_dir = Path(tmp) / "logs"
+            logs_dir.mkdir(parents=True)
+
+            with patch.object(run_fix_pipeline, "LOGS_DIR", logs_dir):
+                log_path = run_fix_pipeline.write_chunk_execution_log(
+                    chunk_index=1,
+                    attempt=1,
+                    provider="codex",
+                    command="codex exec --full-auto",
+                    cwd="/workspace",
+                    staging_dir="/workspace/.agents/staging/chunk_001",
+                    prompt="Fix the issue",
+                    stdout="Output line 1\nOutput line 2",
+                    stderr="Error: something failed",
+                    returncode=1,
+                    error_kind="runtime_error",
+                    started_at="2026-04-25T10:00:00+08:00",
+                    finished_at="2026-04-25T10:00:15+08:00",
+                )
+
+                # Verify path
+                self.assertEqual(log_path, logs_dir / "chunk_001.log")
+                self.assertTrue(log_path.exists())
+
+            content = log_path.read_text(encoding="utf-8")
+            # Check header format
+            self.assertIn("=== CHUNK 001 EXECUTION LOG ===", content)
+            self.assertIn("Started: 2026-04-25T10:00:00+08:00", content)
+            self.assertIn("Provider: codex", content)
+            self.assertIn("Command: codex exec --full-auto", content)
+            self.assertIn("CWD: /workspace", content)
+            self.assertIn("Staging: /workspace/.agents/staging/chunk_001", content)
+            self.assertIn("Prompt length: 13 characters", content)
+            # Check output sections
+            self.assertIn("--- STDOUT ---", content)
+            self.assertIn("Output line 1", content)
+            self.assertIn("--- STDERR ---", content)
+            self.assertIn("Error: something failed", content)
+            # Check tail metadata
+            self.assertIn("--- END ---", content)
+            self.assertIn("Returncode: 1", content)
+            self.assertIn("Error kind: runtime_error", content)
+            self.assertIn("Finished: 2026-04-25T10:00:15+08:00", content)
+
+    def test_write_chunk_execution_log_retry_append(self) -> None:
+        """Test that retry attempts append to existing log."""
+        with tempfile.TemporaryDirectory() as tmp:
+            logs_dir = Path(tmp) / "logs"
+            logs_dir.mkdir(parents=True)
+
+            with patch.object(run_fix_pipeline, "LOGS_DIR", logs_dir):
+                # First attempt
+                run_fix_pipeline.write_chunk_execution_log(
+                    chunk_index=1,
+                    attempt=1,
+                    provider="codex",
+                    command="codex exec",
+                    cwd="/workspace",
+                    staging_dir="/staging",
+                    prompt="prompt",
+                    stdout="first stdout",
+                    stderr="first stderr",
+                    returncode=1,
+                    error_kind="network_error",
+                    started_at="2026-04-25T10:00:00+08:00",
+                    finished_at="2026-04-25T10:00:10+08:00",
+                )
+
+                # Second attempt (retry)
+                run_fix_pipeline.write_chunk_execution_log(
+                    chunk_index=1,
+                    attempt=2,
+                    provider="codex",
+                    command="codex exec",
+                    cwd="/workspace",
+                    staging_dir="/staging",
+                    prompt="prompt",
+                    stdout="second stdout",
+                    stderr="second stderr",
+                    returncode=1,
+                    error_kind="runtime_error",
+                    started_at="2026-04-25T10:00:15+08:00",
+                    finished_at="2026-04-25T10:00:25+08:00",
+                )
+
+                log_path = logs_dir / "chunk_001.log"
+
+            content = log_path.read_text(encoding="utf-8")
+
+            # Header should appear once
+            self.assertEqual(content.count("=== CHUNK 001 EXECUTION LOG ==="), 1)
+            # Attempt separator should appear
+            self.assertIn("--- ATTEMPT 2 ---", content)
+            # Both stdout/stderr pairs should be present
+            self.assertIn("first stdout", content)
+            self.assertIn("second stdout", content)
+            # Both tail metadata blocks should be present
+            self.assertEqual(content.count("--- END ---"), 2)
+            self.assertEqual(content.count("Returncode:"), 2)
+
+    def test_extract_error_summary_provider_keywords(self) -> None:
+        """Test keyword matching for each provider."""
+        # Codex quota error
+        summary = run_fix_pipeline.extract_error_summary(
+            stdout="Processing...\nERROR: You've hit your usage limit. Upgrade to Pro\nDone.",
+            stderr="",
+            provider="codex",
+        )
+        self.assertIn("usage limit", summary.lower())
+
+        # Claude rate limit
+        summary = run_fix_pipeline.extract_error_summary(
+            stdout="API call failed\nRate limit exceeded. HTTP 429\n",
+            stderr="",
+            provider="claude",
+        )
+        self.assertIn("rate limit", summary.lower())
+
+        # OpenAPI auth error
+        summary = run_fix_pipeline.extract_error_summary(
+            stdout="Starting...\nPOST https://opencode.ai/zen/v1/messages timed out\n",
+            stderr="",
+            provider="opencode",
+        )
+        self.assertIn("zen/v1/messages", summary.lower())
+
+    def test_extract_error_summary_common_keywords(self) -> None:
+        """Test common error keyword matching."""
+        summary = run_fix_pipeline.extract_error_summary(
+            stdout="Processing...\nFATAL: Connection lost\nERROR: Retry failed\n",
+            stderr="",
+            provider="codex",
+        )
+        # Should return up to 3 matching lines
+        self.assertIn("FATAL", summary)
+        self.assertIn("ERROR", summary)
+
+    def test_extract_error_summary_fallback(self) -> None:
+        """Test fallback to last 200 chars when no keywords match."""
+        long_output = "A" * 300 + "END"
+        summary = run_fix_pipeline.extract_error_summary(
+            stdout=long_output,
+            stderr="",
+            provider="codex",
+        )
+        # Fallback returns last 200 chars of stdout (stripped)
+        self.assertEqual(len(summary), 200)  # last 200 chars
+        self.assertTrue(summary.endswith("END"))
+
+    def test_extract_error_summary_stderr_combined(self) -> None:
+        """Test that stderr is combined with stdout for search."""
+        summary = run_fix_pipeline.extract_error_summary(
+            stdout="Normal output here",
+            stderr="ERROR: Failed to connect",
+            provider="codex",
+        )
+        # Should find ERROR from stderr
+        self.assertIn("ERROR", summary)
+
+    def test_verbose_output_on_failure(self) -> None:
+        """Test --verbose flag shows full stdout/stderr."""
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = Path(tmp) / "runtime"
+            results_dir = runtime_dir / "results"
+            chunks_dir = runtime_dir / "chunks"
+            logs_dir = runtime_dir / "logs"
+            config_dir = Path(tmp) / "config"
+            runtime_dir.mkdir(parents=True)
+            results_dir.mkdir()
+            chunks_dir.mkdir()
+            logs_dir.mkdir()
+            config_dir.mkdir()
+
+            common.save_json(runtime_dir / "progress.json", {
+                "run_id": "test-verbose",
+                "total_chunks": 1,
+                "completed_chunks": [],
+                "failed_chunks": [],
+                "current_chunk": None,
+                "fix_strategy": "conservative",
+                "status": "ready",
+            })
+            common.save_json(chunks_dir / "chunk_001.json", {
+                "chunk_index": 1,
+                "chunk_total": 1,
+                "issues": [{"rule_id": "test-rule"}],
+            })
+            common.save_json(config_dir / "pipeline.json", {
+                "agent": {"provider": "opencode", "staging_dir": ".agents/staging"}
+            })
+
+            def fake_run_chunk_agent(config: dict, chunk: dict) -> dict:
+                return {
+                    "returncode": 1,
+                    "stdout": "Verbose stdout output here",
+                    "stderr": "Verbose stderr output here",
+                    "error_kind": "test_error",
+                    "prompt": "test",
+                    "argv": ["opencode"],
+                    "imported_paths": {},
+                }
+
+            stdout = io.StringIO()
+            with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
+                run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "LOGS_DIR", logs_dir
+            ), patch.object(
+                run_fix_pipeline, "CONFIG_DIR", config_dir
+            ), patch.object(
+                run_fix_pipeline, "run_chunk_agent", side_effect=fake_run_chunk_agent
+            ), redirect_stdout(stdout):
+                rc = run_fix_pipeline.main(["--verbose"])
+
+            self.assertEqual(rc, 1)
+            output = stdout.getvalue()
+            # Verbose output should include full stdout/stderr
+            self.assertIn("=== CHUNK 001 STDOUT (verbose) ===", output)
+            self.assertIn("Verbose stdout output here", output)
+            self.assertIn("=== CHUNK 001 STDERR (verbose) ===", output)
+            self.assertIn("Verbose stderr output here", output)
+
+
 if __name__ == "__main__":
     unittest.main()
