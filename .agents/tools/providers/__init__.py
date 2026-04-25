@@ -5,6 +5,8 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from .base import ProviderProtocol  # noqa: F401 – re-exported for downstream use
+
 # Auto-discover providers from *.py files in this directory
 PROVIDERS = {}
 for f in Path(__file__).parent.glob("*.py"):

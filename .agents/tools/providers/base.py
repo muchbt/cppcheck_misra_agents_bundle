@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Protocol
 
 from common import PROMPTS_DIR, get_selected_agent_config, read_text, relative, resolve_agent_staging_dir
 
@@ -9,6 +9,38 @@ from common import PROMPTS_DIR, get_selected_agent_config, read_text, relative, 
 LaunchSpec = Dict[str, Any]
 ExecutionResult = Dict[str, Any]
 ProviderSpec = Dict[str, Any]
+
+
+class ProviderProtocol(Protocol):
+    """Protocol for provider modules.
+
+    Each provider module must define:
+    - PROVIDER_NAME: str - Unique identifier for the provider
+    - SANITIZED_ENV_KEYS: set - Environment keys to sanitize in logs
+    - prepare_launch_env: Prepare environment variables for launch
+    - classify_runtime_error: Classify runtime errors from stderr
+    - build_launch_spec: Build launch specification for agent execution
+
+    Note: This protocol is for module-level structural typing.
+    Provider modules implement these as module-level attributes and functions.
+    To verify a provider module conforms, use:
+        provider: ProviderProtocol = provider_module  # mypy checks structural compatibility
+    """
+
+    PROVIDER_NAME: str
+    SANITIZED_ENV_KEYS: set
+
+    def prepare_launch_env(self, env: Dict[str, str]) -> None:
+        """Prepare environment variables for the provider launch."""
+        ...
+
+    def classify_runtime_error(self, stderr: str) -> str:
+        """Classify runtime errors from stderr output."""
+        ...
+
+    def build_launch_spec(self, config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
+        """Build launch specification for agent execution."""
+        ...
 
 
 def get_selected_launch(config: Dict[str, Any]) -> Dict[str, Any]:
