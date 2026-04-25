@@ -19,9 +19,12 @@ def prepare_launch_env(env: Dict[str, str]) -> None:
     return None
 
 
-def classify_runtime_error(stderr: str) -> str:
-    text = (stderr or "").lower()
+def classify_runtime_error(stderr: str, stdout: str = "") -> str:
+    # 优先从 stdout 分析（claude 主要输出在 stdout）
+    text = (stdout or stderr or "").lower()
     if "anthropic_api_key" in text or "authentication" in text or "login" in text or "unauthorized" in text:
+        return ERROR_KIND_AUTH_ERROR
+    if "rate limit" in text or "429" in text:
         return ERROR_KIND_AUTH_ERROR
     if "network" in text or "timed out" in text or "econn" in text or "socket" in text:
         return ERROR_KIND_NETWORK_ERROR
