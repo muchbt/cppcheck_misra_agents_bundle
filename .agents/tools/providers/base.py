@@ -12,23 +12,25 @@ ProviderSpec = Dict[str, Any]
 
 
 class ProviderProtocol(Protocol):
-    """Protocol for provider modules.
+    """Structural typing contract for provider modules.
 
-    Each provider module must define:
+    Each provider module must define the following module-level attributes
+    and functions:
+
     - PROVIDER_NAME: str - Unique identifier for the provider
-    - SANITIZED_ENV_KEYS: set - Environment keys to sanitize in logs
-    - prepare_launch_env: Prepare environment variables for launch
-    - classify_runtime_error: Classify runtime errors from stderr
-    - build_launch_spec: Build launch specification for agent execution
+    - SANITIZED_ENV_KEYS: set[str] - Environment keys to sanitize in logs
+    - prepare_launch_env(env: Dict[str, str]) -> None
+    - classify_runtime_error(stderr: str) -> str
+    - build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]
 
-    Note: This protocol is for module-level structural typing.
-    Provider modules implement these as module-level attributes and functions.
-    To verify a provider module conforms, use:
-        provider: ProviderProtocol = provider_module  # mypy checks structural compatibility
+    Note: Providers implement these as module-level attributes and functions,
+    not as class instances. This Protocol serves as a documented interface
+    contract. To verify a new provider conforms, ensure it defines all five
+    members with matching signatures.
     """
 
     PROVIDER_NAME: str
-    SANITIZED_ENV_KEYS: set
+    SANITIZED_ENV_KEYS: set[str]
 
     def prepare_launch_env(self, env: Dict[str, str]) -> None:
         """Prepare environment variables for the provider launch."""
