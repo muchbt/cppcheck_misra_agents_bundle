@@ -1,0 +1,2 @@
+[validate-real] claude: passed - 真实 1 issue / 1 chunk 验收通过。
+[validate-real] report: /tmp/cppcheck_misra_real_validation.json

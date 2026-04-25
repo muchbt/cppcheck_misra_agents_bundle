@@ -1,0 +1,141 @@
+{
+  "generated_at": "2026-04-26T07:31:20.182617+08:00",
+  "requested_provider": "claude",
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "skipped_not_installed": 0,
+    "skipped_auth_missing": 0,
+    "skipped_precheck_blocked": 0
+  },
+  "providers": [
+    {
+      "provider": "claude",
+      "status": "passed",
+      "message": "真实 1 issue / 1 chunk 验收通过。",
+      "workspace_root": "/tmp/real-validate-claude-6mm1g61p",
+      "precheck_results": [
+        {
+          "level": "ok",
+          "code": "python_version",
+          "message": "Python 版本满足要求。",
+          "detail": "当前版本: 3.10.12"
+        },
+        {
+          "level": "ok",
+          "code": "cppcheck_xml_ok",
+          "message": "cppcheck.xml 可用。",
+          "detail": "路径: /tmp/real-validate-claude-6mm1g61p/cppcheck.xml; error 节点数量: 1"
+        },
+        {
+          "level": "ok",
+          "code": "pipeline_config_ok",
+          "message": "pipeline.json 配置通过检查。",
+          "detail": "配置项完整。"
+        },
+        {
+          "level": "ok",
+          "code": "agent_launch_ok",
+          "message": "agent 启动配置适合非交互执行。",
+          "detail": "provider: claude; 命令: claude -p --output-format text --permission-mode acceptEdits; prompt_via: stdin"
+        },
+        {
+          "level": "ok",
+          "code": "agent_staging_dir_ok",
+          "message": "agent staging 目录可写。",
+          "detail": "路径: /tmp/real-validate-claude-6mm1g61p/.agents/staging; agent 只写 staging，权威 runtime 由主流程导入维护。"
+        },
+        {
+          "level": "ok",
+          "code": "agent_skill_ok",
+          "message": "当前 provider 的项目内 skill 兼容层已就绪。",
+          "detail": "provider: claude; 路径: /tmp/real-validate-claude-6mm1g61p/.claude/skills/cppcheck-misra-fix/SKILL.md"
+        },
+        {
+          "level": "warning",
+          "code": "agent_auth_manual_check",
+          "message": "Claude Code 认证状态需要人工确认。",
+          "detail": "请确认本机已通过 `claude auth login` 完成登录，或在运行环境中提供 ANTHROPIC_API_KEY。"
+        },
+        {
+          "level": "ok",
+          "code": "agent_network_ok",
+          "message": "未发现 Claude Code 的显式网络阻断环境变量。",
+          "detail": "真实运行仍依赖本机对 Claude 服务的外网访问能力。"
+        },
+        {
+          "level": "ok",
+          "code": "custom_verification_command_absent",
+          "message": "未配置自定义验证命令。",
+          "detail": "跳过该项检查。"
+        },
+        {
+          "level": "ok",
+          "code": "rule_policy_ok",
+          "message": "rule_policy.json 配置通过检查。",
+          "detail": "配置项完整。"
+        },
+        {
+          "level": "ok",
+          "code": "runtime_strategy_ok",
+          "message": "运行时策略一致。",
+          "detail": "pipeline.json: conservative; progress.json: 未设置"
+        },
+        {
+          "level": "ok",
+          "code": "unfinished_run_absent",
+          "message": "没有检测到未完成的运行。",
+          "detail": "当前状态: 未设置"
+        },
+        {
+          "level": "ok",
+          "code": "archive_empty",
+          "message": "归档目录为空。",
+          "detail": "路径: /tmp/real-validate-claude-6mm1g61p/.agents/runs"
+        },
+        {
+          "level": "ok",
+          "code": "prompt_length_ok",
+          "message": "fix_chunk_prompt.txt 长度正常。",
+          "detail": "长度: 1308 字符; 路径: /tmp/real-validate-claude-6mm1g61p/.agents/prompts/fix_chunk_prompt.txt"
+        }
+      ],
+      "bootstrap": {
+        "returncode": 0,
+        "stdout": "[AGENTS.md] target=/tmp/real-validate-claude-6mm1g61p/AGENTS.md changed=True mode=overwrite dry_run=False\n[SKILL.md] provider=claude target=/tmp/real-validate-claude-6mm1g61p/.claude/skills/cppcheck-misra-fix/SKILL.md changed=True mode=overwrite dry_run=False\n[SKILL.md] provider=codex target=/tmp/real-validate-claude-6mm1g61p/.codex/skills/cppcheck-misra-fix/SKILL.md changed=True mode=overwrite dry_run=False\n[SKILL.md] provider=opencode target=/tmp/real-validate-claude-6mm1g61p/.opencode/skills/cppcheck-misra-fix/SKILL.md changed=True mode=overwrite dry_run=False\nBootstrap completed.",
+        "stderr": ""
+      },
+      "auth_probe": {
+        "ok": true,
+        "detail": "Claude auth status 已登录。 authMethod=oauth_token apiProvider=firstParty"
+      },
+      "split": {
+        "returncode": 0,
+        "stdout": "Generated 1 chunks from 1 issues with strategy 'conservative' (run_id=20260426-001).",
+        "stderr": "",
+        "run_id": "20260426-001"
+      },
+      "run": {
+        "returncode": 0,
+        "stdout": "正在处理 chunk 1/1\nStopped after processing 1 chunk(s) due to --max-chunks.",
+        "stderr": "",
+        "attempts": 1
+      },
+      "progress_status": "partial",
+      "result_exists": true,
+      "verify": {
+        "returncode": 0,
+        "stdout": "{\n  \"performed\": true,\n  \"passed\": true,\n  \"mode\": \"light\",\n  \"notes\": \"light verification only; no custom command configured\",\n  \"command\": \"\",\n  \"returncode\": 0\n}",
+        "stderr": ""
+      },
+      "verification": {
+        "performed": true,
+        "passed": true,
+        "mode": "light",
+        "notes": "light verification only; no custom command configured",
+        "command": "",
+        "returncode": 0
+      }
+    }
+  ]
+}

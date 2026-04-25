@@ -127,14 +127,26 @@ class SplitAndRunPipelineTests(unittest.TestCase):
                     "stderr": "",
                     "error_kind": "",
                     "prompt": "prompt body",
+                    "argv": ["opencode"],
                     "imported_paths": {
                         "chunk_result_json_path": result_path,
                     },
                 }
 
             stdout = io.StringIO()
+            logs_dir = runtime_dir / "logs"
+            logs_dir.mkdir()
+            config_dir = Path(tmp) / "config"
+            config_dir.mkdir()
+            common.save_json(config_dir / "pipeline.json", {
+                "agent": {"provider": "opencode", "staging_dir": ".agents/staging"}
+            })
             with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
                 run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "LOGS_DIR", logs_dir
+            ), patch.object(
+                run_fix_pipeline, "CONFIG_DIR", config_dir
             ), patch.object(
                 run_fix_pipeline, "run_chunk_agent", side_effect=fake_run_chunk_agent
             ), patch.object(
