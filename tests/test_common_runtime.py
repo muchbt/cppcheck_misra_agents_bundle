@@ -120,6 +120,7 @@ class CommonRuntimeTests(unittest.TestCase):
 
             (runtime_dir / "chunks").mkdir(parents=True)
             (runtime_dir / "results").mkdir(parents=True)
+            (runtime_dir / "logs").mkdir(parents=True)
             reports_dir.mkdir()
 
             (runtime_dir / "progress.json").write_text("{\"run_id\": \"20260423-001\"}\n", encoding="utf-8")
@@ -128,6 +129,9 @@ class CommonRuntimeTests(unittest.TestCase):
             (runtime_dir / "results" / "chunk_001_result.json").write_text("{\"result\": true}\n", encoding="utf-8")
             (runtime_dir / "pipeline.log").write_text("line one\n", encoding="utf-8")
             (runtime_dir / "run_log.jsonl").write_text("{\"event\": \"x\"}\n", encoding="utf-8")
+            # Add execution logs in runtime/logs/
+            (runtime_dir / "logs" / "chunk_001.log").write_text("=== CHUNK 001 EXECUTION LOG ===\n", encoding="utf-8")
+            (runtime_dir / "logs" / "chunk_002.log").write_text("=== CHUNK 002 EXECUTION LOG ===\n", encoding="utf-8")
             (reports_dir / "final_summary.md").write_text("# summary\n", encoding="utf-8")
             (reports_dir / "final_summary.json").write_text("{\"ok\": true}\n", encoding="utf-8")
 
@@ -144,6 +148,15 @@ class CommonRuntimeTests(unittest.TestCase):
             self.assertEqual(
                 (archive_dir / "runtime" / "results" / "chunk_001_result.json").read_text(encoding="utf-8"),
                 "{\"result\": true}\n",
+            )
+            # Verify runtime/logs/ subdirectory was archived
+            self.assertEqual(
+                (archive_dir / "runtime" / "logs" / "chunk_001.log").read_text(encoding="utf-8"),
+                "=== CHUNK 001 EXECUTION LOG ===\n",
+            )
+            self.assertEqual(
+                (archive_dir / "runtime" / "logs" / "chunk_002.log").read_text(encoding="utf-8"),
+                "=== CHUNK 002 EXECUTION LOG ===\n",
             )
             self.assertEqual(
                 (archive_dir / "reports" / "final_summary.md").read_text(encoding="utf-8"),

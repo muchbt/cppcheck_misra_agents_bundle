@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = REPO_ROOT / ".agents" / "tools"
@@ -34,12 +35,36 @@ def test_logs_dir_constant_exists():
 
 
 def test_ensure_dirs_includes_logs_dir(tmp_path):
-    """Test that ensure_dirs creates LOGS_DIR."""
-    # Create all test paths to avoid real directory creation
-    test_dirs = [".agents", "config", "prompts", "skills",
-                 ".agents/runtime", ".agents/runtime/runs", ".agents/runtime/chunks",
-                 ".agents/runtime/results", ".agents/runtime/reports", ".agents/runtime/logs"]
-    for d in test_dirs:
-        (tmp_path / d).mkdir(parents=True, exist_ok=True)
-    # Verify all expected dirs were created by the test fixture
-    assert (tmp_path / ".agents/runtime/logs").exists()
+    """Test that ensure_dirs creates LOGS_DIR and all other directories."""
+    # Use patch to isolate all directory constants
+    test_agents_dir = tmp_path / ".agents"
+    test_runtime_dir = test_agents_dir / "runtime"
+
+    with patch.object(common, "AGENTS_DIR", test_agents_dir), \
+         patch.object(common, "CONFIG_DIR", tmp_path / "config"), \
+         patch.object(common, "PROMPTS_DIR", tmp_path / "prompts"), \
+         patch.object(common, "SKILLS_DIR", tmp_path / "skills"), \
+         patch.object(common, "RUNTIME_DIR", test_runtime_dir), \
+         patch.object(common, "RUNS_DIR", test_runtime_dir / "runs"), \
+         patch.object(common, "CHUNKS_DIR", test_runtime_dir / "chunks"), \
+         patch.object(common, "RESULTS_DIR", test_runtime_dir / "results"), \
+         patch.object(common, "REPORTS_DIR", test_runtime_dir / "reports"), \
+         patch.object(common, "LOGS_DIR", test_runtime_dir / "logs"):
+        # Ensure none of these exist before calling ensure_dirs
+        assert not test_runtime_dir.exists()
+        assert not (test_runtime_dir / "logs").exists()
+
+        # Call the actual function
+        common.ensure_dirs()
+
+        # Verify all directories were created by ensure_dirs
+        assert test_agents_dir.exists()
+        assert (tmp_path / "config").exists()
+        assert (tmp_path / "prompts").exists()
+        assert (tmp_path / "skills").exists()
+        assert test_runtime_dir.exists()
+        assert (test_runtime_dir / "runs").exists()
+        assert (test_runtime_dir / "chunks").exists()
+        assert (test_runtime_dir / "results").exists()
+        assert (test_runtime_dir / "reports").exists()
+        assert (test_runtime_dir / "logs").exists()

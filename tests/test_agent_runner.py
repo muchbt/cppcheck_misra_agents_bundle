@@ -210,11 +210,50 @@ class OpenCodeProviderTests(unittest.TestCase):
     def test_opencode_classify_runtime_error(self) -> None:
         """Test opencode error classification."""
         from providers.opencode import classify_runtime_error
+        # stderr only (old signature compatibility)
         assert classify_runtime_error("Authentication failed") == "auth_error"
         assert classify_runtime_error("Network timeout") == "network_error"
         assert classify_runtime_error("dial tcp: connect: connection refused") == "network_error"
         assert classify_runtime_error("POST https://opencode.ai/zen/v1/messages timed out") == "network_error"
         assert classify_runtime_error("Unknown error") == "runtime_error"
+        # stdout + stderr combined (new signature)
+        assert classify_runtime_error("", "POST https://opencode.ai/zen/v1/messages timed out") == "network_error"
+        assert classify_runtime_error("stderr auth error", "stdout: credentials invalid") == "auth_error"
+
+    def test_codex_classify_runtime_error(self) -> None:
+        """Test codex error classification."""
+        from providers.codex import classify_runtime_error
+        # quota/usage limit errors
+        assert classify_runtime_error("", "You've hit your usage limit") == "auth_error"
+        assert classify_runtime_error("", "Please upgrade to Pro to continue") == "auth_error"
+        assert classify_runtime_error("", "quota exceeded for this month") == "auth_error"
+        # network errors
+        assert classify_runtime_error("failed to connect to websocket") == "network_error"
+        assert classify_runtime_error("", "stream disconnected before completion") == "network_error"
+        # auth errors
+        assert classify_runtime_error("auth: please login with codex auth login") == "auth_error"
+        # runtime fallback
+        assert classify_runtime_error("Unknown error") == "runtime_error"
+        # stdout + stderr combined
+        assert classify_runtime_error("stderr", "quota exceeded") == "auth_error"
+
+    def test_claude_classify_runtime_error(self) -> None:
+        """Test claude error classification."""
+        from providers.claude import classify_runtime_error
+        # auth errors
+        assert classify_runtime_error("ANTHROPIC_API_KEY not set") == "auth_error"
+        assert classify_runtime_error("authentication required") == "auth_error"
+        assert classify_runtime_error("", "Please login with claude auth") == "auth_error"
+        # rate limit
+        assert classify_runtime_error("", "rate limit exceeded") == "auth_error"
+        assert classify_runtime_error("", "HTTP 429 Too Many Requests") == "auth_error"
+        # network errors
+        assert classify_runtime_error("network error: connection refused") == "network_error"
+        assert classify_runtime_error("", "operation timed out after 30s") == "network_error"
+        # runtime fallback
+        assert classify_runtime_error("Unknown error") == "runtime_error"
+        # stdout + stderr combined
+        assert classify_runtime_error("stderr", "ECONNREFUSED") == "network_error"
 
     def test_opencode_provider_builds_run_launch_spec(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
