@@ -56,6 +56,46 @@ def write_chunk_execution_log(
     return log_path
 
 
+PROVIDER_ERROR_KEYWORDS = {
+    "codex": ["usage limit", "upgrade to pro", "quota", "rate limit"],
+    "claude": ["anthropic_api_key", "authentication", "rate limit", "429"],
+    "opencode": ["zen/v1/messages", "api key", "credentials", "auth"],
+}
+COMMON_ERROR_KEYWORDS = ["ERROR:", "FATAL:", "failed to", "fatal error"]
+
+
+def extract_error_summary(stdout: str, stderr: str, provider: str) -> str:
+    """Extract key error lines from stdout/stderr output."""
+    # Combine outputs, prioritize stdout (where most errors appear)
+    combined = stdout or stderr or ""
+    if not combined:
+        return ""
+
+    # Get last 50 lines
+    lines = combined.strip().split("\n")[-50:]
+
+    # Provider-specific keywords first
+    provider_keywords = PROVIDER_ERROR_KEYWORDS.get(provider, [])
+    all_keywords = provider_keywords + COMMON_ERROR_KEYWORDS
+
+    # Find matching lines
+    error_lines = []
+    for line in lines:
+        line_lower = line.lower()
+        for keyword in all_keywords:
+            if keyword.lower() in line_lower:
+                error_lines.append(line.strip())
+                break
+        if len(error_lines) >= 3:
+            break
+
+    if error_lines:
+        return "\n".join(error_lines)
+
+    # Fallback: last 200 chars of stdout
+    return (stdout or "")[-200:].strip()
+
+
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
