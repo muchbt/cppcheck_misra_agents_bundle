@@ -55,7 +55,7 @@ Error kind: auth_error
 Finished: 2026-04-25T19:30:15+08:00
 ```
 
-**注：** `Error kind` 字段使用现有 `common.py` 的 ERROR_KIND 常量（如 `auth_error`、`network_error`、`runtime_error`）。classify_runtime_error 扩展后将能正确识别 quota/usage limit 类错误并归类为 `auth_error` 或新增 `quota_error`（实现时决定）。
+**注：** `Error kind` 字段使用现有 `common.py` 的 ERROR_KIND 常量（如 `auth_error`、`network_error`、`runtime_error`）。classify_runtime_error 扩展后将能正确识别 quota/usage limit 类错误并归类为 `auth_error`（视为认证/配额问题）。
 
 ### 重试场景日志策略
 
@@ -81,7 +81,7 @@ Finished: 2026-04-25T19:30:15+08:00
 error_kind = classify_fn(completed.stderr, completed.stdout)
 ```
 
-各 provider 实现同步修改，优先从 stdout 分析，stderr 作为补充。识别到 quota/usage limit 类错误时返回 `auth_error` 或新增常量。
+各 provider 实现同步修改，优先从 stdout 分析，stderr 作为补充。识别到 quota/usage limit 类错误时返回 `auth_error`。
 
 **Protocol 同步：** `providers/base.py` 的 `ProviderProtocol` 需同步更新签名定义。
 

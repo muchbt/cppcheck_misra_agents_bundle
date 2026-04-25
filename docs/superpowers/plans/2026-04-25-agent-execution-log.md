@@ -28,7 +28,7 @@
 
 **Files:**
 - Modify: `.agents/tools/common.py:20-24` (add constant)
-- Modify: `.agents/tools/common.py:93-105` (ensure_dirs)
+- Modify: `.agents/tools/common.py:93-105` (ensure_dirs - **从裸循环重构为函数**)
 - Modify: `.agents/tools/common.py:435-439` (reset_runtime_logs)
 - Modify: `.agents/tools/common.py:453` (copy_current_run_archive)
 
@@ -39,7 +39,9 @@
 LOGS_DIR = RUNTIME_DIR / "logs"
 ```
 
-- [ ] **Step 2: Update ensure_dirs() to include LOGS_DIR**
+- [ ] **Step 2: Extract ensure_dirs() from bare loop and add LOGS_DIR**
+
+当前 common.py:93-105 是模块级裸循环（无函数封装）。提取为 `ensure_dirs()` 函数并追加 `LOGS_DIR`：
 
 ```python
 def ensure_dirs() -> None:
@@ -80,15 +82,35 @@ def reset_runtime_logs(runtime_dir: Path = RUNTIME_DIR) -> None:
 for name in ("chunks", "results", "logs"):
 ```
 
-- [ ] **Step 5: Run existing tests to verify no breakage**
+- [ ] **Step 5: Write unit test for reset_runtime_logs logs cleanup**
+
+```python
+# tests/test_common.py 新增
+def test_reset_runtime_logs_clears_logs_dir(tmp_path):
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir(parents=True)
+    (logs_dir / "chunk_001.log").write_text("test log content")
+    (logs_dir / "chunk_002.log").write_text("test log content 2")
+    assert logs_dir.exists()
+    assert (logs_dir / "chunk_001.log").exists()
+
+    from common import reset_runtime_logs
+    reset_runtime_logs(tmp_path)
+
+    assert logs_dir.exists()  # 目录应重建
+    assert not (logs_dir / "chunk_001.log").exists()  # 内容应清空
+    assert not (logs_dir / "chunk_002.log").exists()
+```
+
+- [ ] **Step 6: Run existing tests to verify no breakage**
 
 Run: `python -m pytest tests/ -v --tb=short`
-Expected: All existing tests pass
+Expected: All existing tests pass + new test passes
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add .agents/tools/common.py
+git add .agents/tools/common.py tests/test_common.py
 git commit -m "feat: add LOGS_DIR infrastructure and update archive/reset logic"
 ```
 
@@ -245,7 +267,7 @@ git commit -m "feat: pass stdout to classify_runtime_error"
 - [ ] **Step 1: Add imports and helper function after existing imports**
 
 ```python
-from common import LOGS_DIR, get_selected_agent_provider_name
+from common import LOGS_DIR, ROOT, get_selected_agent_provider_name, resolve_agent_staging_dir
 
 def write_chunk_execution_log(
     chunk_index: int,
@@ -283,11 +305,11 @@ def write_chunk_execution_log(
         f.write(stdout or "(empty)")
         f.write("\n--- STDERR ---\n")
         f.write(stderr or "(empty)")
-        if attempt == 1 or mode == "w":
-            f.write("\n--- END ---\n")
-            f.write(f"Returncode: {returncode}\n")
-            f.write(f"Error kind: {error_kind}\n")
-            f.write(f"Finished: {finished_at}\n")
+        # 每次 attempt 都写入尾部元数据（便于排查每次失败原因）
+        f.write("\n--- END ---\n")
+        f.write(f"Returncode: {returncode}\n")
+        f.write(f"Error kind: {error_kind}\n")
+        f.write(f"Finished: {finished_at}\n")
 
     return log_path
 ```
@@ -380,8 +402,9 @@ Locate the `for attempt in range(1, max_attempts + 1):` loop. Replace the failur
 
             # Write execution log
             provider_name = get_selected_agent_provider_name(config)
-            command_str = " ".join(result.get("prompt", "")[:100] if result.get("prompt") else "")
-            spec = result.get("spec", {})
+            # 从 result 获取实际执行的 argv（如果有），否则简化为 provider 名
+            argv_list = result.get("argv", []) or [provider_name]
+            command_str = " ".join(argv_list[:5])  # 最多显示前 5 个参数
             log_path = write_chunk_execution_log(
                 chunk_index=idx,
                 attempt=attempt,
@@ -538,6 +561,7 @@ git commit -m "test: verify execution log integration"
 | LOGS_DIR constant | Task 1 Step 1 |
 | ensure_dirs update | Task 1 Step 2 |
 | reset_runtime_logs update | Task 1 Step 3 |
+| reset_runtime_logs test | Task 1 Step 5 |
 | copy_current_run_archive update | Task 1 Step 4 |
 | ProviderProtocol signature | Task 2 |
 | codex classify with stdout/quota | Task 3 |
