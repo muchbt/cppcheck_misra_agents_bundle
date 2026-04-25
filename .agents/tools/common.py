@@ -21,6 +21,7 @@ RUNTIME_DIR = AGENTS_DIR / "runtime"
 RUNS_DIR = AGENTS_DIR / "runs"
 CHUNKS_DIR = RUNTIME_DIR / "chunks"
 RESULTS_DIR = RUNTIME_DIR / "results"
+LOGS_DIR = RUNTIME_DIR / "logs"
 REPORTS_DIR = AGENTS_DIR / "reports"
 TZ = timezone(timedelta(hours=8))
 RUN_ID_RE = re.compile(r"^(?P<date>\d{8})-(?P<seq>\d{3})$")
@@ -101,6 +102,7 @@ def ensure_dirs() -> None:
         CHUNKS_DIR,
         RESULTS_DIR,
         REPORTS_DIR,
+        LOGS_DIR,
     ]:
         path.mkdir(parents=True, exist_ok=True)
 
@@ -437,6 +439,10 @@ def reset_runtime_logs(runtime_dir: Path = RUNTIME_DIR) -> None:
         path = runtime_dir / name
         if path.exists():
             path.unlink()
+    logs_dir = runtime_dir / "logs"
+    if logs_dir.exists():
+        shutil.rmtree(logs_dir, ignore_errors=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
 def copy_current_run_archive(runtime_dir: Path, reports_dir: Path, archive_dir: Path) -> None:
     runtime_archive = archive_dir / "runtime"
@@ -450,7 +456,7 @@ def copy_current_run_archive(runtime_dir: Path, reports_dir: Path, archive_dir: 
         for path in runtime_dir.iterdir():
             if path.is_file() and path.suffix == ".json":
                 shutil.copy2(path, runtime_archive / path.name)
-        for name in ("chunks", "results"):
+        for name in ("chunks", "results", "logs"):
             src_dir = runtime_dir / name
             dest_dir = runtime_archive / name
             dest_dir.mkdir(parents=True, exist_ok=True)
