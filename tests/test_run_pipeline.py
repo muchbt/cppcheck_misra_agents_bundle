@@ -204,8 +204,24 @@ class SplitAndRunPipelineTests(unittest.TestCase):
                 }
 
             stdout = io.StringIO()
+            logs_dir = runtime_dir / "logs"
+            logs_dir.mkdir()
+            config_dir = Path(tmp) / "config"
+            config_dir.mkdir()
+            # Use relative staging_dir to avoid ROOT validation issues
+            # (resolve_agent_staging_dir default root=ROOT is bound at definition time)
+            common.save_json(config_dir / "pipeline.json", {
+                "agent": {
+                    "provider": "opencode",
+                    "staging_dir": ".agents/staging"
+                }
+            })
             with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
                 run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "LOGS_DIR", logs_dir
+            ), patch.object(
+                run_fix_pipeline, "CONFIG_DIR", config_dir
             ), patch.object(
                 run_fix_pipeline, "run_chunk_agent", side_effect=fake_run_chunk_agent
             ), redirect_stdout(stdout):

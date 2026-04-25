@@ -23,8 +23,8 @@ def prepare_launch_env(env: Dict[str, str]) -> None:
 
 def classify_runtime_error(stderr: str, stdout: str = "") -> str:
     """Classify runtime errors from stderr and stdout output."""
-    # 优先从 stdout 分析（opencode 主要输出在 stdout）
-    text = (stdout or stderr or "").lower()
+    # 同时搜索 stdout 和 stderr（stdout 优先但 stderr 作为补充）
+    text = f"{stdout or ''}\n{stderr or ''}".lower()
     if "auth" in text or "login" in text or "unauthorized" in text or "api key" in text or "credentials" in text:
         return ERROR_KIND_AUTH_ERROR
     if (

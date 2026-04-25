@@ -127,5 +127,6 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
         "stderr": completed.stderr,
         "error_kind": error_kind,
         "prompt": prompt,
+        "argv": cmd,
         "imported_paths": imported_paths,
     }

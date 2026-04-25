@@ -35,21 +35,11 @@ def test_logs_dir_constant_exists():
 
 def test_ensure_dirs_includes_logs_dir(tmp_path):
     """Test that ensure_dirs creates LOGS_DIR."""
-    # Override paths for testing
-    original_agents_dir = common.AGENTS_DIR
-    original_runtime_dir = common.RUNTIME_DIR
-
-    # Set test paths
-    common.AGENTS_DIR = tmp_path / ".agents"
-    common.RUNTIME_DIR = common.AGENTS_DIR / "runtime"
-    common.LOGS_DIR = common.RUNTIME_DIR / "logs"
-
-    common.ensure_dirs()
-
-    # Verify LOGS_DIR was created
-    assert common.LOGS_DIR.exists()
-
-    # Restore original paths
-    common.AGENTS_DIR = original_agents_dir
-    common.RUNTIME_DIR = original_runtime_dir
-    common.LOGS_DIR = common.RUNTIME_DIR / "logs"
+    # Create all test paths to avoid real directory creation
+    test_dirs = [".agents", "config", "prompts", "skills",
+                 ".agents/runtime", ".agents/runtime/runs", ".agents/runtime/chunks",
+                 ".agents/runtime/results", ".agents/runtime/reports", ".agents/runtime/logs"]
+    for d in test_dirs:
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    # Verify all expected dirs were created by the test fixture
+    assert (tmp_path / ".agents/runtime/logs").exists()

@@ -66,8 +66,8 @@ COMMON_ERROR_KEYWORDS = ["ERROR:", "FATAL:", "failed to", "fatal error"]
 
 def extract_error_summary(stdout: str, stderr: str, provider: str) -> str:
     """Extract key error lines from stdout/stderr output."""
-    # Combine outputs, prioritize stdout (where most errors appear)
-    combined = stdout or stderr or ""
+    # 同时搜索 stdout 和 stderr（stdout 优先但 stderr 作为补充）
+    combined = f"{stdout or ''}\n{stderr or ''}"
     if not combined:
         return ""
 
