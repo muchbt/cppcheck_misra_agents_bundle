@@ -36,8 +36,11 @@ def prepare_launch_env(env: Dict[str, str]) -> None:
             _link_or_copy(source, target_dir / name)
 
 
-def classify_runtime_error(stderr: str) -> str:
-    text = (stderr or "").lower()
+def classify_runtime_error(stderr: str, stdout: str = "") -> str:
+    # 优先从 stdout 分析（codex 主要输出在 stdout）
+    text = (stdout or stderr or "").lower()
+    if "usage limit" in text or "upgrade to pro" in text or "quota" in text:
+        return ERROR_KIND_AUTH_ERROR
     if "failed to connect to websocket" in text or "api.openai.com/v1/responses" in text or "stream disconnected before completion" in text:
         return ERROR_KIND_NETWORK_ERROR
     if "auth" in text and ("login" in text or "token" in text or "credential" in text):
