@@ -143,6 +143,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
             "split_cppcheck_xml.py."
         ),
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print full stdout/stderr after each chunk completes (last attempt only).",
+    )
     return parser.parse_args(argv)
 
 
@@ -408,6 +413,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "error_kind": last_error_kind or ERROR_KIND_RUNTIME_ERROR,
             }
             save_json(progress_path, progress)
+
+            # Verbose output (last attempt only)
+            if args.verbose and last_result:
+                print(f"\n=== CHUNK {idx:03d} STDOUT (verbose) ===")
+                print(last_result.get("stdout", "(empty)"))
+                print(f"\n=== CHUNK {idx:03d} STDERR (verbose) ===")
+                print(last_result.get("stderr", "(empty)"))
+
             print(f"Chunk {idx} failed after {max_attempts} attempt(s).")
             return 1
 
