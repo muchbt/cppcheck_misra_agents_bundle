@@ -68,7 +68,8 @@
       "risk_tags": [
         "volatile"
       ],
-      "risk_reason": "Volatile-related changes may affect hardware or concurrency semantics."
+      "risk_reason": "Volatile-related changes may affect hardware or concurrency semantics.",
+      "$comment": "volatile 关键字涉及硬件寄存器或并发场景，编译器优化行为不可预测，需人工确认"
     },
     {
       "match_contains": "interrupt",
@@ -77,7 +78,8 @@
       "risk_tags": [
         "interrupt"
       ],
-      "risk_reason": "Interrupt path changes need manual timing and safety review."
+      "risk_reason": "Interrupt path changes need manual timing and safety review.",
+      "$comment": "中断处理涉及实时性和上下文保存，自动修复可能引入竞态条件或时序问题"
     },
     {
       "match_contains": "register",
@@ -86,7 +88,8 @@
       "risk_tags": [
         "register"
       ],
-      "risk_reason": "Register access changes may affect hardware behavior."
+      "risk_reason": "Register access changes may affect hardware behavior.",
+      "$comment": "寄存器访问通常与硬件地址绑定，修改可能影响外设配置或内存映射"
     },
     {
       "match_contains": "rte_",
@@ -95,7 +98,8 @@
       "risk_tags": [
         "rte"
       ],
-      "risk_reason": "AUTOSAR RTE paths require integration review."
+      "risk_reason": "AUTOSAR RTE paths require integration review.",
+      "$comment": "AUTOSAR RTE 接口由工具生成，修改可能破坏 SWC 与 BSW 的通信契约"
     },
     {
       "match_contains": "mcal",
@@ -104,7 +108,8 @@
       "risk_tags": [
         "mcal"
       ],
-      "risk_reason": "MCAL paths can affect hardware abstraction behavior."
+      "risk_reason": "MCAL paths can affect hardware abstraction behavior.",
+      "$comment": "MCAL 为微控制器抽象层，修改需确认硬件规格和驱动配置一致性"
     },
     {
       "match_contains": "canif",
@@ -113,7 +118,8 @@
       "risk_tags": [
         "canif"
       ],
-      "risk_reason": "CAN interface changes need communication stack review."
+      "risk_reason": "CAN interface changes need communication stack review.",
+      "$comment": "CAN 接口修改涉及总线通信协议，需确认帧格式、时序和诊断行为"
     }
   ]
 }
