@@ -5,10 +5,55 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
 from agent_runner import run_chunk_agent
-from common import ERROR_KIND_RUNTIME_ERROR, CONFIG_DIR, RESULTS_DIR, RUNTIME_DIR, append_pipeline_event, load_json, now_iso, save_json
+from common import ERROR_KIND_RUNTIME_ERROR, CONFIG_DIR, LOGS_DIR, RESULTS_DIR, ROOT, RUNTIME_DIR, append_pipeline_event, get_selected_agent_provider_name, load_json, now_iso, resolve_agent_staging_dir, save_json
 from verify_chunk import verify_chunk_result
 
 VALID_STRATEGIES = {"conservative", "all_auto"}
+
+
+def write_chunk_execution_log(
+    chunk_index: int,
+    attempt: int,
+    provider: str,
+    command: str,
+    cwd: str,
+    staging_dir: str,
+    prompt: str,
+    stdout: str,
+    stderr: str,
+    returncode: int,
+    error_kind: str,
+    started_at: str,
+    finished_at: str,
+) -> Path:
+    """Write execution log for a chunk attempt. Returns log path."""
+    log_path = LOGS_DIR / f"chunk_{chunk_index:03d}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Append mode for retry scenarios
+    mode = "a" if attempt > 1 else "w"
+    with open(log_path, mode, encoding="utf-8") as f:
+        if attempt > 1:
+            f.write(f"\n--- ATTEMPT {attempt} ---\n")
+        else:
+            f.write(f"=== CHUNK {chunk_index:03d} EXECUTION LOG ===\n")
+            f.write(f"Started: {started_at}\n")
+            f.write(f"Provider: {provider}\n")
+            f.write(f"Command: {command}\n")
+            f.write(f"CWD: {cwd}\n")
+            f.write(f"Staging: {staging_dir}\n")
+            f.write(f"Prompt length: {len(prompt)} characters\n")
+            f.write("\n--- STDOUT ---\n")
+        f.write(stdout or "(empty)")
+        f.write("\n--- STDERR ---\n")
+        f.write(stderr or "(empty)")
+        # 每次 attempt 都写入尾部元数据（便于排查每次失败原因）
+        f.write("\n--- END ---\n")
+        f.write(f"Returncode: {returncode}\n")
+        f.write(f"Error kind: {error_kind}\n")
+        f.write(f"Finished: {finished_at}\n")
+
+    return log_path
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
