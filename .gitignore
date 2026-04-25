@@ -1,3 +1,5 @@
 .worktrees/
 __pycache__/
 *.pyc
+.agents/runtime
+.agents/runtime_backup
