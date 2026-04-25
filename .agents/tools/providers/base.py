@@ -20,7 +20,7 @@ class ProviderProtocol(Protocol):
     - PROVIDER_NAME: str - Unique identifier for the provider
     - SANITIZED_ENV_KEYS: set[str] - Environment keys to sanitize in logs
     - prepare_launch_env(env: Dict[str, str]) -> None
-    - classify_runtime_error(stderr: str) -> str
+    - classify_runtime_error(stderr: str, stdout: str = "") -> str
     - build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]
 
     Note: Providers implement these as module-level attributes and functions,
