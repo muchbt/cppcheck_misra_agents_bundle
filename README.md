@@ -89,7 +89,7 @@
 }
 ```
 
-切换到 `Claude Code` 时，只需要把：
+当前默认配置使用 `OpenCode`。如需切换到 `Claude Code`，只需要把：
 
 ```json
 "provider": "opencode"
@@ -101,16 +101,16 @@
 "provider": "claude"
 ```
 
-切换到 `OpenCode` 时，只需要把：
+如需切换回 `Codex`，只需要把：
 
 ```json
-"provider": "codex"
+"provider": "opencode"
 ```
 
 改成：
 
 ```json
-"provider": "opencode"
+"provider": "codex"
 ```
 
 要求如下：
