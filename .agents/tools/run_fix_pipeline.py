@@ -314,14 +314,39 @@ def main(argv: Optional[List[str]] = None) -> int:
         success = False
         last_rc = 0
         last_error_kind = ""
+        last_result = {}
 
         for attempt in range(1, max_attempts + 1):
             config = load_json(CONFIG_DIR / "pipeline.json", {})
             chunk_payload = load_chunk_payload(idx)
+            started_at = now_iso()
             result = run_chunk_agent(config, chunk_payload)
+            finished_at = now_iso()
             rc = int(result.get("returncode", 1))
             last_rc = rc
             last_error_kind = str(result.get("error_kind", "")).strip()
+            last_result = result  # Keep for final summary
+
+            # Write execution log
+            provider_name = get_selected_agent_provider_name(config)
+            argv_list = result.get("argv", []) or [provider_name]
+            command_str = " ".join(argv_list[:5])  # Show at most first 5 args
+            log_path = write_chunk_execution_log(
+                chunk_index=idx,
+                attempt=attempt,
+                provider=provider_name,
+                command=command_str,
+                cwd=str(ROOT),
+                staging_dir=str(resolve_agent_staging_dir(config) / f"chunk_{idx:03d}"),
+                prompt=result.get("prompt", ""),
+                stdout=result.get("stdout", ""),
+                stderr=result.get("stderr", ""),
+                returncode=rc,
+                error_kind=last_error_kind or ERROR_KIND_RUNTIME_ERROR,
+                started_at=started_at,
+                finished_at=finished_at,
+            )
+
             result_json = RESULTS_DIR / f"chunk_{idx:03d}_result.json"
             imported_paths = result.get("imported_paths", {})
             imported_result_json = None
@@ -358,9 +383,19 @@ def main(argv: Optional[List[str]] = None) -> int:
 
             exhausted = attempt >= max_attempts
             mark_failure(progress, idx, rc, attempt, exhausted)
+
+            # Improved failure output
             if result.get("returncode") != 0:
-                stderr_preview = (result.get("stderr") or "")[:200]
-                print(f"[run] Chunk {idx} 失败: {result.get('error_kind', 'unknown')} - {stderr_preview}")
+                summary = extract_error_summary(
+                    result.get("stdout", ""),
+                    result.get("stderr", ""),
+                    provider_name
+                )
+                print(f"[run] Chunk {idx} 失败: {last_error_kind or 'unknown'}")
+                print(f"[run] 查看完整日志: {log_path}")
+                if summary:
+                    print(f"[run] 错误摘要: {summary}")
+
             save_json(progress_path, progress)
 
         if not success:
