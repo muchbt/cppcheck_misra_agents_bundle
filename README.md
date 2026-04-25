@@ -5,7 +5,7 @@
 - 解析 `cppcheck.xml`
 - 识别普通 cppcheck 与 MISRA 结果
 - 按文件聚类并切 chunk
-- 调用本地 agent（默认 `codex` CLI）
+- 调用本地 agent（当前默认 `opencode` CLI）
 - 记录 issue 状态、修改点、chunk 结果、统一运行日志
 - 支持按 `年月日-序号` 的 `run_id` 归档
 - 支持 `oneshot` 统一入口和默认续跑
@@ -31,7 +31,7 @@
 
 ```json
 "agent": {
-  "provider": "codex",
+  "provider": "opencode",
   "staging_dir": ".agents/staging",
   "providers": {
     "codex": {
@@ -92,7 +92,7 @@
 切换到 `Claude Code` 时，只需要把：
 
 ```json
-"provider": "codex"
+"provider": "opencode"
 ```
 
 改成：
@@ -132,6 +132,7 @@
 - `codex`：需要 `CODEX_HOME` 指向工作区内可写目录，用于存放认证文件 (`auth.json`) 和配置 (`config.toml`)。运行时会自动从 `~/.codex/` 复制到工作区。
 - `claude`：认证依赖本机 `claude auth login` 或环境变量 `ANTHROPIC_API_KEY`，不需要额外工作区目录配置。`env` 字段可保持为空对象 `{}`。
 - `opencode`：运行时会自动设置 `XDG_DATA_HOME` 和 `XDG_STATE_HOME` 环境变量，分别指向工作区内的 `.opencode/data` 和 `.opencode/state` 目录。这样可以将 OpenCode 的状态（如配置、缓存、日志）隔离在项目工作区内，避免污染用户全局 `~/.local/share/` 和 `~/.local/state/` 目录。认证依赖 OpenCode CLI 的全局配置，无需在 `env` 中额外指定。
+- `opencode`：常见 `connection refused`、`dial tcp`、`timed out` 或 `zen/v1/messages` 请求失败会在运行时归类为 `network_error`，优先检查外网连通性和 OpenCode 服务可达性。
 
 ## 推荐用法
 

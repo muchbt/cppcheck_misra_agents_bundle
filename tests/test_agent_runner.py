@@ -62,6 +62,13 @@ class AgentConfigValidationTests(unittest.TestCase):
     def test_validate_pipeline_config_accepts_structured_agent(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
 
+        self.assertEqual(config["agent"]["provider"], "opencode")
+        self.assertIn("opencode", config["agent"]["providers"])
+        self.assertEqual(
+            config["agent"]["providers"]["opencode"]["launch"]["argv"],
+            ["opencode"],
+        )
+
         errors, warnings = common.validate_pipeline_config(config)
 
         self.assertEqual(errors, [])
@@ -71,6 +78,7 @@ class AgentConfigValidationTests(unittest.TestCase):
 class CodexProviderTests(unittest.TestCase):
     def test_codex_provider_builds_non_interactive_launch_spec(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "codex"
         chunk = {
             "chunk_index": 1,
             "fix_strategy": "conservative",
@@ -202,6 +210,8 @@ class OpenCodeProviderTests(unittest.TestCase):
         from providers.opencode import classify_runtime_error
         assert classify_runtime_error("Authentication failed") == "auth_error"
         assert classify_runtime_error("Network timeout") == "network_error"
+        assert classify_runtime_error("dial tcp: connect: connection refused") == "network_error"
+        assert classify_runtime_error("POST https://opencode.ai/zen/v1/messages timed out") == "network_error"
         assert classify_runtime_error("Unknown error") == "runtime_error"
 
 
@@ -303,26 +313,35 @@ class AgentRunnerTests(unittest.TestCase):
 
     def test_run_chunk_agent_reports_spawn_error(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "codex"
         chunk = {"chunk_index": 1}
         agent_runner = importlib.import_module("agent_runner")
 
-        with patch.object(
-            agent_runner,
-            "get_provider",
-            return_value=SimpleNamespace(
-                build_launch_spec=lambda current_config, current_chunk: {
-                    "argv": ["codex", "exec", "--full-auto"],
-                    "prompt_via": "stdin",
-                    "cwd_mode": "project_root",
-                    "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
-                    "requires_tty": False,
-                    "output_mode": "exit_code",
-                    "prompt": "prompt body",
-                    "staging_dir": str(REPO_ROOT / ".agents" / "staging" / "chunk_001"),
-                }
-            ),
-        ), patch.object(agent_runner.subprocess, "run", side_effect=OSError("permission denied")):
-            result = agent_runner.run_chunk_agent(config, chunk)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            staging_dir = root / ".agents" / "staging" / "chunk_001"
+
+            with patch.object(
+                agent_runner,
+                "ROOT",
+                root,
+            ), patch.object(
+                agent_runner,
+                "get_provider",
+                return_value=SimpleNamespace(
+                    build_launch_spec=lambda current_config, current_chunk: {
+                        "argv": ["codex", "exec", "--full-auto"],
+                        "prompt_via": "stdin",
+                        "cwd_mode": "project_root",
+                        "env": {"CODEX_HOME": ".agents/runtime/agent-home"},
+                        "requires_tty": False,
+                        "output_mode": "exit_code",
+                        "prompt": "prompt body",
+                        "staging_dir": str(staging_dir),
+                    }
+                ),
+            ), patch.object(agent_runner.subprocess, "run", side_effect=OSError("permission denied")):
+                result = agent_runner.run_chunk_agent(config, chunk)
 
         self.assertEqual(result["error_kind"], "spawn_error")
         self.assertIn("permission denied", result["stderr"])

@@ -41,7 +41,7 @@
     "custom_command": ""
   },
   "agent": {
-    "provider": "codex",
+    "provider": "opencode",
     "staging_dir": ".agents/staging",
     "providers": {
       "codex": {
@@ -75,6 +75,24 @@
             "text",
             "--permission-mode",
             "acceptEdits"
+          ],
+          "prompt_via": "stdin",
+          "cwd": "project_root",
+          "env": {},
+          "requires_tty": false,
+          "output": {
+            "mode": "exit_code"
+          }
+        },
+        "capabilities": {
+          "non_interactive": true,
+          "workspace_write_required": true
+        }
+      },
+      "opencode": {
+        "launch": {
+          "argv": [
+            "opencode"
           ],
           "prompt_via": "stdin",
           "cwd": "project_root",

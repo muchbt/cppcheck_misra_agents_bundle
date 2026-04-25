@@ -45,18 +45,25 @@
 - Modify: `.agents/tools/providers/__init__.py`
 - Modify: `tests/test_agent_runner.py`
 
-- [ ] Add failing tests for:
+- [x] Add failing tests for:
   - `opencode` launch spec generation
   - `XDG_DATA_HOME` 指向工作区内可写目录
   - `XDG_STATE_HOME` 指向工作区内可写目录
   - 常见 `ConnectionRefused` / `zen/v1/messages` 错误映射为 `network_error`
-- [ ] Implement `providers/opencode.py`.
-- [ ] Register the provider.
-- [ ] Run:
+- [x] Implement `providers/opencode.py`.
+- [x] Register the provider.
+- [x] Run:
 
 ```bash
 python3 -m unittest tests.test_agent_runner -v
 ```
+
+当前状态：
+
+- 已补齐 `.agents/config/pipeline.json` 中的 `agent.providers.opencode` 配置块，并把当前默认 provider 切到 `opencode`
+- 已实现 `providers/opencode.py` 的 launch spec、`XDG_DATA_HOME` / `XDG_STATE_HOME` 环境注入和基础错误分类
+- 已覆盖 `connection refused`、`dial tcp`、`timed out`、`zen/v1/messages` 等网络错误归类
+- `tests.test_agent_runner` 当前已通过
 
 ---
 
@@ -66,18 +73,24 @@ python3 -m unittest tests.test_agent_runner -v
 - Modify: `.agents/tools/doctor.py`
 - Modify: `tests/test_doctor.py`
 
-- [ ] Add failing tests for:
+- [x] Add failing tests for:
   - `opencode` 可执行入口检查
   - 本地状态目录不可写
   - 数据目录不可写
   - 网络失败提示
   - 认证状态提示
-- [ ] Extend `doctor.py` with `opencode`-specific diagnostics.
-- [ ] Run:
+- [x] Extend `doctor.py` with `opencode`-specific diagnostics.
+- [x] Run:
 
 ```bash
 python3 -m unittest tests.test_doctor -v
 ```
+
+当前状态：
+
+- `doctor.py` 已具备 `opencode` 的可执行入口、XDG 目录和认证提示检查
+- `tests.test_doctor` 当前已通过
+- 网络错误的最终诊断仍以运行时 stderr 分类为准，`doctor` 继续提供环境与配置层提示
 
 ---
 
@@ -87,7 +100,7 @@ python3 -m unittest tests.test_doctor -v
 - Modify: `README.md`
 - Modify: `docs/superpowers/specs/2026-04-23-pipeline-review-archive-design.md`
 
-- [ ] Document `opencode` config, environment isolation, and known limitations.
+- [x] Document `opencode` config, environment isolation, and known limitations.
 - [ ] Run one real `1 issue / 1 chunk` acceptance flow with `opencode`.
 - [ ] Confirm whether prompt-by-arg is sufficient or `prompt_via=file` is needed.
 - [ ] Record the final blocker, if any, with exact classification.
@@ -102,4 +115,4 @@ python3 -m unittest tests.test_doctor -v
 
 - [ ] Decide whether current `agent.provider` 模型仍够用，或是否需要在后续区分“执行器 provider”和“模型 provider”。
 - [ ] Record what remains provider-specific vs. what should move back into the common runner.
-- [ ] Prepare final commit message for the phase 3 implementation batch.
+- [x] Prepare final commit message for the phase 3 implementation batch.

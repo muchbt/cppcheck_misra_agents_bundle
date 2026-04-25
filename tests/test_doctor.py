@@ -166,6 +166,7 @@ class DoctorTests(unittest.TestCase):
 
     def test_check_agent_launch_rejects_unwritable_env_dir(self) -> None:
         config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "codex"
 
         with patch.object(doctor.shutil, "which", return_value="/usr/bin/codex"), patch.object(
             doctor, "_ensure_writable_dir", return_value="permission denied"
@@ -186,7 +187,9 @@ class DoctorTests(unittest.TestCase):
     def test_check_agent_staging_dir_reports_ok(self) -> None:
         config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
 
-        result = doctor.check_agent_staging_dir(config, root=REPO_ROOT)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = doctor.check_agent_staging_dir(config, root=root)
 
         self.assertEqual(result["level"], "ok")
         self.assertEqual(result["code"], "agent_staging_dir_ok")
@@ -194,6 +197,7 @@ class DoctorTests(unittest.TestCase):
 
     def test_check_agent_skill_visibility_reports_codex_skill_ok(self) -> None:
         config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "codex"
 
         result = doctor.check_agent_skill_visibility(config, root=REPO_ROOT)
 
@@ -275,6 +279,7 @@ class DoctorTests(unittest.TestCase):
             fake_home = Path(tmp) / "home"
             fake_home.mkdir(parents=True)
             config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+            config["agent"]["provider"] = "codex"
             with patch.object(doctor.Path, "home", return_value=fake_home):
                 result = doctor.check_agent_auth(config, root=root)
 
@@ -283,6 +288,7 @@ class DoctorTests(unittest.TestCase):
 
     def test_check_agent_network_reports_sanitized_inherited_disable_flag(self) -> None:
         config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "codex"
 
         with patch.dict(os.environ, {"CODEX_SANDBOX_NETWORK_DISABLED": "1"}, clear=False):
             result = doctor.check_agent_network(config)

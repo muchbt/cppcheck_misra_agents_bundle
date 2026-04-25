@@ -13,38 +13,40 @@ def runtime_dir_for_root(root: Path = ROOT) -> Path:
     return root / ".agents" / "runtime"
 
 
-def resolve_env_path(value: str) -> Path:
+def resolve_env_path(value: str, root: Path = ROOT) -> Path:
     path = Path(value)
     if not path.is_absolute():
-        path = ROOT / path
+        path = root / path
     return path
 
-def build_launch_env(env_config: Dict[str, str], provider: Any) -> Dict[str, str]:
+
+def build_launch_env(env_config: Dict[str, str], provider: Any, root: Path = ROOT) -> Dict[str, str]:
     env = dict(os.environ)
     for key in getattr(provider, "SANITIZED_ENV_KEYS", set()):
         env.pop(key, None)
     for key, value in env_config.items():
-        env[key] = str(resolve_env_path(value))
+        env[key] = str(resolve_env_path(value, root=root))
     prepare_launch_env = getattr(provider, "prepare_launch_env", None)
     if callable(prepare_launch_env):
         prepare_launch_env(env)
     return env
 
 
-def resolve_cwd(cwd_mode: str, spec: Dict[str, Any]) -> Path:
+def resolve_cwd(cwd_mode: str, spec: Dict[str, Any], root: Path = ROOT) -> Path:
     if cwd_mode == "project_root":
-        return ROOT
+        return root
     if cwd_mode == "runtime_dir":
-        return runtime_dir_for_root(ROOT)
+        return runtime_dir_for_root(root)
     if cwd_mode == "custom":
         custom = spec.get("cwd_path", "")
         path = Path(str(custom))
         if not path.is_absolute():
-            path = ROOT / path
+            path = root / path
         return path
-    return ROOT
+    return root
 
 def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
+    current_root = ROOT
     provider_name = str(config.get("agent", {}).get("provider", "")).strip()
     provider = get_provider(provider_name)
     if provider is None:
@@ -59,8 +61,8 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
     spec = provider.build_launch_spec(config, chunk)
     prompt = str(spec.get("prompt", ""))
     prompt_via = str(spec.get("prompt_via", "stdin"))
-    cwd = resolve_cwd(str(spec.get("cwd_mode", "project_root")), spec)
-    env = build_launch_env(spec.get("env", {}), provider)
+    cwd = resolve_cwd(str(spec.get("cwd_mode", "project_root")), spec, root=current_root)
+    env = build_launch_env(spec.get("env", {}), provider, root=current_root)
     chunk_index = int(chunk.get("chunk_index", 0))
     staging_dir = Path(str(spec.get("staging_dir", "")).strip()) if str(spec.get("staging_dir", "")).strip() else None
     if staging_dir is not None:
@@ -91,7 +93,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
 
     if completed.returncode == 0 and staging_dir is not None:
         try:
-            runtime_dir = runtime_dir_for_root(ROOT)
+            runtime_dir = runtime_dir_for_root(current_root)
             imported_paths = import_chunk_staging_artifacts(
                 staging_dir,
                 chunk_index,

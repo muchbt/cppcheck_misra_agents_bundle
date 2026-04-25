@@ -24,9 +24,16 @@ def prepare_launch_env(env: Dict[str, str]) -> None:
 def classify_runtime_error(stderr: str) -> str:
     """Classify runtime errors from OpenCode CLI stderr output."""
     text = (stderr or "").lower()
-    if "auth" in text or "login" in text:
+    if "auth" in text or "login" in text or "unauthorized" in text or "api key" in text:
         return ERROR_KIND_AUTH_ERROR
-    if "network" in text or "timeout" in text:
+    if (
+        "network" in text
+        or "timeout" in text
+        or "timed out" in text
+        or "connection refused" in text
+        or "dial tcp" in text
+        or "zen/v1/messages" in text
+    ):
         return ERROR_KIND_NETWORK_ERROR
     return ERROR_KIND_RUNTIME_ERROR
 
