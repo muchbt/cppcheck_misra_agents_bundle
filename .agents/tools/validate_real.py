@@ -24,6 +24,7 @@ AUTH_PROBE_TIMEOUT_SECONDS = 10
 CLI_STAGE_TIMEOUT_SECONDS = 120
 DEFAULT_REPORT_PATH = Path(tempfile.gettempdir()) / "cppcheck_misra_real_validation.json"
 RUN_STAGE_TIMEOUT_RETRIES = 1
+CODEX_WORKSPACE_BASE = Path.home() / ".cache" / "cppcheck_misra_validation" / "codex"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -250,12 +251,24 @@ def run_run_stage_with_retry(workspace_root: Path) -> Tuple[subprocess.Completed
                 raise
 
 
+def _workspace_root_for_provider(provider: str) -> Path:
+    """Create workspace root appropriate for each provider.
+
+    Codex refuses to create helper binaries under /tmp, so we use ~/.cache instead.
+    Other providers can use standard temp directories.
+    """
+    if provider == "codex":
+        CODEX_WORKSPACE_BASE.mkdir(parents=True, exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix="workspace-", dir=str(CODEX_WORKSPACE_BASE)))
+    return Path(tempfile.mkdtemp(prefix=f"real-validate-{provider}-"))
+
+
 def run_provider_validation(
     provider: str,
     keep_workdir: bool = False,
     run_id_override: str = "",
 ) -> Dict[str, Any]:
-    workspace_root = Path(tempfile.mkdtemp(prefix=f"real-validate-{provider}-"))
+    workspace_root = _workspace_root_for_provider(provider)
     result: Dict[str, Any] = {
         "provider": provider,
         "status": "failed",

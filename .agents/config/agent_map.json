@@ -12,6 +12,11 @@
       "bootstrap": {
         "skill_target": ".claude/skills/cppcheck-misra-fix/SKILL.md"
       }
+    },
+    "opencode": {
+      "bootstrap": {
+        "skill_target": ".opencode/skills/cppcheck-misra-fix/SKILL.md"
+      }
     }
   }
 }

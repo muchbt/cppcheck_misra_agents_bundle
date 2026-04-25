@@ -658,6 +658,57 @@ def normalize_file_change_delta(
             normalized[file_path] = current_entry
         return normalized
 
+    # Handle single-file format: {"file": "path/to/file", "edits": [...], ...}
+    # This format is sometimes output by agents that don't wrap in file_changes array
+    single_file_path = file_change_delta.get("file")
+    if isinstance(single_file_path, str) and single_file_path.strip():
+        file_path = single_file_path.strip()
+        current_entry = {"edits": []}
+        edits_raw = file_change_delta.get("edits", [])
+        if isinstance(edits_raw, list):
+            for edit_item in edits_raw:
+                if not isinstance(edit_item, dict):
+                    continue
+                edit_id = str(edit_item.get("edit_id", "")).strip()
+                if not edit_id:
+                    preview_entry = {
+                        "edits": [
+                            *base_file_change_index.get(file_path, {}).get("edits", []),
+                            *current_entry.get("edits", []),
+                        ]
+                    }
+                    edit_id = next_edit_id(file_path, {file_path: preview_entry})
+                related_issue_keys = _as_string_list(edit_item.get("related_issue_keys"))
+                if not related_issue_keys:
+                    related_issue_keys = _as_string_list(edit_item.get("linked_issues"))
+                if not related_issue_keys:
+                    related_issue_keys = _as_string_list(edit_item.get("linked_issue_keys"))
+                edit = {
+                    "edit_id": edit_id,
+                    "summary": str(edit_item.get("summary", "")).strip()
+                    or str(edit_item.get("edit_summary", "")).strip()
+                    or str(file_change_delta.get("change_summary", "")).strip()
+                    or str(file_change_delta.get("summary", "")).strip()
+                    or "staging imported change",
+                    "chunk_index": int(edit_item.get("chunk_index", chunk_index)),
+                    "related_issue_keys": related_issue_keys,
+                }
+                lines_modified = edit_item.get("lines_modified")
+                if isinstance(lines_modified, list):
+                    edit["lines_modified"] = list(lines_modified)
+                else:
+                    lines_before = edit_item.get("lines_before")
+                    lines_after = edit_item.get("lines_after")
+                    if lines_before is not None:
+                        edit["lines_before"] = lines_before
+                    if lines_after is not None:
+                        edit["lines_after"] = lines_after
+                change_type = str(edit_item.get("change_type", "")).strip()
+                if change_type:
+                    edit["change_type"] = change_type
+                current_entry["edits"] = [*current_entry.get("edits", []), edit]
+        return {file_path: current_entry}
+
     normalized = {}
     for file_path, delta_entry in file_change_delta.items():
         if file_path == "chunk_index":
@@ -720,6 +771,31 @@ def normalize_issue_status_delta(
                 patch["reason"] = reason
             normalized[issue_key] = patch
         return normalized
+
+    # Handle single-issue format: {"issue_key": "...", "status": "fixed", ...}
+    # This format is sometimes output by agents that don't wrap in status_changes array
+    single_issue_key = issue_status_delta.get("issue_key")
+    if isinstance(single_issue_key, str) and single_issue_key.strip():
+        issue_key = single_issue_key.strip()
+        issue_edit_ids = _build_issue_edit_index(file_change_delta)
+        patch: Dict[str, Any] = {
+            "chunk_index": int(chunk_index),
+            "edit_ids": issue_edit_ids.get(issue_key, []),
+        }
+        new_status = str(issue_status_delta.get("new_status", "")).strip() or str(issue_status_delta.get("status", "")).strip()
+        if new_status:
+            patch["status"] = new_status
+        for key in ("risk_level", "risk_reason", "requires_review_after_fix", "verified"):
+            if key in issue_status_delta:
+                patch[key] = issue_status_delta.get(key)
+        reason = (
+            str(issue_status_delta.get("reason", "")).strip()
+            or str(issue_status_delta.get("blocker_reason", "")).strip()
+            or str(issue_status_delta.get("message", "")).strip()
+        )
+        if reason:
+            patch["reason"] = reason
+        return {issue_key: patch}
 
     normalized = {}
     for issue_key, patch in issue_status_delta.items():
