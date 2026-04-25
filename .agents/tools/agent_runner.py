@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
-from common import ROOT, import_chunk_staging_artifacts, prepare_chunk_staging_dir
+from common import ERROR_KIND_CONFIG_ERROR, ERROR_KIND_RUNTIME_ERROR, ERROR_KIND_SPAWN_ERROR, ERROR_KIND_IMPORT_ERROR, ROOT, import_chunk_staging_artifacts, prepare_chunk_staging_dir
 from providers import get_provider
 
 
@@ -52,7 +52,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
             "returncode": 2,
             "stdout": "",
             "stderr": "unsupported provider",
-            "error_kind": "config_error",
+            "error_kind": ERROR_KIND_CONFIG_ERROR,
             "prompt": "",
         }
 
@@ -85,7 +85,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
             "returncode": 1,
             "stdout": "",
             "stderr": str(exc),
-            "error_kind": "spawn_error",
+            "error_kind": ERROR_KIND_SPAWN_ERROR,
             "prompt": prompt,
         }
 
@@ -103,7 +103,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
                 "returncode": 1,
                 "stdout": completed.stdout,
                 "stderr": str(exc),
-                "error_kind": "import_error",
+                "error_kind": ERROR_KIND_IMPORT_ERROR,
                 "prompt": prompt,
             }
     else:
@@ -117,7 +117,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
             error_kind = classify_fn(completed.stderr)
         else:
             # Fallback for providers without classify_runtime_error method
-            error_kind = "runtime_error"
+            error_kind = ERROR_KIND_RUNTIME_ERROR
 
     return {
         "returncode": completed.returncode,

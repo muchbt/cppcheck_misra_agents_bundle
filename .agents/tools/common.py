@@ -25,6 +25,17 @@ RUN_ID_RE = re.compile(r"^(?P<date>\d{8})-(?P<seq>\d{3})$")
 AUTO_BLOCK_BEGIN = "<!-- BEGIN AUTO-GENERATED: cppcheck-misra-fix -->"
 AUTO_BLOCK_END = "<!-- END AUTO-GENERATED: cppcheck-misra-fix -->"
 
+# Error kinds for agent execution
+ERROR_KIND_LAUNCH_FAILED = "launch_failed"
+ERROR_KIND_TIMEOUT = "timeout"
+ERROR_KIND_AUTH_ERROR = "auth_error"
+ERROR_KIND_NETWORK_ERROR = "network_error"
+ERROR_KIND_RUNTIME_ERROR = "runtime_error"
+ERROR_KIND_SUCCESS = "success"
+ERROR_KIND_CONFIG_ERROR = "config_error"
+ERROR_KIND_SPAWN_ERROR = "spawn_error"
+ERROR_KIND_IMPORT_ERROR = "import_error"
+
 
 def resolve_path_under_root(value: str, root: Path = ROOT) -> Path:
     path = Path(value)

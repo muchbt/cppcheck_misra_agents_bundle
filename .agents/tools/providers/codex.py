@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict
 
-from common import RUNTIME_DIR
+from common import ERROR_KIND_AUTH_ERROR, ERROR_KIND_NETWORK_ERROR, ERROR_KIND_RUNTIME_ERROR, RUNTIME_DIR
 from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
 
 PROVIDER_NAME = "codex"
@@ -39,10 +39,10 @@ def prepare_launch_env(env: Dict[str, str]) -> None:
 def classify_runtime_error(stderr: str) -> str:
     text = (stderr or "").lower()
     if "failed to connect to websocket" in text or "api.openai.com/v1/responses" in text or "stream disconnected before completion" in text:
-        return "network_error"
+        return ERROR_KIND_NETWORK_ERROR
     if "auth" in text and ("login" in text or "token" in text or "credential" in text):
-        return "auth_error"
-    return "runtime_error"
+        return ERROR_KIND_AUTH_ERROR
+    return ERROR_KIND_RUNTIME_ERROR
 
 
 def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:

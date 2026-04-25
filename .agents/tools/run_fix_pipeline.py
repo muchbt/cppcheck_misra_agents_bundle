@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
 from agent_runner import run_chunk_agent
-from common import CONFIG_DIR, RESULTS_DIR, RUNTIME_DIR, append_pipeline_event, load_json, now_iso, save_json
+from common import ERROR_KIND_RUNTIME_ERROR, CONFIG_DIR, RESULTS_DIR, RUNTIME_DIR, append_pipeline_event, load_json, now_iso, save_json
 from verify_chunk import verify_chunk_result
 
 VALID_STRATEGIES = {"conservative", "all_auto"}
@@ -285,7 +285,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "chunk_index": idx,
                 "returncode": last_rc,
                 "retries": args.retry_failed,
-                "error_kind": last_error_kind or "runtime_error",
+                "error_kind": last_error_kind or ERROR_KIND_RUNTIME_ERROR,
             }
             save_json(progress_path, progress)
             print(f"Chunk {idx} failed after {max_attempts} attempt(s).")

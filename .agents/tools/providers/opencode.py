@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from common import ROOT, RUNTIME_DIR
+from common import ERROR_KIND_AUTH_ERROR, ERROR_KIND_NETWORK_ERROR, ERROR_KIND_RUNTIME_ERROR, ROOT, RUNTIME_DIR
 from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
 
 PROVIDER_NAME = "opencode"
@@ -25,10 +25,10 @@ def classify_runtime_error(stderr: str) -> str:
     """Classify runtime errors from OpenCode CLI stderr output."""
     text = (stderr or "").lower()
     if "auth" in text or "login" in text:
-        return "auth_error"
+        return ERROR_KIND_AUTH_ERROR
     if "network" in text or "timeout" in text:
-        return "network_error"
-    return "runtime_error"
+        return ERROR_KIND_NETWORK_ERROR
+    return ERROR_KIND_RUNTIME_ERROR
 
 
 def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
