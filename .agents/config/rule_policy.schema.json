@@ -32,8 +32,8 @@
   "definitions": {
     "actionType": {
       "type": "string",
-      "enum": ["auto_fix", "careful_fix", "needs_manual_review"],
-      "description": "The type of action to take:\n- auto_fix: Safe to apply automatically\n- careful_fix: Requires careful review but can be auto-applied\n- needs_manual_review: Requires human review before any changes"
+      "enum": ["fix", "skip", "auto_fix", "careful_fix", "needs_manual_review"],
+      "description": "The type of action to take:\n- fix: Direct fix without special handling (legacy, use auto_fix instead)\n- skip: Skip this rule, do not attempt any fix\n- auto_fix: Safe to apply automatically\n- careful_fix: Requires careful review but can be auto-applied\n- needs_manual_review: Requires human review before any changes"
     },
     "riskLevel": {
       "type": "string",
