@@ -184,6 +184,27 @@ class ClaudeProviderTests(unittest.TestCase):
         self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
 
 
+class OpenCodeProviderTests(unittest.TestCase):
+    def test_opencode_provider_import(self) -> None:
+        """Test that opencode provider can be imported and has required attributes."""
+        from providers import get_provider
+        provider = get_provider("opencode")
+        assert provider is not None
+        assert hasattr(provider, "PROVIDER_NAME")
+        assert provider.PROVIDER_NAME == "opencode"
+        assert hasattr(provider, "SANITIZED_ENV_KEYS")
+        assert hasattr(provider, "prepare_launch_env")
+        assert hasattr(provider, "classify_runtime_error")
+        assert hasattr(provider, "build_launch_spec")
+
+    def test_opencode_classify_runtime_error(self) -> None:
+        """Test opencode error classification."""
+        from providers.opencode import classify_runtime_error
+        assert classify_runtime_error("Authentication failed") == "auth_error"
+        assert classify_runtime_error("Network timeout") == "network_error"
+        assert classify_runtime_error("Unknown error") == "runtime_error"
+
+
 class AgentRunnerTests(unittest.TestCase):
     def test_run_chunk_agent_passes_prompt_via_stdin(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
