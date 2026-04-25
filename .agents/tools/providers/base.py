@@ -36,8 +36,8 @@ class ProviderProtocol(Protocol):
         """Prepare environment variables for the provider launch."""
         ...
 
-    def classify_runtime_error(self, stderr: str) -> str:
-        """Classify runtime errors from stderr output."""
+    def classify_runtime_error(self, stderr: str, stdout: str = "") -> str:
+        """Classify runtime errors from stderr and stdout output."""
         ...
 
     def build_launch_spec(self, config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
