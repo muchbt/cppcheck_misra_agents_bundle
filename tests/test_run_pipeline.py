@@ -213,7 +213,10 @@ class SplitAndRunPipelineTests(unittest.TestCase):
 
             self.assertEqual(rc, 1)
             output = stdout.getvalue()
-            self.assertIn("[run] Chunk 1 失败: agent_error - Error: something went wrong in the agent execution...", output)
+            # New format: error_kind on separate line, log path, and summary
+            self.assertIn("[run] Chunk 1 失败: agent_error", output)
+            self.assertIn("[run] 查看完整日志:", output)
+            self.assertIn("[run] 错误摘要: Error: something went wrong in the agent execution...", output)
 
 
 if __name__ == "__main__":
