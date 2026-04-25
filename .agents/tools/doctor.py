@@ -900,9 +900,18 @@ def print_checks(results: List[Dict[str, Any]]) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="诊断 cppcheck/MISRA pipeline 运行环境。")
-    parser.parse_args(sys.argv[1:] if argv is None else argv)
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="输出格式: text (人类可读) 或 json (JSON 数组)",
+    )
+    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     results = collect_checks()
-    print_checks(results)
+    if args.format == "json":
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+    else:
+        print_checks(results)
     return 1 if any(result.get("level") == "error" for result in results) else 0
 
 
