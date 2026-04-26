@@ -266,6 +266,39 @@ class CommonRuntimeTests(unittest.TestCase):
         self.assertIn("missing required field: patterns", errors)
         self.assertEqual(warnings, [])
 
+    def test_get_selected_agent_provider_name_env_override(self) -> None:
+        """Test that PIPELINE_AGENT_PROVIDER env var overrides config."""
+        config = {"agent": {"provider": "codex"}}
+
+        with patch.dict(os.environ, {"PIPELINE_AGENT_PROVIDER": "claude"}, clear=False):
+            reloaded = importlib.reload(common)
+            result = reloaded.get_selected_agent_provider_name(config)
+
+        self.assertEqual(result, "claude")
+
+    def test_get_selected_agent_provider_name_env_empty_fallback(self) -> None:
+        """Test fallback to config when env var is empty."""
+        config = {"agent": {"provider": "opencode"}}
+
+        with patch.dict(os.environ, {"PIPELINE_AGENT_PROVIDER": ""}, clear=False):
+            reloaded = importlib.reload(common)
+            result = reloaded.get_selected_agent_provider_name(config)
+
+        self.assertEqual(result, "opencode")
+
+    def test_get_selected_agent_provider_name_no_env_fallback(self) -> None:
+        """Test fallback to config when env var is not set."""
+        config = {"agent": {"provider": "codex"}}
+
+        # Ensure env var is not set
+        env_copy = dict(os.environ)
+        env_copy.pop("PIPELINE_AGENT_PROVIDER", None)
+        with patch.dict(os.environ, env_copy, clear=True):
+            reloaded = importlib.reload(common)
+            result = reloaded.get_selected_agent_provider_name(config)
+
+        self.assertEqual(result, "codex")
+
 
 if __name__ == "__main__":
     unittest.main()

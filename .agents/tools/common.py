@@ -66,6 +66,10 @@ def resolve_chunk_staging_dir(config: Dict[str, Any], chunk_index: int, root: Pa
 
 
 def get_selected_agent_provider_name(config: Dict[str, Any]) -> str:
+    # Priority: env var > config
+    env_provider = os.environ.get("PIPELINE_AGENT_PROVIDER", "").strip()
+    if env_provider:
+        return env_provider
     return str(config.get("agent", {}).get("provider", "")).strip()
 
 
