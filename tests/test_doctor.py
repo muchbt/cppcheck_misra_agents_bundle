@@ -471,5 +471,47 @@ class DoctorTests(unittest.TestCase):
             self.assertIn(different_provider, agent_launch_result["detail"])
 
 
+class KimiAuthTests(unittest.TestCase):
+    def test_check_kimi_auth_env_var(self) -> None:
+        """KIMI_API_KEY env var detected."""
+        config = {"agent": {"provider": "kimi"}}
+        with patch.dict(os.environ, {"KIMI_API_KEY": "test-key"}, clear=True):
+            result = doctor.check_kimi_auth(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "kimi_auth_env_ok")
+
+    def test_check_kimi_auth_credential_file(self) -> None:
+        """Credential file detected."""
+        config = {"agent": {"provider": "kimi"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp)
+            cred_dir = fake_home / ".kimi" / "credentials"
+            cred_dir.mkdir(parents=True)
+            (cred_dir / "kimi-code.json").write_text("{}")
+            with patch.dict(os.environ, {}, clear=True):
+                with patch.object(doctor.Path, "home", return_value=fake_home):
+                    result = doctor.check_kimi_auth(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "kimi_auth_credential_ok")
+
+    def test_check_kimi_auth_manual_check(self) -> None:
+        """Neither env var nor credential file found."""
+        config = {"agent": {"provider": "kimi"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp)
+            with patch.dict(os.environ, {}, clear=True):
+                with patch.object(doctor.Path, "home", return_value=fake_home):
+                    result = doctor.check_kimi_auth(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "warning")
+        self.assertEqual(result["code"], "kimi_auth_manual_check")
+
+    def test_check_kimi_auth_not_applicable(self) -> None:
+        """Provider is not kimi, skip check."""
+        config = {"agent": {"provider": "claude"}}
+        result = doctor.check_kimi_auth(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "kimi_auth_not_applicable")
+
+
 if __name__ == "__main__":
     unittest.main()

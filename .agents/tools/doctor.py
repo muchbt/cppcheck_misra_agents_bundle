@@ -36,6 +36,7 @@ CHECK_REGISTRY: Dict[str, List[CheckFunc]] = {
     "_common": [],
     "claude": [],
     "codex": [],
+    "kimi": [],
     "opencode": [],
 }
 
@@ -737,6 +738,44 @@ def check_opencode_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     )
 
 
+def check_kimi_auth(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    """Check kimi-cli authentication status."""
+    provider_name = _get_agent_provider_name(config)
+    if provider_name != "kimi":
+        return make_result(
+            "ok",
+            "kimi_auth_not_applicable",
+            "当前 provider 不是 kimi，跳过认证检查。",
+            f"provider: {provider_name or '未设置'}",
+        )
+
+    # Check environment variable
+    if os.environ.get("KIMI_API_KEY"):
+        return make_result(
+            "ok",
+            "kimi_auth_env_ok",
+            "检测到 kimi 可用的环境认证变量。",
+            "已检测到 KIMI_API_KEY。",
+        )
+
+    # Check credential file
+    cred_file = Path.home() / ".kimi" / "credentials" / "kimi-code.json"
+    if cred_file.exists():
+        return make_result(
+            "ok",
+            "kimi_auth_credential_ok",
+            "检测到 kimi 认证文件。",
+            f"路径: {cred_file}",
+        )
+
+    return make_result(
+        "warning",
+        "kimi_auth_manual_check",
+        "kimi-cli 认证状态需要人工确认。",
+        "请确认已设置 KIMI_API_KEY 环境变量，或运行 `kimi login` 完成认证。",
+    )
+
+
 def check_prompt_length(path: Path) -> Dict[str, Any]:
     text = read_text(path, "")
     if len(text) > PROMPT_LENGTH_WARNING_THRESHOLD:
@@ -879,6 +918,9 @@ register_check("codex", check_agent_network)
 register_check("opencode", check_opencode_executable)
 register_check("opencode", check_opencode_xdg_dirs)
 register_check("opencode", check_opencode_auth)
+
+# Kimi-specific checks
+register_check("kimi", check_kimi_auth)
 
 
 def print_checks(results: List[Dict[str, Any]]) -> None:
