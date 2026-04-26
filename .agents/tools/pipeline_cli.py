@@ -36,16 +36,29 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
 def main() -> None:
     args = parse_args(sys.argv[1:])
 
-    # Set provider env var if specified via CLI
-    if args.provider:
-        os.environ["PIPELINE_AGENT_PROVIDER"] = args.provider
+    # Save original env var value to restore after subcommand
+    original_provider = os.environ.get("PIPELINE_AGENT_PROVIDER")
 
-    module_name = COMMANDS[args.command][0]
-    module = importlib.import_module(module_name)
-    sys.argv = [f"{module_name}.py", *args.args]
-    result = module.main()
-    if isinstance(result, int):
-        raise SystemExit(result)
+    try:
+        # Set/clear provider env var based on CLI arg
+        if args.provider:
+            os.environ["PIPELINE_AGENT_PROVIDER"] = args.provider
+        elif original_provider is not None:
+            # Clear stale env var from previous invocation
+            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+        module_name = COMMANDS[args.command][0]
+        module = importlib.import_module(module_name)
+        sys.argv = [f"{module_name}.py", *args.args]
+        result = module.main()
+        if isinstance(result, int):
+            raise SystemExit(result)
+    finally:
+        # Restore original env var state
+        if original_provider is not None:
+            os.environ["PIPELINE_AGENT_PROVIDER"] = original_provider
+        else:
+            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
 
 
 if __name__ == "__main__":

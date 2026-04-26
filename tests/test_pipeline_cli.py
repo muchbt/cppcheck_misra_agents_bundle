@@ -123,6 +123,49 @@ class PipelineCliTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertIsNone(seen_env["provider"])
 
+    def test_sequential_calls_clear_stale_provider_env(self) -> None:
+        """Regression test: second call without --provider should not see stale env from first."""
+        seen_env_first = {}
+        seen_env_second = {}
+
+        class FakeModuleFirst:
+            def main(self) -> int:
+                seen_env_first["provider"] = os.environ.get("PIPELINE_AGENT_PROVIDER")
+                return 0
+
+        class FakeModuleSecond:
+            def main(self) -> int:
+                seen_env_second["provider"] = os.environ.get("PIPELINE_AGENT_PROVIDER")
+                return 0
+
+        # Ensure starting clean
+        original = os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+        try:
+            # First call with --provider codex
+            with patch.object(pipeline_cli.importlib, "import_module", return_value=FakeModuleFirst()):
+                with patch.object(sys, "argv", ["pipeline_cli.py", "--provider", "codex", "doctor"]):
+                    with self.assertRaises(SystemExit) as ctx1:
+                        pipeline_cli.main()
+
+            self.assertEqual(ctx1.exception.code, 0)
+            self.assertEqual(seen_env_first["provider"], "codex")
+
+            # Second call without --provider - should NOT see stale codex
+            with patch.object(pipeline_cli.importlib, "import_module", return_value=FakeModuleSecond()):
+                with patch.object(sys, "argv", ["pipeline_cli.py", "doctor"]):
+                    with self.assertRaises(SystemExit) as ctx2:
+                        pipeline_cli.main()
+
+            self.assertEqual(ctx2.exception.code, 0)
+            self.assertIsNone(seen_env_second["provider"])
+
+            # Env var should remain unset after both calls
+            self.assertIsNone(os.environ.get("PIPELINE_AGENT_PROVIDER"))
+        finally:
+            if original is not None:
+                os.environ["PIPELINE_AGENT_PROVIDER"] = original
+
 
 if __name__ == "__main__":
     unittest.main()
