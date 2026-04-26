@@ -6,6 +6,14 @@ import os
 import sys
 from typing import List
 
+MIN_PYTHON = (3, 8)
+
+if sys.version_info < MIN_PYTHON:
+    version = ".".join(map(str, MIN_PYTHON))
+    print(f"Error: Python {version} or higher is required "
+          f"(current: {sys.version.split()[0]}).", file=sys.stderr)
+    raise SystemExit(1)
+
 
 COMMANDS = {
     "split": ("split_cppcheck_xml", "Split cppcheck XML into runtime chunks."),

@@ -84,6 +84,11 @@ class PipelineCliTests(unittest.TestCase):
 
         self.assertIsNone(args.provider)
 
+    def test_version_guard_rejects_old_python(self) -> None:
+        """Verify MIN_PYTHON is defined and >= (3, 8)."""
+        self.assertTrue(hasattr(pipeline_cli, "MIN_PYTHON"))
+        self.assertGreaterEqual(pipeline_cli.MIN_PYTHON, (3, 8))
+
     def test_main_sets_provider_env_var(self) -> None:
         seen_env = {}
 
