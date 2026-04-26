@@ -75,8 +75,11 @@ python3 .agents/tools/pipeline_cli.py --provider kimi oneshot
 # 查看可用模板
 python3 .agents/tools/pipeline_cli.py policy list
 
-# 从模板初始化策略文件
+# 从单个模板初始化策略文件
 python3 .agents/tools/pipeline_cli.py policy init misra_c2012_relaxed
+
+# 从多个模板初始化（合并，后面的覆盖前面的冲突规则）
+python3 .agents/tools/pipeline_cli.py policy init --template misra_c2012_relaxed --template cppcheck_common
 
 # 测试规则匹配
 python3 .agents/tools/pipeline_cli.py policy test misra-c2012-2.2
@@ -84,6 +87,37 @@ python3 .agents/tools/pipeline_cli.py policy test misra-c2012-2.2
 # 添加自定义规则
 python3 .agents/tools/pipeline_cli.py policy add misra-c2012-8.1 --action auto_fix --risk-level low
 ```
+
+### 多模板合并规则
+
+`--template` 可多次指定，合并时遵循以下规则：
+
+| 情况 | 处理方式 |
+|------|----------|
+| **规则冲突** | 后面的模板覆盖前面的（按 `--template` 顺序，后胜） |
+| **规则不冲突** | 全部保留（取并集） |
+| **pattern 冲突** | 按 `match_contains` 去重，后面的不覆盖已有的 |
+| **default** | 采用第一个有 default 的模板 |
+
+**合并后果示例：**
+
+假设模板 A 定义 `misra-c2012-2.2 → auto_fix`，模板 B 定义 `misra-c2012-2.2 → needs_manual_review`：
+
+```bash
+python3 .agents/tools/pipeline_cli.py policy init --template misra_c2012_relaxed --template misra_c2012_conservative
+```
+
+结果：`misra-c2012-2.2` 动作取决于顺序：
+- `--template A --template B` → `needs_manual_review`（B 覆盖 A）
+- `--template B --template A` → `auto_fix`（A 覆盖 B）
+
+**常用合并组合：**
+
+| 组合 | 效果 |
+|------|------|
+| `misra_c2012_relaxed + cppcheck_common` | MISRA 规则 + 通用 cppcheck 规则合并 |
+| `misra_c2012_conservative + cppcheck_common` | 保守 MISRA + 通用 cppcheck（cppcheck 规则在保守基础上增加） |
+| `autosar_baseline + cppcheck_common` | AUTOSAR 架构保护 + 通用 cppcheck 规则 |
 
 ### 模板详解
 

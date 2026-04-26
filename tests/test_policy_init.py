@@ -115,7 +115,7 @@ class PolicyInitTests(unittest.TestCase):
             output_path = Path(tmp) / "deep" / "nested" / "dir" / "policy.json"
 
             result = policy_init.init_policy(
-                "misra_c2012_relaxed", output_path, force=False
+                ["misra_c2012_relaxed"], output_path, force=False
             )
 
             self.assertEqual(result, 0)
@@ -129,7 +129,7 @@ class PolicyInitTests(unittest.TestCase):
 
             # First create the file with one template
             result1 = policy_init.init_policy(
-                "misra_c2012_conservative", output_path, force=False
+                ["misra_c2012_conservative"], output_path, force=False
             )
             self.assertEqual(result1, 0)
 
@@ -139,7 +139,7 @@ class PolicyInitTests(unittest.TestCase):
 
             # Overwrite with a different template using force
             result2 = policy_init.init_policy(
-                "misra_c2012_relaxed", output_path, force=True
+                ["misra_c2012_relaxed"], output_path, force=True
             )
             self.assertEqual(result2, 0)
 
@@ -195,7 +195,7 @@ class PolicyInitTests(unittest.TestCase):
             output_path = Path(tmp) / "policy.json"
 
             result = policy_init.init_policy(
-                "misra_c2012_conservative", output_path, force=False
+                ["misra_c2012_conservative"], output_path, force=False
             )
 
             self.assertEqual(result, 0)
@@ -214,7 +214,7 @@ class PolicyInitTests(unittest.TestCase):
 
             with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
                 result = policy_init.init_policy(
-                    "misra_c2012_conservative", output_path, force=False
+                    ["misra_c2012_conservative"], output_path, force=False
                 )
 
             self.assertEqual(result, 0)
@@ -229,7 +229,7 @@ class PolicyInitTests(unittest.TestCase):
 
             # Initialize from template
             result = policy_init.init_policy(
-                "misra_c2012_conservative", output_path, force=False
+                ["misra_c2012_conservative"], output_path, force=False
             )
             self.assertEqual(result, 0)
 
@@ -295,7 +295,7 @@ class PolicyInitTests(unittest.TestCase):
             ["init", "--template", "misra_c2012_conservative"]
         )
         self.assertEqual(args.subcommand, "init")
-        self.assertEqual(args.template, "misra_c2012_conservative")
+        self.assertEqual(args.templates, ["misra_c2012_conservative"])
         self.assertFalse(args.force)
 
     def test_parse_args_init_with_options(self) -> None:
@@ -311,9 +311,18 @@ class PolicyInitTests(unittest.TestCase):
             ]
         )
         self.assertEqual(args.subcommand, "init")
-        self.assertEqual(args.template, "misra_c2012_relaxed")
+        self.assertEqual(args.templates, ["misra_c2012_relaxed"])
         self.assertEqual(args.output, "/custom/path/policy.json")
         self.assertTrue(args.force)
+
+    def test_parse_args_init_multiple_templates(self) -> None:
+        """Test parse_args for 'init' with multiple --template args."""
+        args = policy_init.parse_args(
+            ["init", "--template", "misra_c2012_relaxed", "--template", "cppcheck_common"]
+        )
+        self.assertEqual(args.subcommand, "init")
+        self.assertEqual(args.templates, ["misra_c2012_relaxed", "cppcheck_common"])
+        self.assertFalse(args.force)
 
     def test_parse_args_init_force_short_flag(self) -> None:
         """Test parse_args for 'init' with -f short flag."""

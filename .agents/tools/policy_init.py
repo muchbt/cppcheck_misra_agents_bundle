@@ -53,13 +53,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
     # init subcommand
     init_parser = subparsers.add_parser(
-        "init", help="Initialize policy configuration from a template."
+        "init", help="Initialize policy configuration from one or more templates (merged)."
     )
     init_parser.add_argument(
         "--template",
-        required=True,
+        "-t",
+        action="append",
+        default=[],
+        dest="templates",
         choices=list(AVAILABLE_TEMPLATES.keys()),
-        help="Template name to use for initialization.",
+        help="Template name(s) to initialize from. Can be specified multiple times to merge templates. If omitted, defaults to first available template.",
     )
     init_parser.add_argument(
         "--output",
@@ -430,13 +433,11 @@ def add_rule(
     return 0
 
 
-def init_policy(template_name: str, output_path: Path, force: bool) -> int:
-    """Initialize policy from template."""
-    template_file = TEMPLATES_DIR / f"{template_name}.json"
-
-    if not template_file.exists():
-        print(f"Error: Template file not found: {template_file}", file=sys.stderr)
-        return 1
+def init_policy(templates: List[str], output_path: Path, force: bool) -> int:
+    """Initialize policy from one or more templates (merged)."""
+    if not templates:
+        templates = [list(AVAILABLE_TEMPLATES.keys())[0]]
+        print(f"No template specified, using default: '{templates[0]}'")
 
     if output_path.exists() and not force:
         print(
@@ -449,28 +450,52 @@ def init_policy(template_name: str, output_path: Path, force: bool) -> int:
     # Ensure parent directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Copy template to output path
+    # Load and merge all templates (last one wins on conflict)
+    merged: Dict[str, Any] = {
+        "$schema": "../rule_policy.schema.json",
+        "_description": f"Merged from: {', '.join(templates)}",
+        "default": {"action": "needs_manual_review", "risk_level": "high", "risk_tags": [], "risk_reason": ""},
+        "actions": {},
+        "patterns": [],
+    }
+    merged_descriptions: List[str] = []
+
+    for name in templates:
+        template_file = TEMPLATES_DIR / f"{name}.json"
+        if not template_file.exists():
+            print(f"Error: Template file not found: {template_file}", file=sys.stderr)
+            return 1
+        try:
+            with open(template_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            merged_descriptions.append(data.get("_description", name))
+            # Merge actions (later template overrides earlier)
+            for key, value in data.get("actions", {}).items():
+                merged["actions"][key] = value
+            # Merge patterns (dedup by match_contains)
+            seen_patterns = {p["match_contains"] for p in merged["patterns"]}
+            for p in data.get("patterns", []):
+                if p["match_contains"] not in seen_patterns:
+                    merged["patterns"].append(p)
+                    seen_patterns.add(p["match_contains"])
+            # Use first template's default if available
+            if "default" in data and merged["default"] == {"action": "needs_manual_review", "risk_level": "high", "risk_tags": [], "risk_reason": ""}:
+                merged["default"] = data["default"]
+        except json.JSONDecodeError as e:
+            print(f"Error: Template '{name}' is not valid JSON: {e}", file=sys.stderr)
+            return 1
+
+    # Write merged policy
     try:
-        shutil.copy2(template_file, output_path)
-        print(f"Policy initialized from template '{template_name}'")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+        print(f"Policy initialized from template(s): {', '.join(templates)}")
         print(f"Output: {output_path}")
-
-        # Validate the copied file is valid JSON
-        with open(output_path, "r", encoding="utf-8") as f:
-            policy_data = json.load(f)
-
-        # Count rules for summary
-        rule_count = len(policy_data.get("actions", {}))
-        pattern_count = len(policy_data.get("patterns", []))
-        print(f"Rules configured: {rule_count}")
-        print(f"Patterns configured: {pattern_count}")
-
+        print(f"Rules configured: {len(merged['actions'])}")
+        print(f"Patterns configured: {len(merged['patterns'])}")
         return 0
-    except json.JSONDecodeError as e:
-        print(f"Error: Template file is not valid JSON: {e}", file=sys.stderr)
-        return 1
     except Exception as e:
-        print(f"Error copying template: {e}", file=sys.stderr)
+        print(f"Error writing policy file: {e}", file=sys.stderr)
         return 1
 
 
@@ -508,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             output_path = Path(args.output)
 
-        return init_policy(args.template, output_path, args.force)
+        return init_policy(args.templates, output_path, args.force)
 
     # Handle "test" subcommand
     if args.subcommand == "test":
