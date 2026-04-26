@@ -515,5 +515,82 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(result["launch"], expected_launch)
 
 
+class KimiProviderTests(unittest.TestCase):
+    def test_kimi_provider_import(self) -> None:
+        """Verify kimi provider can be imported and has required attributes."""
+        from providers import get_provider, PROVIDERS
+        provider = get_provider("kimi")
+        self.assertIsNotNone(provider, "kimi provider should be discoverable")
+        self.assertEqual(provider.PROVIDER_NAME, "kimi")
+        self.assertIn("kimi", PROVIDERS, "kimi should be in PROVIDERS dict")
+        self.assertTrue(hasattr(provider, "SANITIZED_ENV_KEYS"))
+        self.assertTrue(hasattr(provider, "prepare_launch_env"))
+        self.assertTrue(hasattr(provider, "classify_runtime_error"))
+        self.assertTrue(hasattr(provider, "build_launch_spec"))
+
+    def test_kimi_provider_builds_launch_spec(self) -> None:
+        """Verify build_launch_spec produces correct argv with required flags."""
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "kimi"
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n{chunk_result_json_path}\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(json.dumps(chunk), encoding="utf-8")
+
+            kimi_provider = importlib.import_module("providers.kimi")
+            provider_base = importlib.import_module("providers.base")
+            with patch.object(kimi_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                provider_base, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
+            ):
+                spec = kimi_provider.build_launch_spec(config, chunk)
+
+        self.assertEqual(spec["argv"][0], "kimi")
+        self.assertIn("--print", spec["argv"])
+        self.assertIn("--input-format", spec["argv"])
+        self.assertIn("--output-format", spec["argv"])
+        self.assertIn("--yolo", spec["argv"])
+        self.assertEqual(spec["prompt_via"], "stdin")
+
+    def test_kimi_classify_runtime_error_by_exit_code(self) -> None:
+        """Verify classify_runtime_error uses exit codes correctly."""
+        from providers.kimi import classify_runtime_error
+
+        # Exit code 75 -> network_error
+        assert classify_runtime_error("", "", returncode=75) == "network_error"
+
+        # Exit code 1 + auth keywords -> auth_error
+        assert classify_runtime_error("unauthorized access", "", returncode=1) == "auth_error"
+        assert classify_runtime_error("", "login required", returncode=1) == "auth_error"
+        assert classify_runtime_error("quota exhausted", "", returncode=1) == "auth_error"
+
+        # Exit code 1 + no auth keywords -> runtime_error
+        assert classify_runtime_error("some config error", "", returncode=1) == "runtime_error"
+
+        # returncode=None -> text pattern fallback
+        assert classify_runtime_error("auth error", "") == "auth_error"
+        assert classify_runtime_error("timeout", "") == "network_error"
+        assert classify_runtime_error("unknown error", "") == "runtime_error"
+
+
 if __name__ == "__main__":
     unittest.main()
