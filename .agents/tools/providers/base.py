@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Protocol
+from typing import Any, Dict, Optional, Protocol
 
 from common import PROMPTS_DIR, get_selected_agent_config, read_text, relative, resolve_agent_staging_dir
 
@@ -20,7 +20,7 @@ class ProviderProtocol(Protocol):
     - PROVIDER_NAME: str - Unique identifier for the provider
     - SANITIZED_ENV_KEYS: set[str] - Environment keys to sanitize in logs
     - prepare_launch_env(env: Dict[str, str]) -> None
-    - classify_runtime_error(stderr: str, stdout: str = "") -> str
+    - classify_runtime_error(stderr: str, stdout: str = "", returncode: Optional[int] = None) -> str
     - build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]
 
     Note: Providers implement these as module-level attributes and functions,
@@ -36,8 +36,19 @@ class ProviderProtocol(Protocol):
         """Prepare environment variables for the provider launch."""
         ...
 
-    def classify_runtime_error(self, stderr: str, stdout: str = "") -> str:
-        """Classify runtime errors from stderr and stdout output."""
+    def classify_runtime_error(self, stderr: str, stdout: str = "", returncode: Optional[int] = None) -> str:
+        """Classify runtime errors from stderr, stdout, and optional returncode.
+
+        Args:
+            stderr: Standard error output from agent execution
+            stdout: Standard output from agent execution
+            returncode: Optional process exit code. New providers can use this
+                        for more accurate classification.
+
+        Returns:
+            Error kind string: ERROR_KIND_AUTH_ERROR, ERROR_KIND_NETWORK_ERROR,
+            or ERROR_KIND_RUNTIME_ERROR
+        """
         ...
 
     def build_launch_spec(self, config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, Any]:
