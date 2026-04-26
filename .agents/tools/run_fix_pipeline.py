@@ -60,6 +60,7 @@ PROVIDER_ERROR_KEYWORDS = {
     "codex": ["usage limit", "upgrade to pro", "quota", "rate limit"],
     "claude": ["anthropic_api_key", "authentication", "rate limit", "429"],
     "opencode": ["zen/v1/messages", "api key", "credentials", "auth"],
+    "kimi": ["login", "unauthorized", "api_key", "token", "quota", "credit", "rate limit"],
 }
 COMMON_ERROR_KEYWORDS = ["ERROR:", "FATAL:", "failed to", "fatal error"]
 
