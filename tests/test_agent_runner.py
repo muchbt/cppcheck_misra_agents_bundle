@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -495,6 +496,23 @@ class AgentRunnerTests(unittest.TestCase):
             env = agent_runner.build_launch_env({"CODEX_HOME": ".agents/runtime/agent-home"}, codex_provider)
 
         self.assertNotIn("CODEX_SANDBOX_NETWORK_DISABLED", env)
+
+    def test_get_selected_agent_config_respects_env_provider(self) -> None:
+        """Test that get_selected_agent_config respects env var override."""
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        original_provider = config["agent"]["provider"]
+
+        # Use a different provider via env var
+        different_provider = "codex" if original_provider != "codex" else "claude"
+
+        with patch.dict(os.environ, {"PIPELINE_AGENT_PROVIDER": different_provider}, clear=False):
+            reloaded_common = importlib.reload(common)
+            result = reloaded_common.get_selected_agent_config(config)
+
+        self.assertEqual(result["provider"], different_provider)
+        # Verify the launch config comes from the correct provider
+        expected_launch = config["agent"]["providers"][different_provider]["launch"]
+        self.assertEqual(result["launch"], expected_launch)
 
 
 if __name__ == "__main__":
