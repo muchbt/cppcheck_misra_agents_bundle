@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from common import ERROR_KIND_AUTH_ERROR, ERROR_KIND_NETWORK_ERROR, ERROR_KIND_RUNTIME_ERROR, RUNTIME_DIR
 from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_launch
@@ -19,7 +19,7 @@ def prepare_launch_env(env: Dict[str, str]) -> None:
     return None
 
 
-def classify_runtime_error(stderr: str, stdout: str = "") -> str:
+def classify_runtime_error(stderr: str, stdout: str = "", returncode: Optional[int] = None) -> str:
     # 同时搜索 stdout 和 stderr（stdout 优先但 stderr 作为补充）
     text = f"{stdout or ''}\n{stderr or ''}".lower()
     if "anthropic_api_key" in text or "authentication" in text or "login" in text or "unauthorized" in text:
