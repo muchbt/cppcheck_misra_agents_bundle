@@ -1,6 +1,0 @@
-Verify the touched files for chunk {chunk_index:03d}.
-
-Requirements:
-1. Only check files touched by this chunk
-2. Prefer lightweight validation
-3. Record verification result in .agents/runtime/results/chunk_{chunk_index:03d}_result.json
