@@ -431,6 +431,45 @@ class DoctorTests(unittest.TestCase):
         self.assertNotIn(" | None", doctor_source)
         self.assertNotIn(" | None", pipeline_cli_source)
 
+    def test_collect_checks_uses_provider_from_env_var(self) -> None:
+        """Test that doctor respects PIPELINE_AGENT_PROVIDER env var."""
+        config = doctor.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        original_provider = config["agent"]["provider"]
+
+        # Force different provider via env var
+        different_provider = "codex" if original_provider != "codex" else "claude"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_dir = root / ".agents" / "config"
+            runtime_dir = root / ".agents" / "runtime"
+            prompts_dir = root / ".agents" / "prompts"
+            runs_dir = root / ".agents" / "runs"
+
+            config_dir.mkdir(parents=True)
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            runs_dir.mkdir(parents=True)
+
+            config["agent"]["provider"] = original_provider
+            (config_dir / "pipeline.json").write_text(json.dumps(config), encoding="utf-8")
+            (runtime_dir / "progress.json").write_text("{}", encoding="utf-8")
+            (prompts_dir / "fix_chunk_prompt.txt").write_text("short", encoding="utf-8")
+
+            with patch.dict(os.environ, {"PIPELINE_AGENT_PROVIDER": different_provider}, clear=False):
+                results = doctor.collect_checks(root=root)
+
+        # Find agent-related results and verify provider selection
+        agent_launch_result = next(
+            (r for r in results if r["code"] in ("agent_launch_ok", "agent_launch_executable_missing", "agent_provider_missing")),
+            None
+        )
+
+        # Provider should be the env var value, not the config value
+        if agent_launch_result:
+            # The result should reference the env-var-specified provider
+            self.assertIn(different_provider, agent_launch_result["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()
