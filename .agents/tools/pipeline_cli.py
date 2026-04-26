@@ -21,6 +21,12 @@ COMMANDS = {
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="cppcheck/MISRA agent pipeline CLI.")
+    parser.add_argument(
+        "--provider",
+        choices=["codex", "claude", "opencode"],
+        default=None,
+        help="Override agent provider from pipeline.json (codex, claude, or opencode).",
+    )
     parser.add_argument("command", choices=sorted(COMMANDS))
     parser.add_argument("args", nargs=argparse.REMAINDER)
     return parser.parse_args(argv)

@@ -62,6 +62,27 @@ class PipelineCliTests(unittest.TestCase):
         self.assertEqual(args.command, "validate-real")
         self.assertEqual(args.args, ["--provider", "claude"])
 
+    def test_parse_args_accepts_global_provider(self) -> None:
+        args = pipeline_cli.parse_args(["--provider", "claude", "doctor"])
+
+        self.assertEqual(args.provider, "claude")
+        self.assertEqual(args.command, "doctor")
+        self.assertEqual(args.args, [])
+
+    def test_parse_args_rejects_invalid_provider(self) -> None:
+        with self.assertRaises(SystemExit):
+            pipeline_cli.parse_args(["--provider", "invalid", "doctor"])
+
+    def test_parse_args_provider_choices(self) -> None:
+        for provider in ["codex", "claude", "opencode"]:
+            args = pipeline_cli.parse_args(["--provider", provider, "doctor"])
+            self.assertEqual(args.provider, provider)
+
+    def test_parse_args_no_provider_default_none(self) -> None:
+        args = pipeline_cli.parse_args(["doctor"])
+
+        self.assertIsNone(args.provider)
+
 
 if __name__ == "__main__":
     unittest.main()
