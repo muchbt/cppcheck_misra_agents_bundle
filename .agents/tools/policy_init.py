@@ -529,7 +529,3 @@ def main(argv: list[str] | None = None) -> int:
     # No subcommand and no --list, show help
     list_templates()
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

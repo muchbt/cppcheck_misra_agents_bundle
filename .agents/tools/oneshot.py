@@ -398,7 +398,3 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     print("[oneshot] 全部阶段执行完成。")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))

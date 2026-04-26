@@ -320,6 +320,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     print(f"Generated {total} chunks from {len(issues)} issues with strategy '{strategy}' (run_id={run_id}).")
     return 0
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))

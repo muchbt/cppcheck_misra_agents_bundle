@@ -428,7 +428,3 @@ def main(argv: Optional[List[str]] = None) -> int:
         processed_this_run += 1
         progress["last_chunk_finished_at"] = now_iso()
         save_json(progress_path, progress)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

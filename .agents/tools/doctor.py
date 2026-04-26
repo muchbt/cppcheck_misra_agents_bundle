@@ -957,5 +957,3 @@ def main(argv: Optional[List[str]] = None) -> int:
     return 1 if any(result.get("level") == "error" for result in results) else 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))

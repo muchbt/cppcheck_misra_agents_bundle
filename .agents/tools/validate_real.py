@@ -420,7 +420,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"[validate-real] report: {report_path}")
 
     return 1 if summary["failed"] > 0 else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -137,6 +137,3 @@ def main() -> None:
     write_text(compat_codex_skill, skill_text)
     write_text(compat_claude_skill, skill_text)
     print("Bootstrap completed.")
-
-if __name__ == "__main__":
-    main()
