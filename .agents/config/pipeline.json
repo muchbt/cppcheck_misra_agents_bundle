@@ -109,6 +109,25 @@
           "non_interactive": true,
           "workspace_write_required": true
         }
+      },
+      "kimi": {
+        "launch": {
+          "argv": [
+            "kimi",
+            "--print"
+          ],
+          "prompt_via": "stdin",
+          "cwd": "project_root",
+          "env": {},
+          "requires_tty": false,
+          "output": {
+            "mode": "exit_code"
+          }
+        },
+        "capabilities": {
+          "non_interactive": true,
+          "workspace_write_required": true
+        }
       }
     },
     "auto_bootstrap_compat": true
