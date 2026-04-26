@@ -116,7 +116,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
     if completed.returncode != 0:
         classify_fn = getattr(provider, "classify_runtime_error", None)
         if callable(classify_fn):
-            error_kind = classify_fn(completed.stderr, completed.stdout)
+            error_kind = classify_fn(completed.stderr, completed.stdout, completed.returncode)
         else:
             # Fallback for providers without classify_runtime_error method
             error_kind = ERROR_KIND_RUNTIME_ERROR
