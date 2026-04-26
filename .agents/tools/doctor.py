@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import shutil
 import shlex
 import sys
@@ -151,6 +152,15 @@ def check_rule_policy(policy: Any) -> Dict[str, Any]:
 
 
 def _command_tokens(command: str) -> List[str]:
+    """Split command string into tokens, handling platform differences.
+
+    On Unix: use shlex.split() for proper shell quoting.
+    On Windows: use simple whitespace split (Windows shell quoting differs).
+    """
+    if platform.system() == "Windows":
+        # Windows shell uses different quoting; simple split is safer
+        # For complex commands, users should avoid shell-style quoting
+        return command.split()
     return shlex.split(command)
 
 

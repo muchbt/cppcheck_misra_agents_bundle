@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import re
-import signal
 import shutil
 import subprocess
 import sys
@@ -147,15 +147,21 @@ def run_subprocess(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        start_new_session=True,
+        # On Unix: start_new_session creates a new process group for clean termination
+        # On Windows: this parameter is ignored; use CREATE_NEW_PROCESS_GROUP instead
+        start_new_session=True if platform.system() != "Windows" else False,
     )
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except OSError:
+        # Kill process group on Unix, single process on Windows
+        if platform.system() == "Windows":
             proc.kill()
+        else:
+            try:
+                os.killpg(os.getpgid(proc.pid), 9)  # SIGKILL = 9
+            except OSError:
+                proc.kill()
         stdout, stderr = proc.communicate()
         raise subprocess.TimeoutExpired(cmd=exc.cmd, timeout=exc.timeout, output=stdout, stderr=stderr)
     return subprocess.CompletedProcess(list(cmd), proc.returncode, stdout, stderr)

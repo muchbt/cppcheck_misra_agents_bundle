@@ -201,12 +201,17 @@ class ValidateRealTests(unittest.TestCase):
         ]
 
         with patch.object(validate_real.subprocess, "Popen", return_value=proc), patch.object(
-            validate_real.os, "killpg"
-        ) as killpg_mock:
-            with self.assertRaises(subprocess.TimeoutExpired):
-                validate_real.run_subprocess(["x"], timeout=1)
+            validate_real, "platform"
+        ) as platform_mock:
+            platform_mock.system.return_value = "Linux"
+            with patch.object(validate_real.os, "getpgid", return_value=4321) as getpgid_mock, patch.object(
+                validate_real.os, "killpg"
+            ) as killpg_mock:
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    validate_real.run_subprocess(["x"], timeout=1)
 
-        killpg_mock.assert_called_once_with(proc.pid, validate_real.signal.SIGKILL)
+        getpgid_mock.assert_called_once_with(4321)
+        killpg_mock.assert_called_once_with(4321, 9)  # SIGKILL = 9
 
 
 if __name__ == "__main__":

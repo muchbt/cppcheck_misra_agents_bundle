@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import shlex
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from common import CONFIG_DIR, RESULTS_DIR, ROOT, load_json, run_command, save_json
+
+
+def _split_command(command: str) -> List[str]:
+    """Split command string into tokens, handling platform differences."""
+    if platform.system() == "Windows":
+        return command.split()
+    return shlex.split(command)
+
 
 def verify_chunk_result(chunk_index: int) -> Dict[str, Any]:
     config = load_json(CONFIG_DIR / "pipeline.json", {})
@@ -27,7 +36,7 @@ def verify_chunk_result(chunk_index: int) -> Dict[str, Any]:
         if Path(custom_cmd).exists():
             proc = run_command([custom_cmd], cwd=ROOT)
         else:
-            proc = run_command(shlex.split(custom_cmd), cwd=ROOT)
+            proc = run_command(_split_command(custom_cmd), cwd=ROOT)
         verification["command"] = custom_cmd
         verification["returncode"] = proc.returncode
         verification["passed"] = proc.returncode == 0

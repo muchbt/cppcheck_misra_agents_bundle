@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -16,6 +17,10 @@ def _link_or_copy(src: Path, dest: Path) -> None:
     if dest.exists():
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # symlink_to requires admin/Developer Mode on Windows; skip and copy directly
+    if platform.system() == "Windows":
+        shutil.copy2(src, dest)
+        return
     try:
         dest.symlink_to(src)
     except OSError:
