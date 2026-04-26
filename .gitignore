@@ -1,5 +1,6 @@
 .worktrees/
 __pycache__/
 *.pyc
-.agents/runtime
-.agents/runtime_backup
+.agents/runtime/
+.agents/runtime_backups/
+.agents/staging/
