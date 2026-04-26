@@ -200,7 +200,7 @@ py .agents\tools\pipeline_cli.py doctor
 py .agents\tools\pipeline_cli.py oneshot
 ```
 
-## 自动修复策略
+## 修复策略（fix_strategy）
 
 默认策略是 `conservative`：
 
@@ -214,6 +214,69 @@ python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
 ```
 
 `all_auto` 会把高风险问题也分发给 agent，但结果必须保留 `risk_level`、`risk_reason` 和 `review_required_after_fix=true`。
+
+此维度的详细说明及与规则策略的联动关系，参见下节「策略模板与修复策略的联动」。
+
+## 策略模板与修复策略的联动
+
+本方案有两层策略控制：
+
+| 维度 | 配置位置 | 选项 | 作用 |
+|------|----------|------|------|
+| **规则策略（rule_policy）** | `.agents/config/rule_policy.json` | 模板初始化：`misra_c2012_conservative` / `misra_c2012_relaxed` / `cppcheck_common` / `autosar_baseline` | 定义每条规则在**任意模式**下的默认动作 |
+| **修复策略（fix_strategy）** | `pipeline.json` → CLI `--strategy` | `conservative`（默认）或 `all_auto` | 控制 `needs_manual_review` 规则是否被降级 |
+
+### 联动工作原理
+
+```
+rule_policy.json（规则动作）      +      fix_strategy（运行模式）
+──────────────────────────────────────┼─────────────────────────────
+auto_fix                            →     直接修复
+careful_fix                          →     修复但需验证结果
+needs_manual_review  + conservative →     跳过，标记人工复核
+needs_manual_review  + all_auto     →     降级为 careful_fix，但仍标记 requires_review_after_fix
+```
+
+### 完整工作流示例
+
+假设使用 `misra_c2012_relaxed.json` 模板 + `all_auto` 策略：
+
+```bash
+# 1. 从模板初始化规则策略
+python3 .agents/tools/pipeline_cli.py policy init misra_c2012_relaxed
+
+# 2. 使用 all_auto 模式运行
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
+```
+
+执行时：
+- 规则 `misra-c2012-2.2`（action: `auto_fix`）→ agent 直接修复
+- 规则 `misra-c2012-10.1`（action: `careful_fix`）→ agent 修复但需验证
+- 规则 `misra-c2012-9.1`（action: `needs_manual_review`）→ 在 `all_auto` 下降级为 `careful_fix`，但 `requires_review_after_fix=true` 标记
+
+### 一键切换模板 + 策略
+
+组合使用模板初始化和运行策略：
+
+```bash
+# 保守模式：保守模板 + conservative（最严格）
+python3 .agents/tools/pipeline_cli.py policy init misra_c2012_conservative
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy conservative
+
+# 放宽模式：宽松模板 + all_auto（最大修复范围）
+python3 .agents/tools/pipeline_cli.py policy init misra_c2012_relaxed
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
+
+# AUTOSAR 模式：AUTOSAR 模板 + conservative（保护架构层）
+python3 .agents/tools/pipeline_cli.py policy init autosar_baseline
+python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy conservative
+```
+
+### 配置来源说明
+
+- `pipeline.json` 中的 `fix_strategy.mode` 决定默认运行模式
+- CLI 的 `--strategy` 参数覆盖 `pipeline.json` 的默认模式
+- `rule_policy.json` 由用户通过 `policy init` 管理，默认为空（需要手动初始化）
 
 ## 运行日志
 
