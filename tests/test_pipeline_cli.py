@@ -75,7 +75,7 @@ class PipelineCliTests(unittest.TestCase):
             pipeline_cli.parse_args(["--provider", "invalid", "doctor"])
 
     def test_parse_args_provider_choices(self) -> None:
-        for provider in ["codex", "claude", "opencode"]:
+        for provider in ["codex", "claude", "opencode", "kimi"]:
             args = pipeline_cli.parse_args(["--provider", provider, "doctor"])
             self.assertEqual(args.provider, provider)
 
