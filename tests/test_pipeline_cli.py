@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -82,6 +83,45 @@ class PipelineCliTests(unittest.TestCase):
         args = pipeline_cli.parse_args(["doctor"])
 
         self.assertIsNone(args.provider)
+
+    def test_main_sets_provider_env_var(self) -> None:
+        seen_env = {}
+
+        class FakeModule:
+            def main(self) -> int:
+                seen_env["provider"] = os.environ.get("PIPELINE_AGENT_PROVIDER")
+                return 0
+
+        with patch.object(pipeline_cli.importlib, "import_module", return_value=FakeModule()):
+            with patch.object(sys, "argv", ["pipeline_cli.py", "--provider", "claude", "doctor"]):
+                with self.assertRaises(SystemExit) as ctx:
+                    pipeline_cli.main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertEqual(seen_env["provider"], "claude")
+
+    def test_main_no_provider_does_not_set_env(self) -> None:
+        seen_env = {}
+
+        class FakeModule:
+            def main(self) -> int:
+                seen_env["provider"] = os.environ.get("PIPELINE_AGENT_PROVIDER")
+                return 0
+
+        # Clear any existing value
+        original = os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+        try:
+            with patch.object(pipeline_cli.importlib, "import_module", return_value=FakeModule()):
+                with patch.object(sys, "argv", ["pipeline_cli.py", "doctor"]):
+                    with self.assertRaises(SystemExit) as ctx:
+                        pipeline_cli.main()
+        finally:
+            if original is not None:
+                os.environ["PIPELINE_AGENT_PROVIDER"] = original
+
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIsNone(seen_env["provider"])
 
 
 if __name__ == "__main__":

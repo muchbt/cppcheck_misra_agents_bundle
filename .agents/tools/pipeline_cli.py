@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 import sys
 from typing import List
 
@@ -34,6 +35,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args(sys.argv[1:])
+
+    # Set provider env var if specified via CLI
+    if args.provider:
+        os.environ["PIPELINE_AGENT_PROVIDER"] = args.provider
+
     module_name = COMMANDS[args.command][0]
     module = importlib.import_module(module_name)
     sys.argv = [f"{module_name}.py", *args.args]
