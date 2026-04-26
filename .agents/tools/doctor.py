@@ -192,8 +192,7 @@ def _get_agent_capabilities(config: Any) -> Dict[str, Any]:
 
 
 def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
-    agent = config.get("agent", {}) if isinstance(config, dict) else {}
-    provider_name = agent.get("provider", "") if isinstance(agent, dict) else ""
+    provider_name = _get_agent_provider_name(config)
     launch = _get_agent_launch(config)
     capabilities = _get_agent_capabilities(config)
 
