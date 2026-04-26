@@ -664,6 +664,25 @@ def normalize_file_change_delta(
             normalized[file_path] = current_entry
         return normalized
 
+    # Handle files_inspected format: inspection-only records with no code edits.
+    # Agent may output this when issues are marked for manual review without changes.
+    # Normalize to canonical {filepath: {edits: []}} WITHOUT generating edit records.
+    files_inspected = file_change_delta.get("files_inspected")
+    if isinstance(files_inspected, list):
+        normalized: Dict[str, Any] = {}
+        for item in files_inspected:
+            if not isinstance(item, dict):
+                continue
+            file_path = str(item.get("file", "")).strip()
+            if not file_path:
+                continue
+            entry: Dict[str, Any] = {"edits": []}
+            change_summary = str(item.get("change_summary", "")).strip()
+            if change_summary:
+                entry["change_summary"] = change_summary
+            normalized[file_path] = entry
+        return normalized
+
     # Handle single-file format: {"file": "path/to/file", "edits": [...], ...}
     # This format is sometimes output by agents that don't wrap in file_changes array
     single_file_path = file_change_delta.get("file")

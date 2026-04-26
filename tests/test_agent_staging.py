@@ -205,6 +205,80 @@ class AgentStagingConfigTests(unittest.TestCase):
             ["issue-a"],
         )
 
+    def test_import_accepts_files_inspected_schema(self) -> None:
+        """Test that files_inspected format is treated as inspection-only (no edits)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / ".agents" / "runtime"
+            results_dir = runtime_dir / "results"
+            staging_dir = root / ".agents" / "staging" / "chunk_011"
+            results_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            common.save_json(
+                runtime_dir / "issue_status.json",
+                {
+                    "misra_advisory.c:11:misra-c2012-8.4:4a2c80d8": {
+                        "status": "pending",
+                    }
+                },
+            )
+            common.save_json(runtime_dir / "file_change_index.json", {})
+            common.save_json(
+                staging_dir / "issue_status_delta.json",
+                {
+                    "misra_advisory.c:11:misra-c2012-8.4:4a2c80d8": {
+                        "new_status": "needs_manual_review",
+                        "risk_level": "high",
+                        "risk_reason": "No rule-specific auto-fix policy is configured.",
+                        "requires_review_after_fix": False,
+                        "chunk_index": 11,
+                        "edit_id": None,
+                        "related_issue_keys": [],
+                        "blocker": None,
+                    }
+                },
+            )
+            # Agent used files_inspected instead of file_changes — inspection-only
+            common.save_json(
+                staging_dir / "file_change_delta.json",
+                {
+                    "files_inspected": [
+                        {
+                            "file": "misra_advisory.c",
+                            "linked_issues": ["misra_advisory.c:11:misra-c2012-8.4:4a2c80d8"],
+                            "change_summary": "No changes applied - issue marked for manual review",
+                            "edits": [],
+                        }
+                    ],
+                    "chunk_index": 11,
+                },
+            )
+            common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 11})
+            (staging_dir / "chunk_result.md").write_text("# chunk 11\n", encoding="utf-8")
+
+            common.import_chunk_staging_artifacts(
+                staging_dir,
+                11,
+                runtime_dir=runtime_dir,
+                results_dir=results_dir,
+            )
+
+            issue_status = common.load_json(runtime_dir / "issue_status.json", {})
+            file_change_index = common.load_json(runtime_dir / "file_change_index.json", {})
+
+        # Issue should be updated to needs_manual_review
+        issue = issue_status["misra_advisory.c:11:misra-c2012-8.4:4a2c80d8"]
+        self.assertEqual(issue["new_status"], "needs_manual_review")
+
+        # File should appear in file_change_index with empty edits (no fake edit_ids)
+        self.assertIn("misra_advisory.c", file_change_index)
+        self.assertEqual(file_change_index["misra_advisory.c"]["edits"], [])
+        self.assertEqual(
+            file_change_index["misra_advisory.c"]["change_summary"],
+            "No changes applied - issue marked for manual review",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
