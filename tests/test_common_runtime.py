@@ -299,6 +299,22 @@ class CommonRuntimeTests(unittest.TestCase):
 
         self.assertEqual(result, "codex")
 
+    def test_validate_pipeline_config_accepts_env_provider_not_in_config(self) -> None:
+        """When env var specifies provider, config may not need it."""
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+
+        # Remove provider from config but keep providers
+        if "provider" in config.get("agent", {}):
+            del config["agent"]["provider"]
+
+        with patch.dict(os.environ, {"PIPELINE_AGENT_PROVIDER": "claude"}, clear=False):
+            # Should not error about missing provider when env var is set
+            errors, warnings = common.validate_pipeline_config(config)
+
+        provider_errors = [e for e in errors if "provider" in e]
+        # Should not require agent.provider when env override is active
+        self.assertEqual(provider_errors, [])
+
 
 if __name__ == "__main__":
     unittest.main()

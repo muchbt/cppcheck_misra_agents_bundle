@@ -209,9 +209,22 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
 
     agent = config.get("agent", {})
     if isinstance(agent, dict):
+        # Check provider - allow env var override to skip config requirement
+        env_provider = os.environ.get("PIPELINE_AGENT_PROVIDER", "").strip()
         provider = agent.get("provider")
-        if not isinstance(provider, str) or not provider.strip():
-            errors.append("agent.provider must be a non-empty string")
+
+        if env_provider:
+            # Env var override active - validate the specified provider exists
+            providers = agent.get("providers")
+            if not isinstance(providers, dict):
+                errors.append("agent.providers must be an object when provider override is active")
+            elif env_provider not in providers:
+                errors.append(f"agent.providers must include env-specified provider: {env_provider}")
+        else:
+            # No env override - require config provider
+            if not isinstance(provider, str) or not provider.strip():
+                errors.append("agent.provider must be a non-empty string")
+
         staging_dir = agent.get("staging_dir")
         if not isinstance(staging_dir, str) or not staging_dir.strip():
             errors.append("agent.staging_dir must be a non-empty string")
@@ -225,8 +238,10 @@ def validate_pipeline_config(config: Any) -> Tuple[List[str], List[str]]:
         if providers is not None and not isinstance(providers, dict):
             errors.append("agent.providers must be an object")
         elif isinstance(providers, dict):
-            if provider not in providers:
-                errors.append("agent.providers must include the selected agent.provider")
+            # If config has provider, check it's in providers
+            if provider and isinstance(provider, str) and provider.strip():
+                if provider not in providers:
+                    errors.append("agent.providers must include the selected agent.provider")
             for name, provider_config in providers.items():
                 if not isinstance(name, str) or not name.strip():
                     errors.append("agent.providers keys must be non-empty strings")
