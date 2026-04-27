@@ -114,6 +114,58 @@ def cmd_version_mock() -> str:
     return f"CLI version: {get_current_version()}"
 
 
+def check_python_version() -> bool:
+    """Check Python version >= 3.8."""
+    return sys.version_info >= MIN_PYTHON
+
+
+def check_cli_installed() -> bool:
+    """Check CLI is installed in ~/.misra-pipeline."""
+    return CLI_DIR.exists() and (CLI_DIR / "misra-pipeline-cli.py").exists()
+
+
+def check_git_available() -> bool:
+    """Check git command is available."""
+    try:
+        subprocess.run(["git", "--version"], capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def check_project_initialized_mock(cwd: Path) -> bool:
+    """Mock check for project initialization (for testing)."""
+    return (cwd / ".agents").exists()
+
+
+def check_project_initialized() -> bool:
+    """Check .agents/ exists in current directory."""
+    return (Path.cwd() / ".agents").exists()
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Check installation and environment."""
+    checks = [
+        ("Python version (>=3.8)", check_python_version()),
+        ("CLI installed", check_cli_installed()),
+        ("Git available", check_git_available()),
+        ("Project initialized", check_project_initialized()),
+    ]
+    all_pass = True
+    for name, result in checks:
+        status = "OK" if result else "FAIL"
+        print(f"  {name}: {status}")
+        if not result:
+            all_pass = False
+
+    if all_pass:
+        print("\nAll checks passed.")
+        return 0
+    else:
+        print("\nSome checks failed. Fix issues before proceeding.")
+        return 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point."""
     args = parse_args(argv)

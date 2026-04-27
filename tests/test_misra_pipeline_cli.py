@@ -53,3 +53,40 @@ class MisraPipelineCliTests(unittest.TestCase):
         """Test parse_args for 'doctor' subcommand."""
         args = misra_pipeline_cli.parse_args(["doctor"])
         self.assertEqual(args.subcommand, "doctor")
+
+
+class MisraPipelineDoctorTests(unittest.TestCase):
+    def test_check_python_version_passes_on_38(self):
+        """Test check_python_version passes on Python 3.8+."""
+        result = misra_pipeline_cli.check_python_version()
+        self.assertTrue(result)
+
+    def test_check_cli_installed_fails_when_not_installed(self):
+        """Test check_cli_installed fails when CLI not in ~/.misra-pipeline."""
+        # Mock CLI_DIR to non-existent path
+        original_cli_dir = misra_pipeline_cli.CLI_DIR
+        misra_pipeline_cli.CLI_DIR = Path("/nonexistent/cli")
+        result = misra_pipeline_cli.check_cli_installed()
+        misra_pipeline_cli.CLI_DIR = original_cli_dir
+        self.assertFalse(result)
+
+    def test_check_git_available(self):
+        """Test check_git_available returns bool."""
+        result = misra_pipeline_cli.check_git_available()
+        self.assertIsInstance(result, bool)
+
+    def test_check_project_initialized_fails_without_agents(self):
+        """Test check_project_initialized fails when .agents/ missing."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            result = misra_pipeline_cli.check_project_initialized_mock(Path(tmp))
+            self.assertFalse(result)
+
+    def test_check_project_initialized_passes_with_agents(self):
+        """Test check_project_initialized passes when .agents/ exists."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            agents_dir = Path(tmp) / ".agents"
+            agents_dir.mkdir()
+            result = misra_pipeline_cli.check_project_initialized_mock(Path(tmp))
+            self.assertTrue(result)
