@@ -364,3 +364,58 @@ python3 .agents/tools/pipeline_cli.py bootstrap --mode merge
 - 高风险路径默认标记为 `needs_manual_review`
 - 涉及环境异常、命令缺失、输入文件问题时，先运行 `doctor`
 - Python 低于 3.8 时，入口会直接报错退出
+
+## CLI 安装与使用
+
+### Linux 安装
+
+```bash
+curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh
+```
+
+或指定版本：
+
+```bash
+curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh -s v1.2.3
+```
+
+### Windows 安装
+
+下载 `install.bat` 并运行：
+
+```batch
+install.bat
+```
+
+或指定版本：
+
+```batch
+install.bat v1.2.3
+```
+
+### CLI 命令
+
+| 命令 | 说明 |
+|------|------|
+| `misra-pipeline init` | 在当前项目初始化 `.agents/` 目录 |
+| `misra-pipeline init --force` | 强制覆盖已存在的 `.agents/` |
+| `misra-pipeline init --version vX.Y.Z` | 安装指定版本 |
+| `misra-pipeline upgrade` | 升级到最新版本 |
+| `misra-pipeline upgrade --version vX.Y.Z` | 升级到指定版本 |
+| `misra-pipeline version` | 显示 CLI 和项目版本 |
+| `misra-pipeline doctor` | 检查安装状态和依赖环境 |
+
+### 版本管理
+
+初始化后，项目 `.agents/` 目录下会生成 `.agents-version` 文件，记录安装版本和 commit hash。
+
+升级时：
+- `tools/` 和 `config/templates/` 被覆盖更新
+- `config/pipeline.json` 和 `config/rule_policy.json` 被保留
+- 如检测到本地修改（与安装版本不一致），升级会报错提示手动处理
+
+### 系统要求
+
+- Python 3.8+
+- Git
+- Linux 或 Windows
