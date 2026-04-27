@@ -143,6 +143,142 @@ def check_project_initialized() -> bool:
     return (Path.cwd() / ".agents").exists()
 
 
+# Init command constants
+AGENTS_SUBDIRS_TO_CREATE = [
+    "runtime",
+    "runtime/chunks",
+    "runtime/results",
+    "reports",
+    "runs",
+    "staging",
+]
+
+AGENTS_DIRS_TO_COPY = [
+    "tools",
+    "config",
+    "config/templates",
+    "prompts",
+    "skills",
+    "compat",
+]
+
+
+def download_from_git(target: Path, version: str, source_path: str = ".agents") -> bool:
+    """Download files from Git repository using git archive.
+
+    Args:
+        target: Target directory to extract files to
+        version: Git tag or branch name
+        source_path: Path in repo to extract (e.g., ".agents" or "cli")
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Use git archive to download specific path from repo
+        cmd = [
+            "git",
+            "archive",
+            f"--remote={REPO_URL}",
+            version,
+            source_path,
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, check=True)
+
+        # Extract tar stream to target
+        extract_cmd = ["tar", "-x", "-C", str(target.parent)]
+        subprocess.run(extract_cmd, input=result.stdout, check=True)
+
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error downloading from Git: {e.stderr.decode() if e.stderr else str(e)}", file=sys.stderr)
+        return False
+
+
+def get_git_commit_for_version(version: str) -> str:
+    """Get commit hash for a Git tag."""
+    try:
+        cmd = ["git", "ls-remote", REPO_URL, f"refs/tags/{version}"]
+        result = subprocess.run(cmd, capture_output=True, check=True, text=True)
+        if result.stdout:
+            return result.stdout.split()[0]
+        # If not a tag, try as branch
+        cmd = ["git", "ls-remote", REPO_URL, f"refs/heads/{version}"]
+        result = subprocess.run(cmd, capture_output=True, check=True, text=True)
+        return result.stdout.split()[0] if result.stdout else "unknown"
+    except subprocess.CalledProcessError:
+        return "unknown"
+
+
+def cmd_init_mock(args: argparse.Namespace, cwd: Path) -> int:
+    """Mock init command for testing (without actual Git download)."""
+    target_dir = cwd / ".agents"
+
+    # Check target exists
+    if target_dir.exists() and not args.force:
+        print(f"Error: {target_dir} already exists.", file=sys.stderr)
+        return 1
+
+    # Create target directory
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create empty subdirectories
+    for subdir in AGENTS_SUBDIRS_TO_CREATE:
+        (target_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Create version file
+    version = args.version or get_current_version()
+    commit = "test-commit"
+    write_version_file(target_dir / ".agents-version", version, commit)
+
+    return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Initialize .agents/ directory in current project."""
+    import shutil
+
+    target_dir = Path.cwd() / ".agents"
+
+    # 1. Check target directory exists
+    if target_dir.exists():
+        if not args.force:
+            print(f"Error: {target_dir} already exists.", file=sys.stderr)
+            print("Please backup and remove it, or use --force to overwrite.", file=sys.stderr)
+            return 1
+        # Force mode: remove existing
+        shutil.rmtree(target_dir)
+
+    # 2. Check Git available
+    if not check_git_available():
+        print("Error: Git is not available. Please install Git first.", file=sys.stderr)
+        return 1
+
+    # 3. Determine version
+    version = args.version or get_current_version()
+    print(f"Initializing .agents/ from version: {version}")
+
+    # 4. Download .agents from Git repo
+    if not download_from_git(target_dir, version, ".agents"):
+        print(f"Error: Failed to download .agents/ from {REPO_URL}", file=sys.stderr)
+        return 1
+
+    # 5. Create empty runtime directories
+    for subdir in AGENTS_SUBDIRS_TO_CREATE:
+        (target_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    # 6. Create version file
+    commit = get_git_commit_for_version(version)
+    write_version_file(target_dir / ".agents-version", version, commit)
+
+    print(f"Initialized: {target_dir}")
+    print(f"Version: {version}")
+    print("Next: configure .agents/config/pipeline.json and run policy init")
+
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Check installation and environment."""
     checks = [

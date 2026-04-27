@@ -90,3 +90,43 @@ class MisraPipelineDoctorTests(unittest.TestCase):
             agents_dir.mkdir()
             result = misra_pipeline_cli.check_project_initialized_mock(Path(tmp))
             self.assertTrue(result)
+
+
+class MisraPipelineInitTests(unittest.TestCase):
+    def test_init_checks_target_exists(self):
+        """Test init fails when .agents/ already exists without --force."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / ".agents"
+            target.mkdir()
+
+            # Mock cwd to tmp
+            args = misra_pipeline_cli.parse_args(["init"])
+            result = misra_pipeline_cli.cmd_init_mock(args, Path(tmp))
+            self.assertEqual(result, 1)  # Should fail
+
+    def test_init_force_overwrites(self):
+        """Test init --force succeeds when .agents/ exists."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / ".agents"
+            target.mkdir()
+
+            args = misra_pipeline_cli.parse_args(["init", "--force"])
+            result = misra_pipeline_cli.cmd_init_mock(args, Path(tmp))
+            self.assertEqual(result, 0)  # Should succeed
+
+    def test_init_creates_version_file(self):
+        """Test init creates .agents-version file."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            args = misra_pipeline_cli.parse_args(["init"])
+            result = misra_pipeline_cli.cmd_init_mock(args, Path(tmp))
+            self.assertEqual(result, 0)
+
+            version_file = Path(tmp) / ".agents" / ".agents-version"
+            self.assertTrue(version_file.exists())
+
+            version_info = misra_pipeline_cli.read_version_file(version_file)
+            self.assertIn("tag", version_info)
+            self.assertIn("installed_at", version_info)
