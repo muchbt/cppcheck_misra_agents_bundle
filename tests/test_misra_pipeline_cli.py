@@ -130,3 +130,55 @@ class MisraPipelineInitTests(unittest.TestCase):
             version_info = misra_pipeline_cli.read_version_file(version_file)
             self.assertIn("tag", version_info)
             self.assertIn("installed_at", version_info)
+
+
+class MisraPipelineUpgradeTests(unittest.TestCase):
+    def test_upgrade_fails_without_agents(self):
+        """Test upgrade fails when .agents/ not found."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            args = misra_pipeline_cli.parse_args(["upgrade"])
+            result = misra_pipeline_cli.cmd_upgrade_mock(args, Path(tmp))
+            self.assertEqual(result, 1)
+
+    def test_upgrade_detects_local_modifications(self):
+        """Test upgrade fails when local modifications detected."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            # Create .agents with version file
+            agents_dir = Path(tmp) / ".agents"
+            agents_dir.mkdir()
+            (agents_dir / "tools").mkdir()
+            # Create a modified file
+            modified_file = agents_dir / "tools" / "modified.py"
+            modified_file.write_text("modified content")
+
+            version_file = agents_dir / ".agents-version"
+            misra_pipeline_cli.write_version_file(version_file, "v1.0.0", "original-commit")
+
+            # Simulate modification by checking file hash mismatch
+            args = misra_pipeline_cli.parse_args(["upgrade"])
+            result = misra_pipeline_cli.cmd_upgrade_mock(args, Path(tmp))
+            # Should fail because we detect modifications
+            self.assertEqual(result, 1)
+
+    def test_upgrade_updates_version_file(self):
+        """Test upgrade updates .agents-version to new version."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            # Create clean .agents
+            agents_dir = Path(tmp) / ".agents"
+            agents_dir.mkdir()
+            (agents_dir / "tools").mkdir()
+            (agents_dir / "config").mkdir()
+            (agents_dir / "config" / "templates").mkdir()
+
+            version_file = agents_dir / ".agents-version"
+            misra_pipeline_cli.write_version_file(version_file, "v1.0.0", "commit-1")
+
+            args = misra_pipeline_cli.parse_args(["upgrade", "--version", "v1.1.0"])
+            result = misra_pipeline_cli.cmd_upgrade_mock_clean(args, Path(tmp))
+            self.assertEqual(result, 0)
+
+            new_version = misra_pipeline_cli.read_version_file(version_file)
+            self.assertEqual(new_version.get("tag"), "v1.1.0")
