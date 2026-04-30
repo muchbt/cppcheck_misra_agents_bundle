@@ -1,6 +1,7 @@
 """Unit tests for misra_pipeline_cli.py module."""
 
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 import sys
@@ -53,6 +54,225 @@ class MisraPipelineCliTests(unittest.TestCase):
         """Test parse_args for 'doctor' subcommand."""
         args = misra_pipeline_cli.parse_args(["doctor"])
         self.assertEqual(args.subcommand, "doctor")
+
+    def test_parse_args_init_with_source(self):
+        """Test parse_args for 'init --source release'."""
+        args = misra_pipeline_cli.parse_args(["init", "--source", "release"])
+        self.assertEqual(args.source, "release")
+
+    def test_parse_args_init_with_url(self):
+        """Test parse_args for 'init --url http://example.com/archive.tar.gz'."""
+        args = misra_pipeline_cli.parse_args(["init", "--url", "http://example.com/archive.tar.gz"])
+        self.assertEqual(args.url, "http://example.com/archive.tar.gz")
+
+    def test_parse_args_upgrade_with_source_and_url(self):
+        """Test parse_args for 'upgrade --source direct --url ...'."""
+        args = misra_pipeline_cli.parse_args(["upgrade", "--source", "direct", "--url", "file:///tmp/agents.tar.gz"])
+        self.assertEqual(args.source, "direct")
+        self.assertEqual(args.url, "file:///tmp/agents.tar.gz")
+
+    def test_parse_args_config_show(self):
+        """Test parse_args for 'config show' subcommand."""
+        args = misra_pipeline_cli.parse_args(["config", "show"])
+        self.assertEqual(args.subcommand, "config")
+        self.assertEqual(args.config_action, "show")
+
+    def test_parse_args_config_set(self):
+        """Test parse_args for 'config set mode release'."""
+        args = misra_pipeline_cli.parse_args(["config", "set", "mode", "release"])
+        self.assertEqual(args.config_action, "set")
+        self.assertEqual(args.key, "mode")
+        self.assertEqual(args.value, "release")
+
+    def test_parse_args_config_reset(self):
+        """Test parse_args for 'config reset'."""
+        args = misra_pipeline_cli.parse_args(["config", "reset"])
+        self.assertEqual(args.config_action, "reset")
+        self.assertFalse(args.yes)
+
+    def test_parse_args_config_reset_yes(self):
+        """Test parse_args for 'config reset --yes'."""
+        args = misra_pipeline_cli.parse_args(["config", "reset", "--yes"])
+        self.assertTrue(args.yes)
+
+
+class MisraPipelineConfigTests(unittest.TestCase):
+    def test_user_config_defaults(self):
+        """Test UserConfig has correct default values."""
+        config = misra_pipeline_cli.UserConfig()
+        self.assertEqual(config.download_mode, "release")
+        self.assertEqual(config.fallback_mode, "git_archive")
+        self.assertEqual(config.repo_url, misra_pipeline_cli.DEFAULT_REPO_URL)
+        self.assertIn("{version}", config.url_template)
+
+    def test_user_config_from_dict(self):
+        """Test UserConfig loads from dictionary."""
+        data = {
+            "repo_url": "https://gitlab.com/example/repo",
+            "download": {
+                "mode": "direct",
+                "url_template": "https://my-server.com/{version}.tar.gz",
+                "fallback_mode": "local",
+            },
+        }
+        config = misra_pipeline_cli.UserConfig(data)
+        self.assertEqual(config.download_mode, "direct")
+        self.assertEqual(config.repo_url, "https://gitlab.com/example/repo")
+        self.assertEqual(config.url_template, "https://my-server.com/{version}.tar.gz")
+        self.assertEqual(config.fallback_mode, "local")
+
+    def test_user_config_resolve_url(self):
+        """Test UserConfig.resolve_url substitutes version variable."""
+        config = misra_pipeline_cli.UserConfig()
+        url = config.resolve_url("v1.2.3")
+        self.assertIn("v1.2.3", url)
+        self.assertIn(misra_pipeline_cli.DEFAULT_REPO_URL, url)
+
+    def test_user_config_to_dict_roundtrip(self):
+        """Test UserConfig serializes and deserializes correctly."""
+        original = misra_pipeline_cli.UserConfig({
+            "repo_url": "https://example.com/repo",
+            "download": {"mode": "local", "url_template": "/tmp/{version}.tar.gz", "fallback_mode": "git_archive"},
+        })
+        data = original.to_dict()
+        restored = misra_pipeline_cli.UserConfig(data)
+        self.assertEqual(original.download_mode, restored.download_mode)
+        self.assertEqual(original.repo_url, restored.repo_url)
+        self.assertEqual(original.url_template, restored.url_template)
+
+    def test_load_user_config_missing_file(self):
+        """Test load_user_config returns defaults when file missing."""
+        original_config_file = misra_pipeline_cli.CONFIG_FILE
+        with tempfile.TemporaryDirectory() as tmp:
+            misra_pipeline_cli.CONFIG_FILE = Path(tmp) / "nonexistent.json"
+            config = misra_pipeline_cli.load_user_config()
+            self.assertEqual(config.download_mode, "release")
+            misra_pipeline_cli.CONFIG_FILE = original_config_file
+
+    def test_save_and_load_user_config(self):
+        """Test save_user_config and load_user_config roundtrip."""
+        original_config_file = misra_pipeline_cli.CONFIG_FILE
+        with tempfile.TemporaryDirectory() as tmp:
+            misra_pipeline_cli.CONFIG_FILE = Path(tmp) / "config.json"
+            config = misra_pipeline_cli.UserConfig({
+                "repo_url": "https://custom.example.com/repo",
+                "download": {"mode": "direct", "url_template": "https://custom.example.com/{version}.zip"},
+            })
+            misra_pipeline_cli.save_user_config(config)
+            loaded = misra_pipeline_cli.load_user_config()
+            self.assertEqual(loaded.repo_url, "https://custom.example.com/repo")
+            self.assertEqual(loaded.download_mode, "direct")
+            misra_pipeline_cli.CONFIG_FILE = original_config_file
+
+    def test_cmd_config_show(self):
+        """Test config show command outputs valid JSON."""
+        import json
+        original_config_file = misra_pipeline_cli.CONFIG_FILE
+        with tempfile.TemporaryDirectory() as tmp:
+            misra_pipeline_cli.CONFIG_FILE = Path(tmp) / "config.json"
+            args = misra_pipeline_cli.parse_args(["config", "show"])
+            result = misra_pipeline_cli.cmd_config(args)
+            self.assertEqual(result, 0)
+            misra_pipeline_cli.CONFIG_FILE = original_config_file
+
+    def test_cmd_config_set(self):
+        """Test config set command updates configuration."""
+        original_config_file = misra_pipeline_cli.CONFIG_FILE
+        with tempfile.TemporaryDirectory() as tmp:
+            misra_pipeline_cli.CONFIG_FILE = Path(tmp) / "config.json"
+            args = misra_pipeline_cli.parse_args(["config", "set", "mode", "git_archive"])
+            result = misra_pipeline_cli.cmd_config(args)
+            self.assertEqual(result, 0)
+            loaded = misra_pipeline_cli.load_user_config()
+            self.assertEqual(loaded.download_mode, "git_archive")
+            misra_pipeline_cli.CONFIG_FILE = original_config_file
+
+    def test_cmd_config_reset(self):
+        """Test config reset --yes command resets configuration."""
+        original_config_file = misra_pipeline_cli.CONFIG_FILE
+        with tempfile.TemporaryDirectory() as tmp:
+            misra_pipeline_cli.CONFIG_FILE = Path(tmp) / "config.json"
+            # First set a custom value
+            misra_pipeline_cli.save_user_config(misra_pipeline_cli.UserConfig({
+                "download": {"mode": "local"},
+            }))
+            args = misra_pipeline_cli.parse_args(["config", "reset", "--yes"])
+            result = misra_pipeline_cli.cmd_config(args)
+            self.assertEqual(result, 0)
+            loaded = misra_pipeline_cli.load_user_config()
+            self.assertEqual(loaded.download_mode, "release")
+            misra_pipeline_cli.CONFIG_FILE = original_config_file
+
+
+class MisraPipelineDownloadTests(unittest.TestCase):
+    def test_download_from_local_directory(self):
+        """Test download_from_local with a directory source."""
+        with tempfile.TemporaryDirectory() as src_tmp:
+            with tempfile.TemporaryDirectory() as dst_tmp:
+                source_dir = Path(src_tmp) / ".agents"
+                source_dir.mkdir()
+                (source_dir / "tools").mkdir()
+                (source_dir / "tools" / "test.py").write_text("test")
+
+                target = Path(dst_tmp) / ".agents"
+                result = misra_pipeline_cli.download_from_local(src_tmp, target, ".agents")
+                self.assertTrue(result)
+                self.assertTrue((target / "tools" / "test.py").exists())
+
+    def test_download_from_local_archive(self):
+        """Test download_from_local with a tar.gz archive."""
+        import tarfile
+        with tempfile.TemporaryDirectory() as src_tmp:
+            with tempfile.TemporaryDirectory() as dst_tmp:
+                # Create source directory structure inside a nested folder
+                # to simulate release archive layout: agents-v1.0.0/.agents/...
+                source_dir = Path(src_tmp) / "agents-v1.0.0" / ".agents"
+                source_dir.mkdir(parents=True)
+                (source_dir / "config").mkdir()
+                (source_dir / "config" / "pipeline.json").write_text('{}')
+
+                # Create tar.gz archive with nested folder
+                archive_path = Path(src_tmp) / "agents.tar.gz"
+                with tarfile.open(archive_path, "w:gz") as tar:
+                    tar.add(Path(src_tmp) / "agents-v1.0.0", arcname="agents-v1.0.0")
+
+                target = Path(dst_tmp) / ".agents"
+                result = misra_pipeline_cli.download_from_local(str(archive_path), target, ".agents")
+                self.assertTrue(result)
+                self.assertTrue((target / "config" / "pipeline.json").exists())
+
+    def test_download_from_local_missing_path(self):
+        """Test download_from_local fails with non-existent path."""
+        with tempfile.TemporaryDirectory() as dst_tmp:
+            target = Path(dst_tmp) / ".agents"
+            result = misra_pipeline_cli.download_from_local("/nonexistent/path", target)
+            self.assertFalse(result)
+
+    def test_download_from_local_unsupported_file(self):
+        """Test download_from_local fails with unsupported file type."""
+        with tempfile.TemporaryDirectory() as src_tmp:
+            with tempfile.TemporaryDirectory() as dst_tmp:
+                txt_file = Path(src_tmp) / "file.txt"
+                txt_file.write_text("not an archive")
+                target = Path(dst_tmp) / ".agents"
+                result = misra_pipeline_cli.download_from_local(str(txt_file), target)
+                self.assertFalse(result)
+
+    def test_download_agents_with_local_mode(self):
+        """Test download_agents with local mode and explicit path."""
+        with tempfile.TemporaryDirectory() as src_tmp:
+            with tempfile.TemporaryDirectory() as dst_tmp:
+                source_dir = Path(src_tmp) / ".agents"
+                source_dir.mkdir()
+                (source_dir / "tools").mkdir()
+                (source_dir / "tools" / "tool.py").write_text("tool")
+
+                target = Path(dst_tmp) / ".agents"
+                result = misra_pipeline_cli.download_agents(
+                    target, "v1.0.0", ".agents", mode="local", url=src_tmp
+                )
+                self.assertTrue(result)
+                self.assertTrue((target / "tools" / "tool.py").exists())
 
 
 class MisraPipelineDoctorTests(unittest.TestCase):

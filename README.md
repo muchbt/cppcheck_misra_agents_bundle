@@ -373,10 +373,16 @@ python3 .agents/tools/pipeline_cli.py bootstrap --mode merge
 curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh
 ```
 
-或指定版本：
+指定版本：
 
 ```bash
-curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh -s v1.2.3
+curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh -s -- --version v1.2.3
+```
+
+指定自定义仓库：
+
+```bash
+curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh -s -- --repo-url https://gitlab.company.com/tools/misra-pipeline
 ```
 
 ### Windows 安装
@@ -387,10 +393,32 @@ curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh |
 install.bat
 ```
 
-或指定版本：
+指定版本：
 
 ```batch
-install.bat v1.2.3
+install.bat --version v1.2.3
+```
+
+指定自定义仓库：
+
+```batch
+install.bat --repo-url https://gitlab.company.com/tools/misra-pipeline
+```
+
+### 使用环境变量安装
+
+如果不想通过命令行参数，也可以通过环境变量指定：
+
+```bash
+# Linux/macOS
+export MISRA_PIPELINE_REPO_URL=https://gitlab.company.com/tools/misra-pipeline
+export MISRA_PIPELINE_DOWNLOAD_URL=https://my-server.com/agents-v1.2.3.tar.gz
+curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh
+
+# Windows
+set MISRA_PIPELINE_REPO_URL=https://gitlab.company.com/tools/misra-pipeline
+set MISRA_PIPELINE_DOWNLOAD_URL=https://my-server.com/agents-v1.2.3.tar.gz
+install.bat
 ```
 
 ### CLI 命令
@@ -400,10 +428,68 @@ install.bat v1.2.3
 | `misra-pipeline init` | 在当前项目初始化 `.agents/` 目录 |
 | `misra-pipeline init --force` | 强制覆盖已存在的 `.agents/` |
 | `misra-pipeline init --version vX.Y.Z` | 安装指定版本 |
+| `misra-pipeline init --source release` | 从 Release 下载（默认） |
+| `misra-pipeline init --source git_archive` | 使用 git archive 下载 |
+| `misra-pipeline init --source direct --url <url>` | 从指定 URL 下载 |
+| `misra-pipeline init --source local --url <path>` | 从本地路径复制 |
 | `misra-pipeline upgrade` | 升级到最新版本 |
 | `misra-pipeline upgrade --version vX.Y.Z` | 升级到指定版本 |
 | `misra-pipeline version` | 显示 CLI 和项目版本 |
 | `misra-pipeline doctor` | 检查安装状态和依赖环境 |
+| `misra-pipeline config show` | 显示当前下载源配置 |
+| `misra-pipeline config set mode <mode>` | 设置默认下载模式 |
+| `misra-pipeline config set repo_url <url>` | 设置仓库 URL |
+| `misra-pipeline config set url_template <tpl>` | 设置 URL 模板 |
+| `misra-pipeline config reset --yes` | 重置为默认配置 |
+
+### 配置自定义分发源
+
+CLI 支持从多种来源下载 `.agents/` 内容，不仅限于 GitHub Release。配置存储在 `~/.misra-pipeline/config.json`。
+
+**默认配置：**
+
+```json
+{
+  "repo_url": "https://github.com/muchbt/cppcheck_misra_agents_bundle_v2",
+  "download": {
+    "mode": "release",
+    "url_template": "{repo_url}/releases/download/{version}/agents-{version}.tar.gz",
+    "fallback_mode": "git_archive"
+  }
+}
+```
+
+**支持的下载模式：**
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| `release` | 从 Release 下载预打包 tar.gz | **默认**，GitHub/GitLab Release |
+| `git_archive` | 使用 `git archive` 从仓库提取 | 开发测试、无 Release 时回退 |
+| `direct` | 直接下载指定 URL | 任意 HTTP 服务器 |
+| `local` | 从本地目录或 tar.gz 复制 | 内网离线环境 |
+
+**企业内部 GitLab 示例：**
+
+```bash
+# 安装时指定
+./install.sh --repo-url https://gitlab.company.com/tools/misra-pipeline
+
+# 或在安装后修改配置
+misra-pipeline config set repo_url https://gitlab.company.com/tools/misra-pipeline
+misra-pipeline config set url_template "https://gitlab.company.com/tools/misra-pipeline/-/releases/download/{version}/agents-{version}.tar.gz"
+```
+
+**离线/本地文件示例：**
+
+```bash
+misra-pipeline init --source local --url /mnt/usb/agents-v1.0.0.tar.gz
+```
+
+**任意 HTTP 服务器示例：**
+
+```bash
+misra-pipeline init --source direct --url https://artifacts.company.com/misra/agents-latest.tar.gz
+```
 
 ### 版本管理
 
@@ -417,5 +503,67 @@ install.bat v1.2.3
 ### 系统要求
 
 - Python 3.8+
-- Git
+- Git（用于 `git_archive` 回退模式，Release 下载无需）
 - Linux 或 Windows
+
+## Release 打包
+
+项目根目录提供 `Makefile` 用于自动打包 Release 归档。
+
+### 查看可用目标
+
+```bash
+make help
+```
+
+### 打包 Release
+
+```bash
+# 1. 确保版本号正确（修改 cli/VERSION）
+cat cli/VERSION
+
+# 2. 运行测试并打包
+make release
+```
+
+`make release` 会：
+1. 运行全部测试
+2. 读取 `cli/VERSION` 作为版本号
+3. 打包为 `dist/agents-v{VERSION}.tar.gz`
+
+打包内容包括：
+- `cli/` — CLI 入口和版本文件
+- `.agents/config/` — 配置和策略模板
+- `.agents/compat/` — 兼容层
+- `.agents/prompts/` — Prompt 模板
+- `.agents/skills/` — Skill 文件
+- `.agents/tools/` — 工具脚本
+- `README.md`, `AGENTS.md` — 文档
+- `install.sh`, `install.bat` — 安装脚本
+
+排除内容：
+- `__pycache__`, `.pytest_cache`
+- `.agents/runs/`, `.agents/staging/`, `.agents/runtime/`, `.agents/reports/`
+
+### 创建并推送 Tag
+
+```bash
+# 创建 git tag（基于 cli/VERSION）
+make tag
+
+# 或手动操作
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+### 发布到 GitHub/GitLab
+
+1. 在 GitHub/GitLab 上创建 Release
+2. 上传 `dist/agents-v{VERSION}.tar.gz` 到 Release Assets
+3. 用户即可通过 `misra-pipeline init` 自动下载该版本
+
+### 清理打包产物
+
+```bash
+make clean
+```
