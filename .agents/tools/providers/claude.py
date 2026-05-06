@@ -7,7 +7,7 @@ from .base import build_chunk_prompt, build_chunk_staging_paths, get_selected_la
 
 PROVIDER_NAME = "claude"
 SUPPORTED_PROMPT_VIA = {"stdin", "arg"}
-NON_INTERACTIVE_COMMAND_PREFIX = ["claude", "-p"]
+NON_INTERACTIVE_COMMAND_PREFIX = ["claude"]
 SANITIZED_ENV_KEYS = set()
 CLAUDE_APPEND_SYSTEM_PROMPT = (
     "Use the local cppcheck-misra-fix skill from the current workspace when available. "
@@ -40,6 +40,13 @@ def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str
         argv.extend(["--add-dir", str(staging_paths["chunk_dir"])])
     if "--append-system-prompt" not in argv:
         argv.extend(["--append-system-prompt", CLAUDE_APPEND_SYSTEM_PROMPT])
+    # Move -p/--print to the end so it reads prompt from stdin instead of
+    # consuming the next argv element as the prompt text.
+    for flag in ("-p", "--print"):
+        if flag in argv:
+            argv.remove(flag)
+            argv.append(flag)
+            break
     return {
         "argv": argv,
         "prompt_via": launch["prompt_via"],

@@ -186,11 +186,12 @@ class ClaudeProviderTests(unittest.TestCase):
             ):
                 spec = claude_provider.build_launch_spec(config, chunk)
 
-        self.assertEqual(spec["argv"][:2], ["claude", "-p"])
+        self.assertEqual(spec["argv"][0], "claude")
+        self.assertEqual(spec["argv"][-1], "-p")
         self.assertIn("--add-dir", spec["argv"])
         self.assertIn(str(staging_dir / "chunk_001"), spec["argv"])
         self.assertIn("--append-system-prompt", spec["argv"])
-        self.assertEqual(spec["prompt_via"], "stdin")
+        self.assertEqual(spec["prompt_via"], "arg")
         self.assertIn(".agents/staging/chunk_001/chunk_result.json", spec["prompt"])
         self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
 

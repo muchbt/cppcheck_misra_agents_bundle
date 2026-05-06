@@ -71,13 +71,13 @@
         "launch": {
           "argv": [
             "claude",
-            "-p",
             "--output-format",
             "text",
             "--permission-mode",
-            "acceptEdits"
+            "acceptEdits",
+            "-p"
           ],
-          "prompt_via": "stdin",
+          "prompt_via": "arg",
           "cwd": "project_root",
           "env": {},
           "requires_tty": false,
