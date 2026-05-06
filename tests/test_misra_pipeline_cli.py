@@ -101,7 +101,7 @@ class MisraPipelineConfigTests(unittest.TestCase):
         """Test UserConfig has correct default values."""
         config = misra_pipeline_cli.UserConfig()
         self.assertEqual(config.download_mode, "release")
-        self.assertEqual(config.fallback_mode, "git_archive")
+        self.assertEqual(config.fallback_mode, "git_clone")
         self.assertEqual(config.repo_url, misra_pipeline_cli.DEFAULT_REPO_URL)
         self.assertIn("{version}", config.url_template)
 

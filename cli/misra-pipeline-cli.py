@@ -70,7 +70,7 @@ class UserConfig:
         download = data.get("download", {})
         self.download_mode: str = download.get("mode", DEFAULT_DOWNLOAD_MODE)
         self.url_template: str = download.get("url_template", DEFAULT_URL_TEMPLATE)
-        self.fallback_mode: str = download.get("fallback_mode", "git_archive")
+        self.fallback_mode: str = download.get("fallback_mode", "git_clone")
         self.repo_url: str = data.get("repo_url", DEFAULT_REPO_URL)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -122,7 +122,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     init_parser.add_argument(
         "--source",
         "-s",
-        choices=["release", "git_archive", "direct", "local"],
+        choices=["release", "git_archive", "git_clone", "direct", "local"],
         default=None,
         help="Download source mode (overrides config)",
     )
@@ -134,7 +134,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     upgrade_parser.add_argument(
         "--source",
         "-s",
-        choices=["release", "git_archive", "direct", "local"],
+        choices=["release", "git_archive", "git_clone", "direct", "local"],
         default=None,
         help="Download source mode (overrides config)",
     )
@@ -246,7 +246,7 @@ def _download_http(url: str, dest: Path) -> bool:
         return False
 
 
-def _extract_archive(archive_path: Path, target: Path, strip_components: int = 1) -> bool:
+def _extract_archive(archive_path: Path, target: Path, strip_components: int = 0) -> bool:
     """Extract tar.gz archive to target directory."""
     try:
         # Try tar command first (handles strip-components)
@@ -319,7 +319,7 @@ def download_from_release(url: str, target: Path, source_path: str = ".agents") 
 
 
 def download_from_git(target: Path, version: str, source_path: str = ".agents", repo_url: str = DEFAULT_REPO_URL) -> bool:
-    """Download files from Git repository using git archive.
+    """Download files from Git repository using shallow clone.
 
     Args:
         target: Target directory to extract files to
@@ -330,15 +330,36 @@ def download_from_git(target: Path, version: str, source_path: str = ".agents", 
     Returns:
         True if successful, False otherwise
     """
+    import tempfile as tempfile_mod
     try:
-        cmd = ["git", "archive", f"--remote={repo_url}", version, source_path]
-        result = subprocess.run(cmd, capture_output=True, check=True)
-        extract_cmd = ["tar", "-x", "-C", str(target.parent)]
-        subprocess.run(extract_cmd, input=result.stdout, check=True)
+        tmpdir = tempfile_mod.mkdtemp(prefix="misra_clone_")
+        clone_cmd = [
+            "git", "clone", "--depth=1",
+            "--branch", version,
+            "--single-branch",
+            repo_url, tmpdir,
+        ]
+        result = subprocess.run(clone_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            stderr = result.stderr.strip() if result.stderr else "unknown error"
+            print(f"Error cloning repository: {stderr}", file=sys.stderr)
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            return False
+
+        source_dir = Path(tmpdir) / source_path
+        if not source_dir.exists():
+            print(f"Error: '{source_path}' not found in repository", file=sys.stderr)
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            return False
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(source_dir, target)
+        shutil.rmtree(tmpdir, ignore_errors=True)
         return True
-    except subprocess.CalledProcessError as e:
-        stderr = e.stderr.decode() if e.stderr else str(e)
-        print(f"Error downloading from Git: {stderr}", file=sys.stderr)
+    except Exception as e:
+        print(f"Error downloading from Git: {e}", file=sys.stderr)
         return False
 
 
@@ -452,7 +473,7 @@ def download_agents(
     elif effective_mode == "local" and effective_url:
         if download_from_local(effective_url, target, source_path):
             return True
-    elif effective_mode == "git_archive":
+    elif effective_mode in ("git_archive", "git_clone"):
         if download_from_git(target, version, source_path, cfg.repo_url):
             return True
 
@@ -460,7 +481,7 @@ def download_agents(
     fallback = cfg.fallback_mode
     if fallback != effective_mode:
         print(f"Primary mode '{effective_mode}' failed, trying fallback '{fallback}'...")
-        if fallback == "git_archive":
+        if fallback in ("git_archive", "git_clone"):
             if download_from_git(target, version, source_path, cfg.repo_url):
                 return True
         elif fallback in ("release", "direct"):
