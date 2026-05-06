@@ -26,7 +26,7 @@ from typing import Any, Dict, Optional
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-DEFAULT_REPO_URL = "https://github.com/muchbt/cppcheck_misra_agents_bundle_v2"
+DEFAULT_REPO_URL = "https://github.com/muchbt/cppcheck_misra_agents_bundle"
 DEFAULT_DOWNLOAD_MODE = "release"
 DEFAULT_URL_TEMPLATE = (
     "{repo_url}/releases/download/{version}/agents-{version}.tar.gz"

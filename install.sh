@@ -11,7 +11,7 @@
 set -e
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
-DEFAULT_REPO_URL="https://github.com/muchbt/cppcheck_misra_agents_bundle_v2"
+DEFAULT_REPO_URL="https://github.com/muchbt/cppcheck_misra_agents_bundle"
 REPO_URL="${MISRA_PIPELINE_REPO_URL:-$DEFAULT_REPO_URL}"
 
 INSTALL_DIR="${HOME}/.misra-pipeline"
@@ -92,7 +92,7 @@ download_success=false
 # 1. Try explicit/environment URL first
 if [[ -n "$DOWNLOAD_URL" ]]; then
     echo "Downloading from specified URL..."
-    if curl -sSL -o "${INSTALL_DIR}/temp.tar.gz" "$DOWNLOAD_URL" 2>/dev/null; then
+    if curl -fsSL -o "${INSTALL_DIR}/temp.tar.gz" "$DOWNLOAD_URL"; then
         echo "Extracting archive..."
         if tar -xzf "${INSTALL_DIR}/temp.tar.gz" -C "$BIN_DIR" --strip-components=1 2>/dev/null; then
             download_success=true
@@ -120,7 +120,7 @@ fi
 if [[ "$download_success" != "true" ]]; then
     RELEASE_URL="${REPO_URL}/releases/download/${VERSION}/agents-${VERSION}.tar.gz"
     echo "Trying release download: $RELEASE_URL"
-    if curl -sSL -o "${INSTALL_DIR}/temp.tar.gz" "$RELEASE_URL" 2>/dev/null; then
+    if curl -fsSL -o "${INSTALL_DIR}/temp.tar.gz" "$RELEASE_URL"; then
         echo "Extracting release archive..."
         mkdir -p "${INSTALL_DIR}/temp_extract"
         if tar -xzf "${INSTALL_DIR}/temp.tar.gz" -C "${INSTALL_DIR}/temp_extract" 2>/dev/null; then
@@ -142,16 +142,25 @@ if [[ "$download_success" != "true" ]]; then
     fi
 fi
 
-# 3. Fallback to git archive
+# 3. Fallback to shallow git clone
 if [[ "$download_success" != "true" ]]; then
-    echo "Release download failed, falling back to git archive..."
+    echo "Release download failed, falling back to git clone..."
     if ! command -v git &> /dev/null; then
         echo "Error: git is required for fallback download but not installed."
         exit 1
     fi
 
-    if git archive --remote="$REPO_URL" "$VERSION" -- cli/ 2>/dev/null | tar -x -C "$BIN_DIR"; then
-        download_success=true
+    TEMP_REPO="${INSTALL_DIR}/temp_repo"
+    if git clone --depth=1 --branch "$VERSION" --single-branch "$REPO_URL" "$TEMP_REPO" 2>&1; then
+        if [[ -d "${TEMP_REPO}/cli" ]]; then
+            cp -r "${TEMP_REPO}/cli/"* "$CLI_DIR/"
+            download_success=true
+        else
+            echo "Warning: cli/ directory not found in cloned repository"
+        fi
+        rm -rf "$TEMP_REPO"
+    else
+        echo "Warning: git clone failed for version '$VERSION'"
     fi
 fi
 
@@ -181,7 +190,7 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   "download": {
     "mode": "release",
     "url_template": "{repo_url}/releases/download/{version}/agents-{version}.tar.gz",
-    "fallback_mode": "git_archive"
+    "fallback_mode": "git_clone"
   }
 }
 CONFIG_EOF

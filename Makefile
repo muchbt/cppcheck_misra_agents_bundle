@@ -1,4 +1,4 @@
-# Makefile for cppcheck_misra_agents_bundle_v2
+# Makefile for cppcheck_misra_agents_bundle
 # Usage: make release
 
 SHELL := /bin/bash

@@ -9,7 +9,7 @@ REM   MISRA_PIPELINE_REPO_URL      - Override repository URL (for fallback)
 setlocal enabledelayedexpansion
 
 REM ── Defaults ───────────────────────────────────────────────────────────────
-set "DEFAULT_REPO_URL=https://github.com/muchbt/cppcheck_misra_agents_bundle_v2"
+set "DEFAULT_REPO_URL=https://github.com/muchbt/cppcheck_misra_agents_bundle"
 if defined MISRA_PIPELINE_REPO_URL (
     set "REPO_URL=!MISRA_PIPELINE_REPO_URL!"
 ) else (
