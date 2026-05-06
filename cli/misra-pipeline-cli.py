@@ -997,7 +997,152 @@ def _dispatch_policy_command(policy_args: list[str]) -> int:
         sys.argv = original_argv
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# ── Run & Status commands ─────────────────────────────────────────────────────
+
+def _import_oneshot_helpers():
+    """Import oneshot module for helper functions."""
+    tools_dir = Path.cwd() / ".agents" / "tools"
+    if not tools_dir.exists():
+        print(
+            f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    tools_dir_str = str(tools_dir.resolve())
+    if tools_dir_str not in sys.path:
+        sys.path.insert(0, tools_dir_str)
+    return importlib.import_module("oneshot")
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """Run the MISRA fix pipeline (split→agent→merge or single stage)."""
+    # --fresh and --resume are mutually exclusive (no import needed)
+    if args.fresh and args.resume:
+        print("[run] --fresh and --resume cannot be used together.", file=sys.stderr)
+        return 2
+
+    # Single-stage mode: dispatch to a specific module (no oneshot import needed)
+    if args.stage:
+        stage_module_map = {
+            "split": "split_cppcheck_xml",
+            "agent": "run_fix_pipeline",
+            "merge": "merge_results",
+        }
+        module_name = stage_module_map[args.stage]
+        stage_args = []
+        if args.stage == "split":
+            if args.strategy:
+                stage_args.extend(["--strategy", args.strategy])
+            if args.run_id:
+                stage_args.extend(["--run-id", args.run_id])
+        elif args.stage == "agent":
+            if args.strategy:
+                stage_args.extend(["--strategy", args.strategy])
+            if args.max_chunks is not None:
+                stage_args.extend(["--max-chunks", str(args.max_chunks)])
+            if args.retry_failed is not None:
+                stage_args.extend(["--retry-failed", str(args.retry_failed)])
+            for rule_id in args.rule_id:
+                stage_args.extend(["--rule-id", rule_id])
+            if args.misra_only:
+                stage_args.append("--misra-only")
+            if args.include_failed:
+                stage_args.append("--include-failed")
+            if args.verbose:
+                stage_args.append("--verbose")
+
+        # Import and call the module
+        tools_dir = Path.cwd() / ".agents" / "tools"
+        if not tools_dir.exists():
+            print(
+                f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
+                file=sys.stderr,
+            )
+            return 1
+        tools_dir_str = str(tools_dir.resolve())
+        if tools_dir_str not in sys.path:
+            sys.path.insert(0, tools_dir_str)
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError as exc:
+            print(f"Error: Failed to import module '{module_name}': {exc}", file=sys.stderr)
+            return 1
+
+        # Set provider env var
+        provider = getattr(args, "provider", None)
+        original_provider = os.environ.get("PIPELINE_AGENT_PROVIDER")
+        try:
+            if provider:
+                os.environ["PIPELINE_AGENT_PROVIDER"] = provider
+            elif original_provider is not None:
+                os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+            original_argv = sys.argv
+            try:
+                sys.argv = [f"{module_name}.py", *stage_args]
+                return _call_module_main(module, stage_args)
+            except Exception as exc:
+                print(f"Error running {args.stage}: {exc}", file=sys.stderr)
+                return 1
+            finally:
+                sys.argv = original_argv
+        finally:
+            if original_provider is not None:
+                os.environ["PIPELINE_AGENT_PROVIDER"] = original_provider
+            else:
+                os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+    # Full-flow mode: import oneshot (only needed here and for --status)
+    oneshot = _import_oneshot_helpers()
+
+    # --status: print progress and exit
+    if args.status:
+        return oneshot.print_status_summary()
+
+    # Build oneshot argv from CLI args
+    oneshot_argv = []
+    if args.fresh:
+        oneshot_argv.append("--fresh")
+    if args.resume:
+        oneshot_argv.append("--resume")
+    if args.strategy:
+        oneshot_argv.extend(["--strategy", args.strategy])
+    if args.run_id:
+        oneshot_argv.extend(["--run-id", args.run_id])
+    if args.max_chunks is not None:
+        oneshot_argv.extend(["--max-chunks", str(args.max_chunks)])
+    if args.retry_failed is not None:
+        oneshot_argv.extend(["--retry-failed", str(args.retry_failed)])
+    for rule_id in args.rule_id:
+        oneshot_argv.extend(["--rule-id", rule_id])
+    if args.misra_only:
+        oneshot_argv.append("--misra-only")
+    if args.include_failed:
+        oneshot_argv.append("--include-failed")
+    if args.dry_run:
+        oneshot_argv.append("--dry-run")
+    if getattr(args, "verbose", False):
+        oneshot_argv.append("--verbose")
+
+    provider = getattr(args, "provider", None)
+    original_provider = os.environ.get("PIPELINE_AGENT_PROVIDER")
+    try:
+        if provider:
+            os.environ["PIPELINE_AGENT_PROVIDER"] = provider
+        elif original_provider is not None:
+            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+        return oneshot.main(oneshot_argv)
+    finally:
+        if original_provider is not None:
+            os.environ["PIPELINE_AGENT_PROVIDER"] = original_provider
+        else:
+            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Show current pipeline run progress."""
+    oneshot = _import_oneshot_helpers()
+    return oneshot.print_status_summary()
 
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point."""
@@ -1011,8 +1156,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_upgrade(args)
     elif args.subcommand == "env-check":
         return cmd_env_check(args)
+    elif args.subcommand == "run":
+        return cmd_run(args)
+    elif args.subcommand == "status":
+        return cmd_status(args)
     elif args.subcommand == "config":
         return cmd_config(args)
+    elif args.subcommand == "oneshot":
+        print("'oneshot' has been merged into 'run'. Use 'misra-pipeline run' instead.", file=sys.stderr)
+        return 1
     elif args.subcommand in PIPELINE_COMMANDS:
         provider = getattr(args, "provider", None)
         return _dispatch_pipeline_command(args.subcommand, args.args, provider=provider)
