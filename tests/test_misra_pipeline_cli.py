@@ -110,6 +110,28 @@ class MisraPipelineCliTests(unittest.TestCase):
         self.assertTrue(args.dry_run)
         self.assertIsNone(args.stage)
 
+    def test_parse_args_run_with_stage(self):
+        """Test parse_args for 'run --stage split'."""
+        args = misra_pipeline_cli.parse_args(["run", "--stage", "split"])
+        self.assertEqual(args.subcommand, "run")
+        self.assertEqual(args.stage, "split")
+
+    def test_parse_args_run_with_strategy(self):
+        """Test parse_args for 'run --strategy conservative'."""
+        args = misra_pipeline_cli.parse_args(["run", "--strategy", "conservative"])
+        self.assertEqual(args.subcommand, "run")
+        self.assertEqual(args.strategy, "conservative")
+
+    def test_parse_args_status_subcommand(self):
+        """Test parse_args for 'status' subcommand."""
+        args = misra_pipeline_cli.parse_args(["status"])
+        self.assertEqual(args.subcommand, "status")
+
+    def test_parse_args_oneshot_deprecated(self):
+        """Test parse_args for deprecated 'oneshot' subcommand."""
+        args = misra_pipeline_cli.parse_args(["oneshot"])
+        self.assertEqual(args.subcommand, "oneshot")
+
     def test_parse_args_merge_subcommand(self):
         """Test parse_args for 'merge' subcommand."""
         args = misra_pipeline_cli.parse_args(["merge"])
@@ -630,3 +652,49 @@ class MisraPipelineDispatchTests(unittest.TestCase):
             self.assertEqual(os.environ.get("PIPELINE_AGENT_PROVIDER"), original)
         finally:
             os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+
+class MisraPipelineRunTests(unittest.TestCase):
+    def test_run_fresh_resume_conflict(self):
+        """Test that --fresh and --resume together returns error code 2."""
+        args = misra_pipeline_cli.parse_args(["run", "--fresh", "--resume"])
+        result = misra_pipeline_cli.cmd_run(args)
+        self.assertEqual(result, 2)
+
+    def test_run_stage_split_dispatches(self):
+        """Test that --stage split dispatches to split_cppcheck_xml module."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            (tools_dir / "split_cppcheck_xml.py").write_text(
+                "def main(argv=None):\n    return 0\n"
+            )
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                args = misra_pipeline_cli.parse_args(["run", "--stage", "split", "--strategy", "conservative"])
+                with patch.object(misra_pipeline_cli, "_call_module_main", return_value=0) as mock_call:
+                    result = misra_pipeline_cli.cmd_run(args)
+                    self.assertEqual(result, 0)
+                    self.assertEqual(mock_call.call_args[0][1], ["--strategy", "conservative"])
+
+    def test_cmd_status(self):
+        """Test that cmd_status delegates to oneshot.print_status_summary."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            (tools_dir / "oneshot.py").write_text(
+                "def print_status_summary(*a, **kw):\n    return 0\n"
+                "def main(*a, **kw):\n    return 0\n"
+            )
+            (tools_dir / "common.py").write_text(
+                "RUNTIME_DIR = None\nROOT = None\ndef load_json(*a, **kw): return {}\n"
+                "def append_pipeline_event(*a, **kw): pass\n"
+            )
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                args = misra_pipeline_cli.parse_args(["status"])
+                result = misra_pipeline_cli.cmd_status(args)
+                self.assertEqual(result, 0)
+
+    def test_oneshot_deprecated_message(self):
+        """Test that 'oneshot' subcommand prints deprecation and returns 1."""
+        result = misra_pipeline_cli.main(["oneshot"])
+        self.assertEqual(result, 1)
