@@ -139,7 +139,30 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         prog="misra-pipeline",
-        description="MISRA Pipeline CLI - Distribution and project initialization tool.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""MISRA Pipeline CLI - Distribution and project initialization tool.
+
+Primary commands:
+  init          Initialize .agents/ in current project.
+  run           Run the MISRA fix pipeline (split -> agent -> merge).
+  status        Show current pipeline run progress.
+  policy        Manage rule policy configuration.
+  doctor        Diagnose pipeline environment.
+  env-check     Check CLI installation and environment.
+
+Advanced commands:
+  split         Split cppcheck XML into runtime chunks.
+  merge         Merge runtime results into reports.
+  verify        Verify one chunk result.
+  bootstrap     Generate agent compatibility files.
+  validate      Provider validation test.
+  config        Manage CLI configuration.
+  upgrade       Upgrade .agents/ to latest version.
+  version       Show CLI and project version.
+
+Deprecated:
+  oneshot       Use 'run' instead.
+        """,
     )
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
 
@@ -157,7 +180,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     init_parser.add_argument("--url", "-u", default=None, help="Override download URL or local path")
 
     # upgrade subcommand
-    upgrade_parser = subparsers.add_parser("upgrade", help="Upgrade .agents/ to latest version.")
+    upgrade_parser = subparsers.add_parser("upgrade", help="Upgrade .agents/ to latest version. (advanced)")
     upgrade_parser.add_argument("--version", "-v", default=None, help="Target version (e.g., v1.2.3)")
     upgrade_parser.add_argument(
         "--source",
@@ -169,13 +192,13 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     upgrade_parser.add_argument("--url", "-u", default=None, help="Override download URL or local path")
 
     # version subcommand
-    subparsers.add_parser("version", help="Show CLI and project version.")
+    subparsers.add_parser("version", help="Show CLI and project version. (advanced)")
 
     # env-check subcommand
     subparsers.add_parser("env-check", help="Check CLI installation and environment.")
 
     # config subcommand
-    config_parser = subparsers.add_parser("config", help="Manage CLI configuration.")
+    config_parser = subparsers.add_parser("config", help="Manage CLI configuration. (advanced)")
     config_subparsers = config_parser.add_subparsers(dest="config_action", required=True)
     config_show = config_subparsers.add_parser("show", help="Show current configuration.")
     config_set = config_subparsers.add_parser("set", help="Set configuration value.")
@@ -187,14 +210,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     # Pipeline commands (forward to .agents/tools/ modules)
     for cmd_name, module_name in PIPELINE_COMMANDS.items():
         cmd_help = {
-            "split": "Split cppcheck XML into runtime chunks",
-            "run": "Run the agent fixing pipeline",
-            "merge": "Merge runtime results into reports",
-            "verify": "Verify one chunk result",
-            "bootstrap": "Generate agent compatibility files",
+            "split": "Split cppcheck XML into runtime chunks (advanced)",
+            "merge": "Merge runtime results into reports (advanced)",
+            "verify": "Verify one chunk result (advanced)",
+            "bootstrap": "Generate agent compatibility files (advanced)",
             "doctor": "Run pipeline diagnostics",
-            "validate": "Provider validation test (formerly 'validate-real')",
-            "oneshot": "Run the one-shot agent entrypoint",
+            "validate": "Provider validation test (advanced)",
         }.get(cmd_name, f"Run {module_name}")
         cmd_parser = subparsers.add_parser(cmd_name, help=cmd_help)
         cmd_parser.add_argument(
