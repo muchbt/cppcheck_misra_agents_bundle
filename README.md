@@ -370,19 +370,19 @@ python3 .agents/tools/pipeline_cli.py bootstrap --mode merge
 ### Linux 安装
 
 ```bash
-curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh
 ```
 
 指定版本：
 
 ```bash
-curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh -s -- --version v1.2.3
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh -s -- --version v1.2.3
 ```
 
 指定自定义仓库：
 
 ```bash
-curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh -s -- --repo-url https://gitlab.company.com/tools/misra-pipeline
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh -s -- --repo-url https://gitlab.company.com/tools/misra-pipeline
 ```
 
 ### Windows 安装
@@ -413,7 +413,7 @@ install.bat --repo-url https://gitlab.company.com/tools/misra-pipeline
 # Linux/macOS
 export MISRA_PIPELINE_REPO_URL=https://gitlab.company.com/tools/misra-pipeline
 export MISRA_PIPELINE_DOWNLOAD_URL=https://my-server.com/agents-v1.2.3.tar.gz
-curl -sSL https://github.com/muchbt/cppcheck_misra_agents_bundle_v2/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh
 
 # Windows
 set MISRA_PIPELINE_REPO_URL=https://gitlab.company.com/tools/misra-pipeline
@@ -450,7 +450,7 @@ CLI 支持从多种来源下载 `.agents/` 内容，不仅限于 GitHub Release�
 
 ```json
 {
-  "repo_url": "https://github.com/muchbt/cppcheck_misra_agents_bundle_v2",
+  "repo_url": "https://github.com/muchbt/cppcheck_misra_agents_bundle",
   "download": {
     "mode": "release",
     "url_template": "{repo_url}/releases/download/{version}/agents-{version}.tar.gz",
