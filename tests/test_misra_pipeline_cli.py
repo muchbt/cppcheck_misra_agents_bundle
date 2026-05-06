@@ -507,6 +507,29 @@ class MisraPipelineUpgradeTests(unittest.TestCase):
 
 
 class MisraPipelineDispatchTests(unittest.TestCase):
+    def test_dispatch_strips_leading_double_dash(self):
+        """Test that _dispatch_pipeline_command strips leading '--' from REMAINDER args."""
+        seen = {}
+
+        class FakeModuleWithArgs:
+            def main(self, argv=None):
+                seen["argv"] = argv
+                seen["sys_argv"] = list(sys.argv)
+                return 0
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleWithArgs()):
+                    result = misra_pipeline_cli._dispatch_pipeline_command(
+                        "split", ["--", "--input", "test.xml"]
+                    )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(seen["argv"], ["--input", "test.xml"])
+        self.assertEqual(seen["sys_argv"], ["split_cppcheck_xml.py", "--input", "test.xml"])
+
     def test_dispatch_sets_sys_argv(self):
         """Test that _dispatch_pipeline_command sets sys.argv correctly."""
         seen = {}

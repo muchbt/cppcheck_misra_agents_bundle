@@ -22,14 +22,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
+import inspect
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
-import importlib
-import inspect
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -888,6 +888,10 @@ def _dispatch_pipeline_command(command: str, args: list[str], provider: Optional
         print("Check that .agents/ is properly installed.", file=sys.stderr)
         return 1
 
+    # Strip leading '--' argparse REMAINDER separator before forwarding
+    if args and args[0] == "--":
+        args = args[1:]
+
     # Set PIPELINE_AGENT_PROVIDER env var if --provider is specified
     original_provider = os.environ.get("PIPELINE_AGENT_PROVIDER")
     try:
@@ -935,6 +939,10 @@ def _dispatch_policy_command(policy_args: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+
+    # Strip leading '--' argparse REMAINDER separator before forwarding
+    if policy_args and policy_args[0] == "--":
+        policy_args = policy_args[1:]
 
     original_argv = sys.argv
     try:
