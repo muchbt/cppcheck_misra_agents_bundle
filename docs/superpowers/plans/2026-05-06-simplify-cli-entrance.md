@@ -24,7 +24,24 @@ In `.agents/tools/oneshot.py`, add a deprecation notice at the top (after the `f
 """DEPRECATED: Use 'misra-pipeline run' instead. This module is kept for backward compatibility."""
 ```
 
-- [ ] **Step 2: 修复 4 处旧命令引用**
+- [ ] **Step 2: 添加 --verbose 支持到 oneshot.py**
+
+oneshot.py 的 `parse_args()` 目前不支持 `--verbose`，但 `cmd_run()` 全流程模式会将 `--verbose` 传给 `oneshot.main()`，导致 argparse 报错退出。需要同步修改：
+
+在 `.agents/tools/oneshot.py` 的 `parse_args()` 中（`--dry-run` 行之前），添加：
+
+```python
+    parser.add_argument("--verbose", action="store_true", help="打印每个 chunk 完整 stdout/stderr。")
+```
+
+在 `build_run_args()` 函数中（`if args.include_failed` 行之后），添加：
+
+```python
+    if args.verbose:
+        stage_args.append("--verbose")
+```
+
+- [ ] **Step 3: 修复 4 处旧命令引用**
 
 Replace all 4 occurrences of `python3 .agents/tools/pipeline_cli.py doctor` with `misra-pipeline doctor`:
 
@@ -35,16 +52,16 @@ Replace all 4 occurrences of `python3 .agents/tools/pipeline_cli.py doctor` with
 
 Also change all `[oneshot]` prefixes in print statements to `[run]` for consistency (lines 260-399). This is a search-and-replace within this file.
 
-- [ ] **Step 3: Run existing tests to verify no breakage**
+- [ ] **Step 4: Run existing tests to verify no breakage**
 
 Run: `python3 -m pytest tests/ -q`
 Expected: All tests pass (240+)
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .agents/tools/oneshot.py
-git commit -m "fix(oneshot): replace old pipeline_cli.py references with misra-pipeline, mark deprecated"
+git commit -m "fix(oneshot): add --verbose support, replace old references with misra-pipeline, mark deprecated"
 ```
 
 ---
@@ -169,114 +186,35 @@ git commit -m "feat(cli): add run, status, oneshot subcommand definitions; remov
 **Files:**
 - Modify: `cli/misra-pipeline-cli.py`
 
-- [ ] **Step 1: 添加 cmd_run() 函数**
+- [ ] **Step 1: 添加 cmd_run() 和 cmd_status() 函数**
 
-Add `cmd_run()` after `cmd_env_check()`. This function implements the full oneshot flow by dynamically importing helper functions from `oneshot.py`:
-
-```python
-def _import_oneshot_helpers():
-    """Import helper functions from oneshot module."""
-    tools_dir = Path.cwd() / ".agents" / "tools"
-    tools_dir_str = str(tools_dir.resolve())
-    if tools_dir_str not in sys.path:
-        sys.path.insert(0, tools_dir_str)
-    oneshot = importlib.import_module("oneshot")
-    return oneshot
-
-
-def cmd_run(args: argparse.Namespace) -> int:
-    """Run the MISRA fix pipeline (split→agent→merge or single stage)."""
-    oneshot = _import_oneshot_helpers()
-
-    # --status: print progress and exit
-    if args.status:
-        return oneshot.print_status_summary()
-
-    # --fresh and --resume are mutually exclusive
-    if args.fresh and args.resume:
-        print("[run] --fresh and --resume cannot be used together.", file=sys.stderr)
-        return 2
-
-    # Single-stage mode: dispatch directly
-    if args.stage:
-        stage_map = {
-            "split": "split_cppcheck_xml",
-            "agent": "run_fix_pipeline",
-            "merge": "merge_results",
-        }
-        module_name = stage_map[args.stage]
-        stage_args = []
-        if args.stage == "split":
-            if args.strategy:
-                stage_args.extend(["--strategy", args.strategy])
-            if args.run_id:
-                stage_args.extend(["--run-id", args.run_id])
-        elif args.stage == "agent":
-            if args.strategy:
-                stage_args.extend(["--strategy", args.strategy])
-            if args.max_chunks is not None:
-                stage_args.extend(["--max-chunks", str(args.max_chunks)])
-            if args.retry_failed is not None:
-                stage_args.extend(["--retry-failed", str(args.retry_failed)])
-            for rule_id in args.rule_id:
-                stage_args.extend(["--rule-id", rule_id])
-            if args.misra_only:
-                stage_args.append("--misra-only")
-            if args.include_failed:
-                stage_args.append("--include-failed")
-            if args.verbose:
-                stage_args.append("--verbose")
-
-        provider = getattr(args, "provider", None)
-        return _dispatch_pipeline_command(args.stage, stage_args, provider=provider) if args.stage != "agent" else _dispatch_pipeline_command("agent_dispatch", stage_args, provider=provider)
-
-    # Full-flow mode: delegate to oneshot logic
-    # Build a Namespace that oneshot.parse_args would produce
-    oneshot_argv = []
-    if args.fresh:
-        oneshot_argv.append("--fresh")
-    if args.resume:
-        oneshot_argv.append("--resume")
-    if args.strategy:
-        oneshot_argv.extend(["--strategy", args.strategy])
-    if args.run_id:
-        oneshot_argv.extend(["--run-id", args.run_id])
-    if args.max_chunks is not None:
-        oneshot_argv.extend(["--max-chunks", str(args.max_chunks)])
-    if args.retry_failed is not None:
-        oneshot_argv.extend(["--retry-failed", str(args.retry_failed)])
-    for rule_id in args.rule_id:
-        oneshot_argv.extend(["--rule-id", rule_id])
-    if args.misra_only:
-        oneshot_argv.append("--misra-only")
-    if args.include_failed:
-        oneshot_argv.append("--include-failed")
-    if args.dry_run:
-        oneshot_argv.append("--dry-run")
-
-    # Set provider env var if specified
-    original_provider = os.environ.get("PIPELINE_AGENT_PROVIDER")
-    try:
-        if getattr(args, "provider", None):
-            os.environ["PIPELINE_AGENT_PROVIDER"] = args.provider
-        elif original_provider is not None:
-            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
-        return oneshot.main(oneshot_argv)
-    finally:
-        if original_provider is not None:
-            os.environ["PIPELINE_AGENT_PROVIDER"] = original_provider
-        else:
-            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
-```
-
-Wait — the above approach has an issue with `--stage agent` not being in `PIPELINE_COMMANDS`. Let me reconsider. Since `run` is no longer in `PIPELINE_COMMANDS`, `_dispatch_pipeline_command` won't handle `agent_dispatch`. Better approach: for single-stage mode, call the module directly via `_call_module_main`.
-
-Revised `cmd_run()`:
+Add `cmd_run()` and `cmd_status()` after `cmd_env_check()`. The function imports helper functions from `oneshot.py` via dynamic import, with tools_dir existence check:
 
 ```python
 def _import_oneshot_helpers():
     """Import oneshot module for helper functions."""
     tools_dir = Path.cwd() / ".agents" / "tools"
+    if not tools_dir.exists():
+        print(
+            f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    tools_dir_str = str(tools_dir.resolve())
+    if tools_dir_str not in sys.path:
+        sys.path.insert(0, tools_dir_str)
+    return importlib.import_module("oneshot")
+
+```python
+def _import_oneshot_helpers():
+    """Import oneshot module for helper functions."""
+    tools_dir = Path.cwd() / ".agents" / "tools"
+    if not tools_dir.exists():
+        print(
+            f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     tools_dir_str = str(tools_dir.resolve())
     if tools_dir_str not in sys.path:
         sys.path.insert(0, tools_dir_str)
@@ -507,15 +445,66 @@ Since `run` is no longer in `PIPELINE_COMMANDS`, the `test_dispatch_calls_main_w
 
 - [ ] **Step 3: 添加 cmd_run 和 cmd_status 测试**
 
-Add new test class `MisraPipelineRunTests` with tests for:
-- `cmd_run --status` calls oneshot.print_status_summary
-- `cmd_run --fresh --resume` returns error code 2
-- `cmd_run --stage split` dispatches to split module
-- `cmd_run --stage agent` dispatches to run_fix_pipeline module
-- `cmd_run --dry-run` delegates to oneshot.main
-- `cmd_status` calls oneshot.print_status_summary
+Add new test class `MisraPipelineRunTests` with specific test code:
 
-All tests should use mock to avoid actually calling oneshot modules.
+```python
+class MisraPipelineRunTests(unittest.TestCase):
+    def test_run_status_calls_oneshot(self):
+        """Test that cmd_run --status delegates to oneshot.print_status_summary."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            (tools_dir / "oneshot.py").write_text("def print_status_summary():\n    return 0\n")
+            (tools_dir / "common.py").write_text("RUNTIME_DIR = None\nROOT = None\ndef load_json(*a, **kw): return {}\n")
+            (tools_dir / "doctor.py").write_text("def collect_checks(*a, **kw): return []\ndef print_checks(*a, **kw): pass\n")
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                args = misra_pipeline_cli.parse_args(["run", "--status"])
+                mock_summary = MagicMock(return_value=0)
+                with patch("oneshot.print_status_summary", mock_summary):
+                    result = misra_pipeline_cli.cmd_run(args)
+                    self.assertEqual(result, 0)
+                    mock_summary.assert_called_once()
+
+    def test_run_fresh_resume_conflict(self):
+        """Test that --fresh and --resume together returns error code 2."""
+        args = misra_pipeline_cli.parse_args(["run", "--fresh", "--resume"])
+        result = misra_pipeline_cli.cmd_run(args)
+        self.assertEqual(result, 2)
+
+    def test_run_stage_split_dispatches(self):
+        """Test that --stage split dispatches to split_cppcheck_xml module."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            (tools_dir / "split_cppcheck_xml.py").write_text(
+                "def main(argv=None):\n    return 0\n"
+            )
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                args = misra_pipeline_cli.parse_args(["run", "--stage", "split", "--strategy", "conservative"])
+                with patch.object(misra_pipeline_cli, "_call_module_main", return_value=0) as mock_call:
+                    result = misra_pipeline_cli.cmd_run(args)
+                    self.assertEqual(result, 0)
+                    self.assertTrue(mock_call.called)
+
+    def test_cmd_status(self):
+        """Test that cmd_status delegates to oneshot.print_status_summary."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            (tools_dir / "oneshot.py").write_text("def print_status_summary():\n    return 0\n")
+            (tools_dir / "common.py").write_text("RUNTIME_DIR = None\nROOT = None\ndef load_json(*a, **kw): return {}\n")
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                args = misra_pipeline_cli.parse_args(["status"])
+                with patch("oneshot.print_status_summary", return_value=0):
+                    result = misra_pipeline_cli.cmd_status(args)
+                    self.assertEqual(result, 0)
+
+    def test_oneshot_deprecated_message(self):
+        """Test that 'oneshot' subcommand prints deprecation and returns 1."""
+        args = misra_pipeline_cli.parse_args(["oneshot"])
+        result = misra_pipeline_cli.main(["oneshot"])
+        self.assertEqual(result, 1)
+```
 
 - [ ] **Step 4: Run full test suite**
 
@@ -544,10 +533,10 @@ Modify the `init_policy()` function to add interactive selection when `templates
 def _select_template_interactive() -> List[str]:
     """Interactively select a template when none specified."""
     template_list = list(AVAILABLE_TEMPLATES.items())
+    default_template = "misra_c2012_relaxed"
     if not sys.stdin.isatty():
-        default = template_list[0][0]
-        print(f"Warning: No --template specified and not running in a terminal. Using default: '{default}'", file=sys.stderr)
-        return [default]
+        print(f"Warning: No --template specified and not running in a terminal. Using default: '{default_template}'", file=sys.stderr)
+        return [default_template]
 
     print("Available templates:\n")
     for i, (name, description) in enumerate(template_list, 1):
