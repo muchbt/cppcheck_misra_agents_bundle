@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 """DEPRECATED: Use 'misra-pipeline run' instead. This module is kept for backward compatibility."""
+from __future__ import annotations
 
 import argparse
 import importlib
@@ -318,10 +317,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if blockers:
         append_pipeline_event(
             RUNTIME_DIR,
-            event="oneshot_precheck_failed",
-            stage="oneshot",
+            event="run_precheck_failed",
+            stage="run",
             level="error",
-            message="oneshot 预检查失败。",
+            message="run 预检查失败。",
             data={"mode": mode, "blockers": [item.get("code", "") for item in blockers]},
         )
         print("[run] 预检查未通过。请先执行 `misra-pipeline doctor`。")
@@ -329,9 +328,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     append_pipeline_event(
         RUNTIME_DIR,
-        event="oneshot_started",
-        stage="oneshot",
-        message="oneshot 启动。",
+        event="run_started",
+        stage="run",
+        message="run 启动。",
         data={
             "mode": mode,
             "requested_strategy": args.strategy or "",
@@ -344,10 +343,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         if rc != 0:
             append_pipeline_event(
                 RUNTIME_DIR,
-                event="oneshot_failed",
-                stage="oneshot",
+                event="run_failed",
+                stage="run",
                 level="error",
-                message="oneshot 在 split 阶段失败。",
+                message="run 在 split 阶段失败。",
                 returncode=rc,
                 data={"mode": mode},
             )
@@ -358,9 +357,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.dry_run:
         append_pipeline_event(
             RUNTIME_DIR,
-            event="oneshot_dry_run",
-            stage="oneshot",
-            message="oneshot dry-run 预览模式，跳过 run/merge。",
+            event="run_dry_run",
+            stage="run",
+            message="run dry-run 预览模式，跳过 run/merge。",
             data={"mode": mode},
         )
         print_dry_run_summary(RUNTIME_DIR)
@@ -370,10 +369,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if rc != 0:
         append_pipeline_event(
             RUNTIME_DIR,
-            event="oneshot_failed",
-            stage="oneshot",
+            event="run_failed",
+            stage="run",
             level="error",
-            message="oneshot 在 run 阶段失败。",
+            message="run 在 run 阶段失败。",
             returncode=rc,
             data={"mode": mode},
         )
@@ -384,10 +383,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if rc != 0:
         append_pipeline_event(
             RUNTIME_DIR,
-            event="oneshot_failed",
-            stage="oneshot",
+            event="run_failed",
+            stage="run",
             level="error",
-            message="oneshot 在 merge 阶段失败。",
+            message="run 在 merge 阶段失败。",
             returncode=rc,
             data={"mode": mode},
         )
@@ -396,9 +395,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     append_pipeline_event(
         RUNTIME_DIR,
-        event="oneshot_completed",
-        stage="oneshot",
-        message="oneshot 已完成 split/run/merge。",
+        event="run_completed",
+        stage="run",
+        message="run 已完成 split/run/merge。",
         data={"mode": mode},
     )
     print("[run] 全部阶段执行完成。")

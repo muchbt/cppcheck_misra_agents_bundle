@@ -127,11 +127,6 @@ class MisraPipelineCliTests(unittest.TestCase):
         args = misra_pipeline_cli.parse_args(["status"])
         self.assertEqual(args.subcommand, "status")
 
-    def test_parse_args_oneshot_deprecated(self):
-        """Test parse_args for deprecated 'oneshot' subcommand."""
-        args = misra_pipeline_cli.parse_args(["oneshot"])
-        self.assertEqual(args.subcommand, "oneshot")
-
     def test_parse_args_merge_subcommand(self):
         """Test parse_args for 'merge' subcommand."""
         args = misra_pipeline_cli.parse_args(["merge"])
@@ -158,8 +153,8 @@ class MisraPipelineCliTests(unittest.TestCase):
         args = misra_pipeline_cli.parse_args(["validate"])
         self.assertEqual(args.subcommand, "validate")
 
-    def test_parse_args_oneshot_subcommand(self):
-        """Test parse_args for 'oneshot' subcommand."""
+    def test_parse_args_oneshot_deprecated(self):
+        """Test parse_args for deprecated 'oneshot' subcommand."""
         args = misra_pipeline_cli.parse_args(["oneshot"])
         self.assertEqual(args.subcommand, "oneshot")
 
@@ -655,6 +650,20 @@ class MisraPipelineDispatchTests(unittest.TestCase):
 
 
 class MisraPipelineRunTests(unittest.TestCase):
+    def setUp(self):
+        self._cached_modules = {
+            k: sys.modules[k]
+            for k in list(sys.modules)
+            if k in ("oneshot", "common", "doctor")
+        }
+        for k in self._cached_modules:
+            sys.modules.pop(k, None)
+
+    def tearDown(self):
+        for k in ("oneshot", "common", "doctor"):
+            sys.modules.pop(k, None)
+        sys.modules.update(self._cached_modules)
+
     def test_run_fresh_resume_conflict(self):
         """Test that --fresh and --resume together returns error code 2."""
         args = misra_pipeline_cli.parse_args(["run", "--fresh", "--resume"])

@@ -11,7 +11,7 @@ Primary commands:
 
 Advanced commands:
   split        Split cppcheck XML (use 'run --stage split')
-  merge         Merge results (use 'run --stage merge')
+  merge        Merge results (use 'run --stage merge')
   verify       Verify one chunk result
   bootstrap    Generate agent compatibility files
   validate     Provider validation test
@@ -1164,6 +1164,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     """Show current pipeline run progress."""
     oneshot = _import_oneshot_helpers()
     return oneshot.print_status_summary()
+
 
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point."""
