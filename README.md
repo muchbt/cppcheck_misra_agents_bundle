@@ -413,7 +413,7 @@ install.bat --repo-url https://gitlab.company.com/tools/misra-pipeline
 # Linux/macOS
 export MISRA_PIPELINE_REPO_URL=https://gitlab.company.com/tools/misra-pipeline
 export MISRA_PIPELINE_DOWNLOAD_URL=https://my-server.com/agents-v1.2.3.tar.gz
-curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | basg
 
 # Windows
 set MISRA_PIPELINE_REPO_URL=https://gitlab.company.com/tools/misra-pipeline

@@ -527,35 +527,53 @@ def download_agents(
             effective_url = cfg.resolve_url(version)
 
     # Try primary mode
+    primary_failed_reason = None
     if effective_mode == "release" and effective_url:
         if download_from_release(effective_url, target, source_path):
             return True
+        primary_failed_reason = f"Release download from {effective_url} failed."
     elif effective_mode == "direct" and effective_url:
         if download_from_direct(effective_url, target, source_path):
             return True
+        primary_failed_reason = f"Direct download from {effective_url} failed."
     elif effective_mode == "local" and effective_url:
         if download_from_local(effective_url, target, source_path):
             return True
+        primary_failed_reason = f"Local path {effective_url} not found or invalid."
     elif effective_mode in ("git_archive", "git_clone"):
         if download_from_git(target, version, source_path, cfg.repo_url):
             return True
+        primary_failed_reason = f"Git clone from {cfg.repo_url} (branch {version}) failed."
 
     # Fallback
     fallback = cfg.fallback_mode
+    fallback_failed_reason = None
     if fallback != effective_mode:
-        print(f"Primary mode '{effective_mode}' failed, trying fallback '{fallback}'...")
+        print(f"Primary mode '{effective_mode}' failed, trying fallback '{fallback}'...", file=sys.stderr)
         if fallback in ("git_archive", "git_clone"):
             if download_from_git(target, version, source_path, cfg.repo_url):
                 return True
+            fallback_failed_reason = f"Git clone from {cfg.repo_url} (branch {version}) failed."
         elif fallback in ("release", "direct"):
             fallback_url = cfg.resolve_url(version)
             if download_from_release(fallback_url, target, source_path):
                 return True
+            fallback_failed_reason = f"Release download from {fallback_url} failed."
         elif fallback == "local":
             fallback_url = cfg.resolve_url(version)
             if download_from_local(fallback_url, target, source_path):
                 return True
+            fallback_failed_reason = f"Local path {fallback_url} not found or invalid."
 
+    print(f"All download methods failed:", file=sys.stderr)
+    if primary_failed_reason:
+        print(f"  - {primary_failed_reason}", file=sys.stderr)
+    if fallback_failed_reason:
+        print(f"  - {fallback_failed_reason}", file=sys.stderr)
+    print("Suggestions:", file=sys.stderr)
+    print("  1. Check your network connection and proxy settings.", file=sys.stderr)
+    print(f"  2. Try: misra-pipeline upgrade --source git_clone -v {version}", file=sys.stderr)
+    print(f"  3. Try: misra-pipeline upgrade --source local --url /path/to/agents-v{version}.tar.gz", file=sys.stderr)
     return False
 
 
@@ -793,7 +811,6 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
             url=args.url,
             config=config,
         ):
-            print("Error: Failed to download new version.", file=sys.stderr)
             return 1
 
         for item in temp_agents.iterdir():
