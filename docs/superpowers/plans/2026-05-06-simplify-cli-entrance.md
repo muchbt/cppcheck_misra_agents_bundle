@@ -188,22 +188,7 @@ git commit -m "feat(cli): add run, status, oneshot subcommand definitions; remov
 
 - [ ] **Step 1: 添加 cmd_run() 和 cmd_status() 函数**
 
-Add `cmd_run()` and `cmd_status()` after `cmd_env_check()`. The function imports helper functions from `oneshot.py` via dynamic import, with tools_dir existence check:
-
-```python
-def _import_oneshot_helpers():
-    """Import oneshot module for helper functions."""
-    tools_dir = Path.cwd() / ".agents" / "tools"
-    if not tools_dir.exists():
-        print(
-            f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    tools_dir_str = str(tools_dir.resolve())
-    if tools_dir_str not in sys.path:
-        sys.path.insert(0, tools_dir_str)
-    return importlib.import_module("oneshot")
+Add `cmd_run()` and `cmd_status()` after `cmd_env_check()`. Key design: parameter validation and `--stage` dispatch happen before oneshot import, so `--stage` mode doesn't require `.agents/tools/` for oneshot.
 
 ```python
 def _import_oneshot_helpers():
@@ -223,18 +208,12 @@ def _import_oneshot_helpers():
 
 def cmd_run(args: argparse.Namespace) -> int:
     """Run the MISRA fix pipeline (split→agent→merge or single stage)."""
-    oneshot = _import_oneshot_helpers()
-
-    # --status: print progress and exit
-    if args.status:
-        return oneshot.print_status_summary()
-
-    # --fresh and --resume are mutually exclusive
+    # --fresh and --resume are mutually exclusive (no import needed)
     if args.fresh and args.resume:
         print("[run] --fresh and --resume cannot be used together.", file=sys.stderr)
         return 2
 
-    # Single-stage mode: dispatch to a specific module
+    # Single-stage mode: dispatch to a specific module (no oneshot import needed)
     if args.stage:
         stage_module_map = {
             "split": "split_cppcheck_xml",
@@ -299,7 +278,14 @@ def cmd_run(args: argparse.Namespace) -> int:
             else:
                 os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
 
-    # Full-flow mode: delegate to oneshot
+    # Full-flow mode: import oneshot (only needed here and for --status)
+    oneshot = _import_oneshot_helpers()
+
+    # --status: print progress and exit
+    if args.status:
+        return oneshot.print_status_summary()
+
+    # Build oneshot argv from CLI args
     oneshot_argv = []
     if args.fresh:
         oneshot_argv.append("--fresh")
@@ -449,22 +435,6 @@ Add new test class `MisraPipelineRunTests` with specific test code:
 
 ```python
 class MisraPipelineRunTests(unittest.TestCase):
-    def test_run_status_calls_oneshot(self):
-        """Test that cmd_run --status delegates to oneshot.print_status_summary."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tools_dir = Path(tmp) / ".agents" / "tools"
-            tools_dir.mkdir(parents=True)
-            (tools_dir / "oneshot.py").write_text("def print_status_summary():\n    return 0\n")
-            (tools_dir / "common.py").write_text("RUNTIME_DIR = None\nROOT = None\ndef load_json(*a, **kw): return {}\n")
-            (tools_dir / "doctor.py").write_text("def collect_checks(*a, **kw): return []\ndef print_checks(*a, **kw): pass\n")
-            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
-                args = misra_pipeline_cli.parse_args(["run", "--status"])
-                mock_summary = MagicMock(return_value=0)
-                with patch("oneshot.print_status_summary", mock_summary):
-                    result = misra_pipeline_cli.cmd_run(args)
-                    self.assertEqual(result, 0)
-                    mock_summary.assert_called_once()
-
     def test_run_fresh_resume_conflict(self):
         """Test that --fresh and --resume together returns error code 2."""
         args = misra_pipeline_cli.parse_args(["run", "--fresh", "--resume"])
@@ -484,24 +454,50 @@ class MisraPipelineRunTests(unittest.TestCase):
                 with patch.object(misra_pipeline_cli, "_call_module_main", return_value=0) as mock_call:
                     result = misra_pipeline_cli.cmd_run(args)
                     self.assertEqual(result, 0)
-                    self.assertTrue(mock_call.called)
+                    self.assertEqual(mock_call.call_args[0][1], ["--strategy", "conservative"])
+
+    def test_run_status_calls_oneshot(self):
+        """Test that cmd_run --status delegates to oneshot.print_status_summary."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            (tools_dir / "oneshot.py").write_text(
+                "def print_status_summary(*a, **kw):\n    return 0\n"
+                "def main(*a, **kw):\n    return 0\n"
+            )
+            (tools_dir / "common.py").write_text(
+                "RUNTIME_DIR = None\nROOT = None\ndef load_json(*a, **kw): return {}\n"
+                "def append_pipeline_event(*a, **kw): pass\n"
+            )
+            (tools_dir / "doctor.py").write_text(
+                "def collect_checks(*a, **kw): return []\ndef print_checks(*a, **kw): pass\n"
+            )
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                args = misra_pipeline_cli.parse_args(["run", "--status"])
+                result = misra_pipeline_cli.cmd_run(args)
+                self.assertEqual(result, 0)
 
     def test_cmd_status(self):
         """Test that cmd_status delegates to oneshot.print_status_summary."""
         with tempfile.TemporaryDirectory() as tmp:
             tools_dir = Path(tmp) / ".agents" / "tools"
             tools_dir.mkdir(parents=True)
-            (tools_dir / "oneshot.py").write_text("def print_status_summary():\n    return 0\n")
-            (tools_dir / "common.py").write_text("RUNTIME_DIR = None\nROOT = None\ndef load_json(*a, **kw): return {}\n")
+            (tools_dir / "oneshot.py").write_text(
+                "def print_status_summary(*a, **kw):\n    return 0\n"
+                "def main(*a, **kw):\n    return 0\n"
+            )
+            (tools_dir / "common.py").write_text(
+                "RUNTIME_DIR = None\nROOT = None\ndef load_json(*a, **kw): return {}\n"
+                "def append_pipeline_event(*a, **kw): pass\n"
+            )
             with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
-                args = misra_pipeline_cli.parse_args(["status"])
                 with patch("oneshot.print_status_summary", return_value=0):
+                    args = misra_pipeline_cli.parse_args(["status"])
                     result = misra_pipeline_cli.cmd_status(args)
                     self.assertEqual(result, 0)
 
     def test_oneshot_deprecated_message(self):
         """Test that 'oneshot' subcommand prints deprecation and returns 1."""
-        args = misra_pipeline_cli.parse_args(["oneshot"])
         result = misra_pipeline_cli.main(["oneshot"])
         self.assertEqual(result, 1)
 ```
