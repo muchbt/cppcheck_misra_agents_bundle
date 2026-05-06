@@ -1,9 +1,11 @@
 """Unit tests for misra_pipeline_cli.py module."""
 
 import importlib.util
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +96,106 @@ class MisraPipelineCliTests(unittest.TestCase):
         """Test parse_args for 'config reset --yes'."""
         args = misra_pipeline_cli.parse_args(["config", "reset", "--yes"])
         self.assertTrue(args.yes)
+
+    def test_parse_args_split_subcommand(self):
+        """Test parse_args for 'split' subcommand."""
+        args = misra_pipeline_cli.parse_args(["split", "--", "--input", "cppcheck.xml"])
+        self.assertEqual(args.subcommand, "split")
+        self.assertEqual(args.args, ["--", "--input", "cppcheck.xml"])
+
+    def test_parse_args_run_subcommand(self):
+        """Test parse_args for 'run' subcommand."""
+        args = misra_pipeline_cli.parse_args(["run", "--", "--dry-run"])
+        self.assertEqual(args.subcommand, "run")
+        self.assertEqual(args.args, ["--", "--dry-run"])
+
+    def test_parse_args_merge_subcommand(self):
+        """Test parse_args for 'merge' subcommand."""
+        args = misra_pipeline_cli.parse_args(["merge"])
+        self.assertEqual(args.subcommand, "merge")
+
+    def test_parse_args_verify_subcommand(self):
+        """Test parse_args for 'verify' subcommand."""
+        args = misra_pipeline_cli.parse_args(["verify", "chunk_001"])
+        self.assertEqual(args.subcommand, "verify")
+        self.assertEqual(args.args, ["chunk_001"])
+
+    def test_parse_args_bootstrap_subcommand(self):
+        """Test parse_args for 'bootstrap' subcommand."""
+        args = misra_pipeline_cli.parse_args(["bootstrap"])
+        self.assertEqual(args.subcommand, "bootstrap")
+
+    def test_parse_args_doctor_pipeline_subcommand(self):
+        """Test parse_args for 'doctor' (pipeline) subcommand."""
+        args = misra_pipeline_cli.parse_args(["doctor"])
+        self.assertEqual(args.subcommand, "doctor")
+
+    def test_parse_args_validate_subcommand(self):
+        """Test parse_args for 'validate' subcommand."""
+        args = misra_pipeline_cli.parse_args(["validate"])
+        self.assertEqual(args.subcommand, "validate")
+
+    def test_parse_args_oneshot_subcommand(self):
+        """Test parse_args for 'oneshot' subcommand."""
+        args = misra_pipeline_cli.parse_args(["oneshot"])
+        self.assertEqual(args.subcommand, "oneshot")
+
+    def test_parse_args_provider_flag(self):
+        """Test --provider flag for pipeline commands."""
+        args = misra_pipeline_cli.parse_args(["run", "--provider", "claude"])
+        self.assertEqual(args.provider, "claude")
+
+    def test_parse_args_provider_flag_invalid(self):
+        """Test --provider rejects invalid values."""
+        with self.assertRaises(SystemExit):
+            misra_pipeline_cli.parse_args(["run", "--provider", "invalid"])
+
+    def test_parse_args_policy_subcommand(self):
+        """Test parse_args for 'policy' with REMAINDER args."""
+        args = misra_pipeline_cli.parse_args(["policy", "init", "--template", "misra_c2012_relaxed"])
+        self.assertEqual(args.subcommand, "policy")
+        self.assertEqual(args.policy_args, ["init", "--template", "misra_c2012_relaxed"])
+
+    def test_parse_args_rejects_invalid_subcommand(self):
+        """Test that invalid subcommands are rejected."""
+        with self.assertRaises(SystemExit):
+            misra_pipeline_cli.parse_args(["invalid_command"])
+
+    def test_dispatch_provider_clears_stale_env(self):
+        """Test that second call without --provider clears stale env."""
+        seen_first = {}
+        seen_second = {}
+
+        class FakeModuleFirst:
+            def main(self, argv=None):
+                seen_first["provider"] = os.environ.get("PIPELINE_AGENT_PROVIDER")
+                return 0
+
+        class FakeModuleSecond:
+            def main(self, argv=None):
+                seen_second["provider"] = os.environ.get("PIPELINE_AGENT_PROVIDER")
+                return 0
+
+        original = os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                tools_dir = Path(tmp) / ".agents" / "tools"
+                tools_dir.mkdir(parents=True)
+
+                with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                    with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleFirst()):
+                        misra_pipeline_cli._dispatch_pipeline_command("split", [], provider="codex")
+
+                    with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleSecond()):
+                        misra_pipeline_cli._dispatch_pipeline_command("split", [])
+
+            self.assertEqual(seen_first["provider"], "codex")
+            self.assertIsNone(seen_second["provider"])
+            self.assertIsNone(os.environ.get("PIPELINE_AGENT_PROVIDER"))
+        finally:
+            if original is not None:
+                os.environ["PIPELINE_AGENT_PROVIDER"] = original
 
 
 class MisraPipelineConfigTests(unittest.TestCase):
@@ -402,3 +504,105 @@ class MisraPipelineUpgradeTests(unittest.TestCase):
 
             new_version = misra_pipeline_cli.read_version_file(version_file)
             self.assertEqual(new_version.get("tag"), "v1.1.0")
+
+
+class MisraPipelineDispatchTests(unittest.TestCase):
+    def test_dispatch_sets_sys_argv(self):
+        """Test that _dispatch_pipeline_command sets sys.argv correctly."""
+        seen = {}
+
+        class FakeModuleWithArgs:
+            def main(self, argv=None):
+                seen["argv"] = list(sys.argv)
+                return 0
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tools_dir = Path(tmp) / ".agents" / "tools"
+            tools_dir.mkdir(parents=True)
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleWithArgs()):
+                    result = misra_pipeline_cli._dispatch_pipeline_command("split", ["--input", "test.xml"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(seen["argv"], ["split_cppcheck_xml.py", "--input", "test.xml"])
+
+    def test_dispatch_calls_main_without_args(self):
+        """Test that _call_module_main handles modules with main() taking no args."""
+        seen = {}
+
+        class FakeModuleNoArgs:
+            def main(self):
+                seen["called"] = True
+                return 42
+
+        result = misra_pipeline_cli._call_module_main(FakeModuleNoArgs(), ["--unused"])
+
+        self.assertEqual(result, 42)
+        self.assertTrue(seen["called"])
+
+    def test_dispatch_calls_main_with_args(self):
+        """Test that _call_module_main handles modules with main(argv=None)."""
+        seen = {}
+
+        class FakeModuleWithArgs:
+            def main(self, argv=None):
+                seen["argv"] = argv
+                return 0
+
+        result = misra_pipeline_cli._call_module_main(FakeModuleWithArgs(), ["--input", "test.xml"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(seen["argv"], ["--input", "test.xml"])
+
+    def test_dispatch_missing_tools_dir(self):
+        """Test that _dispatch_pipeline_command fails when .agents/tools/ missing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                result = misra_pipeline_cli._dispatch_pipeline_command("split", [])
+
+        self.assertEqual(result, 1)
+
+    def test_dispatch_provider_sets_env(self):
+        """Test that --provider sets PIPELINE_AGENT_PROVIDER env var."""
+        seen_env = {}
+        original = os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+        try:
+            class FakeModuleWithArgs:
+                def main(self, argv=None):
+                    seen_env["provider"] = os.environ.get("PIPELINE_AGENT_PROVIDER")
+                    return 0
+
+            with tempfile.TemporaryDirectory() as tmp:
+                tools_dir = Path(tmp) / ".agents" / "tools"
+                tools_dir.mkdir(parents=True)
+                with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                    with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleWithArgs()):
+                        result = misra_pipeline_cli._dispatch_pipeline_command("run", [], provider="claude")
+
+            self.assertEqual(result, 0)
+            self.assertEqual(seen_env["provider"], "claude")
+        finally:
+            if original is not None:
+                os.environ["PIPELINE_AGENT_PROVIDER"] = original
+
+    def test_dispatch_provider_restores_env(self):
+        """Test that PIPELINE_AGENT_PROVIDER is restored after dispatch."""
+        original = "original_value"
+        os.environ["PIPELINE_AGENT_PROVIDER"] = original
+
+        try:
+            class FakeModuleWithArgs:
+                def main(self, argv=None):
+                    return 0
+
+            with tempfile.TemporaryDirectory() as tmp:
+                tools_dir = Path(tmp) / ".agents" / "tools"
+                tools_dir.mkdir(parents=True)
+                with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
+                    with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleWithArgs()):
+                        misra_pipeline_cli._dispatch_pipeline_command("split", [], provider="codex")
+
+            self.assertEqual(os.environ.get("PIPELINE_AGENT_PROVIDER"), original)
+        finally:
+            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
