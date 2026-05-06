@@ -68,7 +68,18 @@ misra-pipeline run --run-id 20260506-001
 | `--misra-only` | flag | False | 仅 MISRA 规则 |
 | `--include-failed` | flag | False | 包含失败 chunk |
 | `--run-id ID` | str | None | 指定 run ID |
+| `--verbose` | flag | False | 打印每个 chunk 完整 stdout/stderr |
 | `--provider` | choice | None | Agent provider（已有） |
+
+**参数互斥规则**：
+
+- `--status` 与所有其他运行参数互斥：`--status` 时忽略 `--fresh`、`--resume`、`--dry-run`、`--stage`、`--strategy`、`--max-chunks`、`--retry-failed`、`--rule-id`、`--misra-only`、`--include-failed`、`--run-id`、`--verbose`（与 oneshot.py 当前行为一致：`--status` 早期返回，仅打印进度摘要）
+- `--fresh` 和 `--resume` 不能同时使用
+- `--stage` 与 `--fresh`/`--resume` 不冲突但 `--fresh` 仅在全流程模式下有效
+
+**无效参数组合处理**：
+
+不校验 `--stage` 与参数的冗余组合（如 `--stage split --max-chunks 10`），保持简单。多余参数会被 dispatch 到的阶段模块自行处理——无法识别的参数被 argparse 忽略或报错，此行为与直接调用阶段模块一致。
 
 **`--stage` 映射**：
 
@@ -165,7 +176,11 @@ oneshot.py 中 4 处 `python3 .agents/tools/pipeline_cli.py doctor` 改为 `misr
 
 ### 6. oneshot 处理
 
-- `oneshot` 从 `PIPELINE_COMMANDS` 映射中移除，不再作为顶级子命令
+- `oneshot` 从 `PIPELINE_COMMANDS` 映射中移除，新增 deprecated alias：用户输入 `misra-pipeline oneshot` 时打印友好提示并退出
+  ```
+  'oneshot' has been merged into 'run'. Use 'misra-pipeline run' instead.
+  ```
+  实现方式：在 `parse_args` 的子命令列表中保留 `oneshot` 作为特殊子命令，添加 `help="(deprecated) Use 'run' instead"`，`main()` 中捕获后打印提示并 `return 1`
 - `oneshot.py` 保留在 `.agents/tools/` 中，标记为 deprecated（文件头注释加 `DEPRECATED: Use 'misra-pipeline run' instead.`）
 - CLI 的 `cmd_run()` 通过 dynamic import 调用 oneshot 模块的辅助函数
 - `run` 在 `PIPELINE_COMMANDS` 中的映射从 `run_fix_pipeline` 改为指向 `cmd_run` 内置函数（不再走 dispatch）
