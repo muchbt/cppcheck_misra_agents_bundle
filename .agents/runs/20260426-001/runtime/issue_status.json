@@ -1,0 +1,243 @@
+{
+  "cppcheck_error.c:10:bufferAccessOutOfBounds:afec5dc6": {
+    "chunk_index": 1,
+    "edit_ids": [],
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "No rule-specific auto-fix policy is configured. Buffer access out of bounds is a high-risk memory safety issue."
+  },
+  "cppcheck_error.c:3:misra-c2012-8.4:4a2c80d8": {
+    "chunk_index": 2,
+    "edit_ids": [],
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "No rule-specific auto-fix policy is configured. Strategy action explicitly set to needs_manual_review."
+  },
+  "cppcheck_error.c:10:misra-c2012-17.7:4a2c80d8": {
+    "chunk_index": 3,
+    "edit_ids": [],
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "Return-value handling can change error handling semantics.",
+    "reason": "Issue strategy_action is 'needs_manual_review' and fix_strategy is 'conservative' - high-risk MISRA return-value issue requires human review"
+  },
+  "cppcheck_info.c:13:misra-c2012-8.4:4a2c80d8": {
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "requires_review_after_fix": false,
+    "blocked": false,
+    "blocker_reason": null
+  },
+  "cppcheck_info.c:10:misra-c2012-17.7:4a2c80d8": {
+    "chunk_index": 5,
+    "edit_ids": [],
+    "risk_level": "high",
+    "risk_reason": "Return-value handling can change error handling semantics.",
+    "reason": "MISRA Rule 17.7 violation - printf return value ignored. Conservative fix strategy requires manual review for high-risk MISRA findings involving return value handling."
+  },
+  "cppcheck_info.c:1:misra-c2012-21.6:4a2c80d8": {
+    "chunk_index": 6,
+    "edit_ids": [],
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "No rule-specific auto-fix policy is configured."
+  },
+  "cppcheck_warning.c:10:uninitvar:74e17dfb": {
+    "status": "pending",
+    "file": "cppcheck_warning.c",
+    "line": 10,
+    "severity": "error",
+    "rule_id": "uninitvar",
+    "is_misra": false,
+    "fix_strategy": "conservative",
+    "action": "careful_fix",
+    "strategy_action": "careful_fix",
+    "risk_level": "medium",
+    "risk_tags": [
+      "initialization"
+    ],
+    "risk_reason": "Initialization fixes can change runtime behavior.",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  },
+  "cppcheck_warning.c:4:unassignedVariable:b3783ebc": {
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "strategy_action": "needs_manual_review",
+    "chunk_index": 7
+  },
+  "cppcheck_warning.c:3:misra-c2012-8.4:4a2c80d8": {
+    "chunk_index": 8,
+    "edit_ids": [],
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "No rule-specific auto-fix policy is configured."
+  },
+  "cppcheck_warning.c:11:misra-c2012-17.7:4a2c80d8": {
+    "chunk_index": 9,
+    "edit_ids": [],
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "Return-value handling can change error handling semantics. MISRA C2012-17.7 requires explicit decision on whether to check printf return value. Fixing requires understanding the intended error handling strategy."
+  },
+  "cppcheck_warning.c:1:misra-c2012-21.6:4a2c80d8": {
+    "chunk_index": 10,
+    "edit_ids": [],
+    "status": "needs_manual_review",
+    "risk_level": "high",
+    "risk_reason": "MISRA C2012 Rule 21.6 prohibits use of standard library I/O functions. Auto-fix would require replacing <stdio.h> with project-specific I/O abstraction, which needs architecture decisions. No rule-specific auto-fix policy is configured."
+  },
+  "misra_advisory.c:11:misra-c2012-8.4:4a2c80d8": {
+    "status": "pending",
+    "file": "misra_advisory.c",
+    "line": 11,
+    "severity": "style",
+    "rule_id": "misra-c2012-8.4",
+    "is_misra": true,
+    "fix_strategy": "conservative",
+    "action": "needs_manual_review",
+    "strategy_action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  },
+  "misra_advisory.c:9:misra-c2012-8.4:4a2c80d8": {
+    "status": "pending",
+    "file": "misra_advisory.c",
+    "line": 9,
+    "severity": "style",
+    "rule_id": "misra-c2012-8.4",
+    "is_misra": true,
+    "fix_strategy": "conservative",
+    "action": "needs_manual_review",
+    "strategy_action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  },
+  "misra_mandatory.c:7:misra-c2012-8.4:4a2c80d8": {
+    "status": "pending",
+    "file": "misra_mandatory.c",
+    "line": 7,
+    "severity": "style",
+    "rule_id": "misra-c2012-8.4",
+    "is_misra": true,
+    "fix_strategy": "conservative",
+    "action": "needs_manual_review",
+    "strategy_action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  },
+  "misra_mandatory.c:11:misra-c2012-11.6:4a2c80d8": {
+    "status": "pending",
+    "file": "misra_mandatory.c",
+    "line": 11,
+    "severity": "style",
+    "rule_id": "misra-c2012-11.6",
+    "is_misra": true,
+    "fix_strategy": "conservative",
+    "action": "needs_manual_review",
+    "strategy_action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  },
+  "misra_required.c:11:unreadVariable:69d6b88f": {
+    "status": "pending",
+    "file": "misra_required.c",
+    "line": 11,
+    "severity": "style",
+    "rule_id": "unreadVariable",
+    "is_misra": false,
+    "fix_strategy": "conservative",
+    "action": "auto_fix",
+    "strategy_action": "auto_fix",
+    "risk_level": "low",
+    "risk_tags": [],
+    "risk_reason": "",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  },
+  "misra_required.c:7:misra-c2012-8.4:4a2c80d8": {
+    "status": "pending",
+    "file": "misra_required.c",
+    "line": 7,
+    "severity": "style",
+    "rule_id": "misra-c2012-8.4",
+    "is_misra": true,
+    "fix_strategy": "conservative",
+    "action": "needs_manual_review",
+    "strategy_action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  },
+  "misra_required.c:11:misra-c2012-10.3:4a2c80d8": {
+    "status": "pending",
+    "file": "misra_required.c",
+    "line": 11,
+    "severity": "style",
+    "rule_id": "misra-c2012-10.3",
+    "is_misra": true,
+    "fix_strategy": "conservative",
+    "action": "needs_manual_review",
+    "strategy_action": "needs_manual_review",
+    "risk_level": "high",
+    "risk_tags": [
+      "unknown_rule"
+    ],
+    "risk_reason": "No rule-specific auto-fix policy is configured.",
+    "requires_review_after_fix": false,
+    "chunk_index": null,
+    "edit_ids": [],
+    "reason": "",
+    "verified": false
+  }
+}

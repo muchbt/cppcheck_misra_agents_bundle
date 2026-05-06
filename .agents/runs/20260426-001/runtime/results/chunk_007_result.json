@@ -1,0 +1,35 @@
+{
+  "chunk_index": 7,
+  "chunk_total": 17,
+  "fix_strategy": "conservative",
+  "issues_processed": 1,
+  "fixed_count": 0,
+  "skipped_count": 0,
+  "needs_manual_review_count": 1,
+  "fixed_issues": [],
+  "skipped_issues": [],
+  "needs_manual_review_issues": [
+    {
+      "issue_key": "cppcheck_warning.c:4:unassignedVariable:b3783ebc",
+      "file": "cppcheck_warning.c",
+      "line": 4,
+      "severity": "style",
+      "rule_id": "unassignedVariable",
+      "msg": "Variable 'uninitialized_var' is not assigned a value.",
+      "risk_level": "high",
+      "risk_reason": "No rule-specific auto-fix policy is configured."
+    }
+  ],
+  "high_risk_fixed_issues": [],
+  "touched_files": [],
+  "edit_records": [],
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "mode": "light",
+    "notes": "light verification only; no custom command configured",
+    "command": "",
+    "returncode": 0
+  },
+  "blockers": []
+}

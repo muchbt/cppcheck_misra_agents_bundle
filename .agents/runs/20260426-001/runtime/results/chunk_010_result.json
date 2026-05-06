@@ -1,0 +1,42 @@
+{
+  "chunk_index": 10,
+  "chunk_total": 17,
+  "fix_strategy": "conservative",
+  "processing_summary": {
+    "total_issues": 1,
+    "fixed_count": 0,
+    "skipped_count": 0,
+    "needs_manual_review_count": 1,
+    "blocked_count": 0
+  },
+  "fixed_issues": [],
+  "skipped_issues": [],
+  "needs_manual_review": [
+    {
+      "issue_key": "cppcheck_warning.c:1:misra-c2012-21.6:4a2c80d8",
+      "file": "cppcheck_warning.c",
+      "line": 1,
+      "severity": "style",
+      "rule_id": "misra-c2012-21.6",
+      "risk_level": "high",
+      "risk_reason": "MISRA C2012 Rule 21.6 prohibits use of standard library I/O functions. Auto-fix would require replacing <stdio.h> with project-specific I/O abstraction, which needs architecture decisions.",
+      "strategy_action": "needs_manual_review"
+    }
+  ],
+  "high_risk_fixed_issues": [],
+  "touched_files": [],
+  "edit_records": [],
+  "verification_results": {
+    "verified": false,
+    "reason": "No edits applied; all issues marked as needs_manual_review"
+  },
+  "blockers": [],
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "mode": "light",
+    "notes": "light verification only; no custom command configured",
+    "command": "",
+    "returncode": 0
+  }
+}

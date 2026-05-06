@@ -1,0 +1,44 @@
+{
+  "chunk_index": 5,
+  "chunk_total": 17,
+  "processing_status": "completed",
+  "fix_strategy": "conservative",
+  "summary": {
+    "total_issues": 1,
+    "fixed": 0,
+    "skipped": 0,
+    "needs_manual_review": 1,
+    "blocked": 0
+  },
+  "issues": {
+    "fixed": [],
+    "skipped": [],
+    "needs_manual_review": [
+      {
+        "issue_key": "cppcheck_info.c:10:misra-c2012-17.7:4a2c80d8",
+        "file": "cppcheck_info.c",
+        "line": 10,
+        "rule_id": "misra-c2012-17.7",
+        "severity": "style",
+        "risk_level": "high",
+        "risk_reason": "Return-value handling can change error handling semantics.",
+        "reason": "MISRA Rule 17.7 violation - printf return value ignored. Conservative fix strategy requires manual review for high-risk MISRA findings involving return value handling."
+      }
+    ],
+    "blocked": []
+  },
+  "touched_files": [],
+  "edit_records": [],
+  "verification_results": {
+    "performed": false,
+    "reason": "No fixes applied; nothing to verify"
+  },
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "mode": "light",
+    "notes": "light verification only; no custom command configured",
+    "command": "",
+    "returncode": 0
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "chunk_index": 1,
+  "chunk_total": 17,
+  "fix_strategy": "conservative",
+  "summary": {
+    "total_issues": 1,
+    "fixed": 0,
+    "skipped": 0,
+    "needs_manual_review": 1,
+    "blocked": 0,
+    "high_risk_fixed": 0
+  },
+  "issues": {
+    "fixed": [],
+    "skipped": [],
+    "needs_manual_review": [
+      {
+        "issue_key": "cppcheck_error.c:10:bufferAccessOutOfBounds:afec5dc6",
+        "file": "cppcheck_error.c",
+        "line": 10,
+        "severity": "error",
+        "rule_id": "bufferAccessOutOfBounds",
+        "msg": "Buffer is accessed out of bounds: buffer",
+        "risk_level": "high",
+        "risk_reason": "No rule-specific auto-fix policy is configured. Buffer access out of bounds is a high-risk memory safety issue."
+      }
+    ],
+    "blocked": []
+  },
+  "touched_files": [],
+  "edit_records": [],
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "mode": "light",
+    "notes": "light verification only; no custom command configured",
+    "command": "",
+    "returncode": 0
+  },
+  "processing_notes": [
+    "Chunk contains 1 high-risk issue with strategy_action=needs_manual_review",
+    "Conservative fix strategy followed - no auto-fix attempted",
+    "Buffer access out of bounds requires human analysis of intended buffer size and string length"
+  ]
+}

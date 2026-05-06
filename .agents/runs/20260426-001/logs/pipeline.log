@@ -1,0 +1,29 @@
+2026-04-26T07:39:05.203821+08:00 [info] split split_started 开始拆分 cppcheck.xml。
+2026-04-26T07:39:05.206014+08:00 [info] split split_completed 拆分完成。
+2026-04-26T07:39:05.206140+08:00 [info] oneshot split_stage_completed oneshot 完成 split 阶段。
+2026-04-26T07:39:05.206238+08:00 [info] oneshot run_stage_started oneshot 开始执行 run 阶段。
+2026-04-26T07:39:05.207381+08:00 [info] run run_started 开始执行 run 阶段。
+2026-04-26T07:39:05.208819+08:00 [info] run chunk_started chunk=1 开始处理 chunk 1。
+2026-04-26T07:40:16.529022+08:00 [info] run chunk_completed chunk=1 returncode=0 chunk 1 处理完成。
+2026-04-26T07:40:16.544578+08:00 [info] run chunk_started chunk=2 开始处理 chunk 2。
+2026-04-26T07:41:15.982906+08:00 [info] run chunk_completed chunk=2 returncode=0 chunk 2 处理完成。
+2026-04-26T07:41:15.983775+08:00 [info] run chunk_started chunk=3 开始处理 chunk 3。
+2026-04-26T07:42:28.860707+08:00 [info] run chunk_completed chunk=3 returncode=0 chunk 3 处理完成。
+2026-04-26T07:42:28.861533+08:00 [info] run chunk_started chunk=4 开始处理 chunk 4。
+2026-04-26T07:43:44.184362+08:00 [info] run chunk_completed chunk=4 returncode=0 chunk 4 处理完成。
+2026-04-26T07:43:44.201381+08:00 [info] run chunk_started chunk=5 开始处理 chunk 5。
+2026-04-26T07:45:02.128367+08:00 [info] run chunk_completed chunk=5 returncode=0 chunk 5 处理完成。
+2026-04-26T07:45:02.129229+08:00 [info] run chunk_started chunk=6 开始处理 chunk 6。
+2026-04-26T07:46:13.761797+08:00 [info] run chunk_completed chunk=6 returncode=0 chunk 6 处理完成。
+2026-04-26T07:46:13.777417+08:00 [info] run chunk_started chunk=7 开始处理 chunk 7。
+2026-04-26T07:46:59.390283+08:00 [info] run chunk_completed chunk=7 returncode=0 chunk 7 处理完成。
+2026-04-26T07:46:59.405377+08:00 [info] run chunk_started chunk=8 开始处理 chunk 8。
+2026-04-26T07:48:10.344244+08:00 [info] run chunk_completed chunk=8 returncode=0 chunk 8 处理完成。
+2026-04-26T07:48:10.346156+08:00 [info] run chunk_started chunk=9 开始处理 chunk 9。
+2026-04-26T07:49:18.596009+08:00 [info] run chunk_completed chunk=9 returncode=0 chunk 9 处理完成。
+2026-04-26T07:49:18.596905+08:00 [info] run chunk_started chunk=10 开始处理 chunk 10。
+2026-04-26T07:50:08.860900+08:00 [info] run chunk_completed chunk=10 returncode=0 chunk 10 处理完成。
+2026-04-26T07:50:08.861494+08:00 [info] run chunk_started chunk=11 开始处理 chunk 11。
+2026-04-26T07:51:25.115140+08:00 [error] run chunk_failed chunk=11 returncode=1 chunk 11 执行失败。
+2026-04-26T07:51:25.116947+08:00 [error] oneshot run_stage_failed returncode=1 oneshot 执行 run 阶段失败。
+2026-04-26T07:51:25.117125+08:00 [error] oneshot oneshot_failed returncode=1 oneshot 在 run 阶段失败。

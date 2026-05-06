@@ -1,0 +1,54 @@
+{
+  "run_id": "20260426-001",
+  "started_at": "2026-04-26T07:39:05.202971+08:00",
+  "finished_at": "2026-04-26T07:51:25.115369+08:00",
+  "status": "failed",
+  "input_xml": "/home/ubuntu/code/cppcheck_misra_agents_bundle_v2/cppcheck.xml",
+  "strategy": "conservative",
+  "total_issues": 18,
+  "status_counts": {
+    "needs_manual_review": 9,
+    "unknown": 1,
+    "pending": 8
+  },
+  "strategy_counts": {
+    "unknown": 10,
+    "conservative": 8
+  },
+  "fixed_high_risk_count": 0,
+  "review_required_after_fix_count": 0,
+  "fixed_high_risk": [],
+  "review_required_after_fix": [],
+  "fixed_by_rule": {},
+  "fixed_by_file": {},
+  "touched_files": [],
+  "chunk_counts": {
+    "total": 17,
+    "completed": 10,
+    "failed": 1
+  },
+  "completed_chunks": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "failed_chunks": [
+    11
+  ],
+  "verification": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "modes": {
+      "light": 10
+    },
+    "custom_command_ran": false
+  }
+}

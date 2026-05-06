@@ -1,0 +1,42 @@
+{
+  "chunk_index": 8,
+  "chunk_total": 17,
+  "fix_strategy": "conservative",
+  "total_issues": 1,
+  "fixed_count": 0,
+  "skipped_count": 0,
+  "needs_manual_review_count": 1,
+  "high_risk_fixed_count": 0,
+  "touched_files": [],
+  "edit_records": [],
+  "issues": {
+    "fixed": [],
+    "skipped": [],
+    "needs_manual_review": [
+      {
+        "issue_key": "cppcheck_warning.c:3:misra-c2012-8.4:4a2c80d8",
+        "file": "cppcheck_warning.c",
+        "line": 3,
+        "severity": "style",
+        "rule_id": "misra-c2012-8.4",
+        "msg": "misra violation (use --rule-texts=<file> to get proper output)",
+        "is_misra": true,
+        "risk_level": "high",
+        "risk_reason": "No rule-specific auto-fix policy is configured.",
+        "risk_tags": [
+          "unknown_rule"
+        ],
+        "strategy_action": "needs_manual_review"
+      }
+    ]
+  },
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "mode": "light",
+    "notes": "light verification only; no custom command configured",
+    "command": "",
+    "returncode": 0
+  },
+  "blockers": []
+}

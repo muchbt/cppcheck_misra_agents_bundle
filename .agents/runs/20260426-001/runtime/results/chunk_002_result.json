@@ -1,0 +1,34 @@
+{
+  "chunk_index": 2,
+  "chunk_total": 17,
+  "fix_strategy": "conservative",
+  "issues_processed": 1,
+  "fixed": [],
+  "skipped": [],
+  "needs_manual_review": [
+    {
+      "issue_key": "cppcheck_error.c:3:misra-c2012-8.4:4a2c80d8",
+      "file": "cppcheck_error.c",
+      "line": 3,
+      "rule_id": "misra-c2012-8.4",
+      "severity": "style",
+      "risk_level": "high",
+      "risk_reason": "No rule-specific auto-fix policy is configured. Strategy action explicitly set to needs_manual_review.",
+      "risk_tags": [
+        "unknown_rule"
+      ]
+    }
+  ],
+  "touched_files": [],
+  "edit_records": [],
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "mode": "light",
+    "notes": "light verification only; no custom command configured",
+    "command": "",
+    "returncode": 0
+  },
+  "blocked_issues": [],
+  "high_risk_fixed": []
+}

@@ -1,0 +1,33 @@
+{
+  "chunk_index": 9,
+  "chunk_total": 17,
+  "fix_strategy": "conservative",
+  "issues_processed": 1,
+  "fixed": [],
+  "skipped": [],
+  "needs_manual_review": [
+    {
+      "issue_key": "cppcheck_warning.c:11:misra-c2012-17.7:4a2c80d8",
+      "file": "cppcheck_warning.c",
+      "line": 11,
+      "rule_id": "misra-c2012-17.7",
+      "severity": "style",
+      "risk_level": "high",
+      "risk_reason": "Return-value handling can change error handling semantics. MISRA C2012-17.7 requires explicit decision on whether to check printf return value. Fixing requires understanding the intended error handling strategy.",
+      "action": "needs_manual_review"
+    }
+  ],
+  "high_risk_fixed": [],
+  "touched_files": [],
+  "edit_records": [],
+  "verification": {
+    "performed": true,
+    "passed": true,
+    "mode": "light",
+    "notes": "light verification only; no custom command configured",
+    "command": "",
+    "returncode": 0
+  },
+  "blocked_issues": [],
+  "completion_status": "completed_with_manual_review_items"
+}

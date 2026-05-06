@@ -1,0 +1,23 @@
+=== CHUNK 010 EXECUTION LOG ===
+Started: 2026-04-26T07:49:18.597172+08:00
+Provider: claude
+Command: claude -p --output-format text --permission-mode
+CWD: /home/ubuntu/code/cppcheck_misra_agents_bundle_v2
+Staging: /home/ubuntu/code/cppcheck_misra_agents_bundle_v2/.agents/staging/chunk_010
+Prompt length: 1601 characters
+
+--- STDOUT ---
+Chunk 010 processing is complete.
+
+**Result:** 1 issue found, 0 auto-fixed, 1 marked as `needs_manual_review`.
+
+**Issue:** `cppcheck_warning.c:1:misra-c2012-21.6` — MISRA C2012 Rule 21.6 violation at `#include <stdio.h>`. Standard library I/O functions are prohibited by MISRA; replacing them with project-specific I/O abstractions requires architecture decisions that cannot be safely automated in conservative mode.
+
+No files were modified. All staging outputs have been written to `.agents/staging/chunk_010/`.
+
+--- STDERR ---
+(empty)
+--- END ---
+Returncode: 0
+Error kind: success
+Finished: 2026-04-26T07:50:08.860528+08:00
