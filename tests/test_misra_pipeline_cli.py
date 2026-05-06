@@ -104,10 +104,11 @@ class MisraPipelineCliTests(unittest.TestCase):
         self.assertEqual(args.args, ["--input", "cppcheck.xml"])
 
     def test_parse_args_run_subcommand(self):
-        """Test parse_args for 'run' subcommand with forwarded args."""
+        """Test parse_args for 'run' subcommand with explicit args."""
         args = misra_pipeline_cli.parse_args(["run", "--dry-run"])
         self.assertEqual(args.subcommand, "run")
-        self.assertEqual(args.args, ["--dry-run"])
+        self.assertTrue(args.dry_run)
+        self.assertIsNone(args.stage)
 
     def test_parse_args_merge_subcommand(self):
         """Test parse_args for 'merge' subcommand."""
@@ -601,7 +602,7 @@ class MisraPipelineDispatchTests(unittest.TestCase):
                 tools_dir.mkdir(parents=True)
                 with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
                     with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleWithArgs()):
-                        result = misra_pipeline_cli._dispatch_pipeline_command("run", [], provider="claude")
+                        result = misra_pipeline_cli._dispatch_pipeline_command("split", [], provider="claude")
 
             self.assertEqual(result, 0)
             self.assertEqual(seen_env["provider"], "claude")

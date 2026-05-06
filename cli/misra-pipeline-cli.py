@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """MISRA Pipeline CLI - Distribution and project initialization tool.
 
-Commands:
-  init         Initialize .agents/ directory in current project
-  upgrade      Upgrade installed .agents/ to latest version
-  version      Show CLI and project version
-  env-check    Check CLI installation and environment
-  config       Manage CLI configuration
-  split        Split cppcheck XML into runtime chunks
-  run          Run the agent fixing pipeline
-  merge        Merge runtime results into reports
+Primary commands:
+  init         Initialize .agents/ directory
+  run          Run the MISRA fix pipeline (split→agent→merge)
+  status       Show current pipeline run progress
+  policy       Manage rule policy configuration
+  doctor       Diagnose pipeline environment
+  env-check    Check CLI installation
+
+Advanced commands:
+  split        Split cppcheck XML (use 'run --stage split')
+  merge         Merge results (use 'run --stage merge')
   verify       Verify one chunk result
   bootstrap    Generate agent compatibility files
-  doctor       Run pipeline diagnostics
-  validate     Run provider validation test
-  oneshot      Run the one-shot agent entrypoint
-  policy       Manage policy configuration
+  validate     Provider validation test
+  config       Manage CLI configuration
+  upgrade      Upgrade .agents/ to a new version
+  version      Show CLI and project version
+
+Deprecated:
+  oneshot      Use 'run' instead
 """
 
 from __future__ import annotations
@@ -52,15 +57,14 @@ VERSION_FILE = CLI_DIR / "VERSION"
 MIN_PYTHON = (3, 8)
 
 # Pipeline command mapping: subcommand -> module_name in .agents/tools/
+# Note: 'run' and 'oneshot' are handled separately (cmd_run / deprecated alias)
 PIPELINE_COMMANDS: Dict[str, str] = {
     "split": "split_cppcheck_xml",
-    "run": "run_fix_pipeline",
     "merge": "merge_results",
     "verify": "verify_chunk",
     "bootstrap": "bootstrap_agents",
     "doctor": "doctor",
     "validate": "validate_real",
-    "oneshot": "oneshot",
 }
 
 # Error kinds for agent execution
@@ -211,6 +215,34 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=None,
         help="Override agent provider (sets PIPELINE_AGENT_PROVIDER env var)",
     )
+
+    # run subcommand (absorbs oneshot functionality)
+    run_parser = subparsers.add_parser("run", help="Run the MISRA fix pipeline (split→agent→merge)")
+    run_parser.add_argument("--fresh", action="store_true", help="Force fresh start, ignore existing progress")
+    run_parser.add_argument("--resume", action="store_true", help="Explicit resume mode")
+    run_parser.add_argument("--dry-run", action="store_true", help="Preview mode: show chunk summary without starting agents")
+    run_parser.add_argument("--status", action="store_true", help="Show current run progress and exit")
+    run_parser.add_argument("--stage", choices=["split", "agent", "merge"], default=None, help="Run a single stage only")
+    run_parser.add_argument("--strategy", choices=["conservative", "all_auto"], default=None, help="Fix strategy")
+    run_parser.add_argument("--max-chunks", type=int, default=None, help="Maximum number of chunks")
+    run_parser.add_argument("--retry-failed", type=int, default=None, help="Retry failed chunks N times")
+    run_parser.add_argument("--rule-id", action="append", default=[], help="Rule ID filter (can be repeated)")
+    run_parser.add_argument("--misra-only", action="store_true", help="Only process MISRA rules")
+    run_parser.add_argument("--include-failed", action="store_true", help="Include previously failed chunks")
+    run_parser.add_argument("--run-id", default=None, help="Specify run ID (format: YYYYMMDD-XXX)")
+    run_parser.add_argument("--verbose", action="store_true", help="Print full stdout/stderr for each chunk")
+    run_parser.add_argument(
+        "--provider", "-P",
+        choices=["codex", "claude", "opencode", "kimi"],
+        default=None,
+        help="Override agent provider",
+    )
+
+    # status subcommand
+    subparsers.add_parser("status", help="Show current pipeline run progress")
+
+    # oneshot deprecated alias
+    subparsers.add_parser("oneshot", help="(deprecated) Use 'run' instead")
 
     # Use parse_known_args so --flags like --dry-run pass through to subcommands
     parsed, forwarded = parser.parse_known_args(argv if argv is not None else sys.argv[1:])
