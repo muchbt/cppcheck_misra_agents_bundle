@@ -434,7 +434,7 @@ def add_rule(
 
 
 def _select_template_interactive() -> List[str]:
-    """Interactively select a template when none specified."""
+    """Interactively select one or more templates when none specified."""
     template_list = list(AVAILABLE_TEMPLATES.items())
     default_template = "misra_c2012_relaxed"
     if not sys.stdin.isatty():
@@ -448,18 +448,24 @@ def _select_template_interactive() -> List[str]:
 
     default_choice = "2"
     while True:
-        choice = input(f"Select template number [{default_choice}]: ").strip()
+        choice = input(f"Select template number(s) [{default_choice}] (comma/space-separated for multiple): ").strip()
         if not choice:
             choice = default_choice
+        # Split by comma or whitespace
+        parts = choice.replace(",", " ").split()
         try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(template_list):
-                selected = template_list[idx][0]
-                print(f"\nSelected: {selected}")
-                return [selected]
+            indices = [int(p) for p in parts]
         except ValueError:
-            pass
-        print(f"Invalid choice. Enter a number between 1 and {len(template_list)}.", file=sys.stderr)
+            print(f"Invalid input. Enter numbers between 1 and {len(template_list)}.", file=sys.stderr)
+            continue
+        if all(1 <= idx <= len(template_list) for idx in indices):
+            selected = [template_list[idx - 1][0] for idx in indices]
+            if len(selected) == 1:
+                print(f"\nSelected: {selected[0]}")
+            else:
+                print(f"\nSelected: {', '.join(selected)}")
+            return selected
+        print(f"Invalid choice. Enter numbers between 1 and {len(template_list)}.", file=sys.stderr)
 
 
 def init_policy(templates: List[str], output_path: Path, force: bool) -> int:
