@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""DEPRECATED: Use 'misra-pipeline run' instead. This module is kept for backward compatibility."""
+
 import argparse
 import importlib
 import json
@@ -39,6 +41,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--rule-id", action="append", default=[])
     parser.add_argument("--misra-only", action="store_true")
     parser.add_argument("--include-failed", action="store_true")
+    parser.add_argument("--verbose", action="store_true", help="打印每个 chunk 完整 stdout/stderr。")
     parser.add_argument("--dry-run", action="store_true", help="预览模式：split 后打印 chunk 摘要，不启动 agent。")
     parser.add_argument("--status", action="store_true", help="查询当前运行进度并输出人类可读摘要。")
     return parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -93,7 +96,7 @@ def print_status_summary(runtime_dir: Path = RUNTIME_DIR, root: Path = ROOT) -> 
     progress = safe_load_progress(progress_path)
 
     if not progress:
-        print("[oneshot] --status: 无运行记录 (progress.json 不存在或为空)")
+        print("[run] --status: 无运行记录 (progress.json 不存在或为空)")
         return 0
 
     run_id = str(progress.get("run_id", "")).strip() or "unknown"
@@ -106,7 +109,7 @@ def print_status_summary(runtime_dir: Path = RUNTIME_DIR, root: Path = ROOT) -> 
 
     user_status = compute_user_status(progress, failed)
 
-    print(f"[oneshot] --status 查询结果:")
+    print(f"[run] --status 查询结果:")
     print(f"  run_id: {run_id}")
     print(f"  status: {user_status}")
     print(f"  strategy: {strategy}")
@@ -163,7 +166,7 @@ def _log_stage_event(
 
 def execute_stage(stage: str, argv: List[str]) -> int:
     """Run a stage with logging. Returns exit code."""
-    print(f"[oneshot] 正在执行 {stage} 阶段...")
+    print(f"[run] 正在执行 {stage} 阶段...")
     _log_stage_event(stage, "started", f"oneshot 开始执行 {stage} 阶段。", argv)
     rc = run_stage(stage, argv)
     if rc == 0:
@@ -196,6 +199,8 @@ def build_run_args(args: argparse.Namespace, resume_status: str) -> List[str]:
         stage_args.append("--misra-only")
     if args.include_failed or resume_status == "failed":
         stage_args.append("--include-failed")
+    if args.verbose:
+        stage_args.append("--verbose")
     return stage_args
 
 
@@ -219,11 +224,11 @@ def print_dry_run_summary(runtime_dir: Path) -> None:
     run_id = progress.get("run_id", "unknown")
     strategy = progress.get("fix_strategy", "unknown")
 
-    print("\n[oneshot] === DRY-RUN PREVIEW ===")
-    print(f"[oneshot] run_id: {run_id}")
-    print(f"[oneshot] strategy: {strategy}")
-    print(f"[oneshot] total_issues: {total_issues}")
-    print(f"[oneshot] total_chunks: {total_chunks}")
+    print("\n[run] === DRY-RUN PREVIEW ===")
+    print(f"[run] run_id: {run_id}")
+    print(f"[run] strategy: {strategy}")
+    print(f"[run] total_issues: {total_issues}")
+    print(f"[run] total_chunks: {total_chunks}")
     print()
 
     # Load and summarize each chunk
@@ -247,14 +252,14 @@ def print_dry_run_summary(runtime_dir: Path) -> None:
                 status_flags.append(f"NEEDS_REVIEW:{review_count}")
 
             flags_str = f" [{', '.join(status_flags)}]" if status_flags else ""
-            print(f"[oneshot] chunk_{chunk_idx:03d}: {issue_count} issues, {len(files)} file(s){flags_str}")
+            print(f"[run] chunk_{chunk_idx:03d}: {issue_count} issues, {len(files)} file(s){flags_str}")
             for f in files[:5]:
                 print(f"    - {f}")
             if len(files) > 5:
                 print(f"    ... and {len(files) - 5} more file(s)")
 
-    print("\n[oneshot] DRY-RUN complete. No agents were started.")
-    print("[oneshot] To execute, run without --dry-run or use --fresh.\n")
+    print("\n[run] DRY-RUN complete. No agents were started.")
+    print("[run] To execute, run without --dry-run or use --fresh.\n")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -265,7 +270,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return print_status_summary(RUNTIME_DIR, ROOT)
 
     if args.fresh and args.resume:
-        print("[oneshot] --fresh 和 --resume 不能同时使用。")
+        print("[run] --fresh 和 --resume 不能同时使用。")
         return 2
     progress_path = RUNTIME_DIR / "progress.json"
     progress = safe_load_progress(progress_path)
@@ -276,7 +281,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Warn if --resume requested but no unfinished runtime exists
     if args.resume and mode == "fresh":
-        print("[oneshot] 注意：--resume 请求续跑但当前无未完成运行，将执行 fresh 模式。")
+        print("[run] 注意：--resume 请求续跑但当前无未完成运行，将执行 fresh 模式。")
 
     progress_status = str(progress.get("status", "")).strip()
     progress_strategy = str(progress.get("fix_strategy", "")).strip()
@@ -284,7 +289,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if mode == "resume":
         print(
-            "[oneshot] 检测到未完成运行，默认继续执行: "
+            "[run] 检测到未完成运行，默认继续执行: "
             f"run_id={progress_run_id or '未设置'}, "
             f"status={progress_status or '未设置'}, "
             f"completed={len(progress.get('completed_chunks', []))}/"
@@ -293,18 +298,18 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         if args.strategy and progress_strategy and args.strategy != progress_strategy:
             print(
-                "[oneshot] 恢复执行时策略冲突: "
+                "[run] 恢复执行时策略冲突: "
                 f"progress={progress_strategy}, requested={args.strategy}。"
             )
-            print(f"[oneshot] 请改用 --fresh --strategy {args.strategy}")
+            print(f"[run] 请改用 --fresh --strategy {args.strategy}")
             return 2
 
         if args.run_id and progress_run_id and args.run_id != progress_run_id:
             print(
-                "[oneshot] 恢复执行时 run_id 冲突: "
+                "[run] 恢复执行时 run_id 冲突: "
                 f"progress={progress_run_id}, requested={args.run_id}。"
             )
-            print("[oneshot] 续跑请使用当前 run_id，或改用 --fresh --run-id <new_run_id>")
+            print("[run] 续跑请使用当前 run_id，或改用 --fresh --run-id <new_run_id>")
             return 2
 
     checks = collect_precheck_results(ROOT)
@@ -319,7 +324,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             message="oneshot 预检查失败。",
             data={"mode": mode, "blockers": [item.get("code", "") for item in blockers]},
         )
-        print("[oneshot] 预检查未通过。请先执行 `python3 .agents/tools/pipeline_cli.py doctor`。")
+        print("[run] 预检查未通过。请先执行 `misra-pipeline doctor`。")
         return 1
 
     append_pipeline_event(
@@ -346,7 +351,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 returncode=rc,
                 data={"mode": mode},
             )
-            print("[oneshot] 执行失败。建议先运行 `python3 .agents/tools/pipeline_cli.py doctor`。")
+            print("[run] 执行失败。建议先运行 `misra-pipeline doctor`。")
             return rc
 
     # --dry-run: print chunk summary and exit without starting agents
@@ -372,7 +377,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             returncode=rc,
             data={"mode": mode},
         )
-        print("[oneshot] 执行失败。建议先运行 `python3 .agents/tools/pipeline_cli.py doctor`。")
+        print("[run] 执行失败。建议先运行 `misra-pipeline doctor`。")
         return rc
 
     rc = execute_stage("merge", [])
@@ -386,7 +391,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             returncode=rc,
             data={"mode": mode},
         )
-        print("[oneshot] 执行失败。建议先运行 `python3 .agents/tools/pipeline_cli.py doctor`。")
+        print("[run] 执行失败。建议先运行 `misra-pipeline doctor`。")
         return rc
 
     append_pipeline_event(
@@ -396,5 +401,5 @@ def main(argv: Optional[List[str]] = None) -> int:
         message="oneshot 已完成 split/run/merge。",
         data={"mode": mode},
     )
-    print("[oneshot] 全部阶段执行完成。")
+    print("[run] 全部阶段执行完成。")
     return 0
