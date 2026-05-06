@@ -40,13 +40,10 @@ def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str
         argv.extend(["--add-dir", str(staging_paths["chunk_dir"])])
     if "--append-system-prompt" not in argv:
         argv.extend(["--append-system-prompt", CLAUDE_APPEND_SYSTEM_PROMPT])
-    # Move -p/--print to the end so it reads prompt from stdin instead of
-    # consuming the next argv element as the prompt text.
-    for flag in ("-p", "--print"):
-        if flag in argv:
-            argv.remove(flag)
-            argv.append(flag)
-            break
+    # Append --print (no value) to force non-interactive mode.
+    # With prompt_via=stdin, the prompt is piped via subprocess.run(input=...).
+    if "--print" not in argv and "-p" not in argv:
+        argv.append("--print")
     return {
         "argv": argv,
         "prompt_via": launch["prompt_via"],

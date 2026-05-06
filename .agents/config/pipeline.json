@@ -31,7 +31,7 @@
     ]
   },
   "fix_strategy": {
-    "mode": "conservative",
+    "mode": "all_auto",
     "mark_high_risk_in_all_auto": true,
     "require_review_after_high_risk_fix": true
   },
@@ -41,7 +41,7 @@
     "custom_command": ""
   },
   "agent": {
-    "provider": "opencode",
+    "provider": "claude",
     "staging_dir": ".agents/staging",
     "providers": {
       "codex": {
@@ -74,10 +74,9 @@
             "--output-format",
             "text",
             "--permission-mode",
-            "acceptEdits",
-            "-p"
+            "acceptEdits"
           ],
-          "prompt_via": "arg",
+          "prompt_via": "stdin",
           "cwd": "project_root",
           "env": {},
           "requires_tty": false,

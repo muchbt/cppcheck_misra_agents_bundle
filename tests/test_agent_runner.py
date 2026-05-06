@@ -63,8 +63,8 @@ class AgentConfigValidationTests(unittest.TestCase):
     def test_validate_pipeline_config_accepts_structured_agent(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
 
-        self.assertEqual(config["agent"]["provider"], "opencode")
-        self.assertIn("opencode", config["agent"]["providers"])
+        default_provider = config["agent"]["provider"]
+        self.assertIn(default_provider, config["agent"]["providers"])
         self.assertEqual(
             config["agent"]["providers"]["opencode"]["launch"]["argv"],
             ["opencode", "run", "--dangerously-skip-permissions"],
@@ -147,7 +147,6 @@ class ClaudeProviderTests(unittest.TestCase):
         config["agent"]["provider"] = "claude"
         config["agent"]["providers"]["claude"]["launch"]["argv"] = [
             "claude",
-            "-p",
             "--output-format",
             "text",
             "--permission-mode",
@@ -187,11 +186,11 @@ class ClaudeProviderTests(unittest.TestCase):
                 spec = claude_provider.build_launch_spec(config, chunk)
 
         self.assertEqual(spec["argv"][0], "claude")
-        self.assertEqual(spec["argv"][-1], "-p")
+        self.assertEqual(spec["argv"][-1], "--print")
         self.assertIn("--add-dir", spec["argv"])
         self.assertIn(str(staging_dir / "chunk_001"), spec["argv"])
         self.assertIn("--append-system-prompt", spec["argv"])
-        self.assertEqual(spec["prompt_via"], "arg")
+        self.assertEqual(spec["prompt_via"], "stdin")
         self.assertIn(".agents/staging/chunk_001/chunk_result.json", spec["prompt"])
         self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
 
