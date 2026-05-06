@@ -50,10 +50,10 @@ class MisraPipelineCliTests(unittest.TestCase):
         args = misra_pipeline_cli.parse_args(["upgrade"])
         self.assertEqual(args.subcommand, "upgrade")
 
-    def test_parse_args_doctor_subcommand(self):
-        """Test parse_args for 'doctor' subcommand."""
-        args = misra_pipeline_cli.parse_args(["doctor"])
-        self.assertEqual(args.subcommand, "doctor")
+    def test_parse_args_env_check_subcommand(self):
+        """Test parse_args for 'env-check' subcommand."""
+        args = misra_pipeline_cli.parse_args(["env-check"])
+        self.assertEqual(args.subcommand, "env-check")
 
     def test_parse_args_init_with_source(self):
         """Test parse_args for 'init --source release'."""
@@ -275,7 +275,7 @@ class MisraPipelineDownloadTests(unittest.TestCase):
                 self.assertTrue((target / "tools" / "tool.py").exists())
 
 
-class MisraPipelineDoctorTests(unittest.TestCase):
+class MisraPipelineEnvCheckTests(unittest.TestCase):
     def test_check_python_version_passes_on_38(self):
         """Test check_python_version passes on Python 3.8+."""
         result = misra_pipeline_cli.check_python_version()

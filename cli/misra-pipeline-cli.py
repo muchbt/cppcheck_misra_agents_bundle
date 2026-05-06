@@ -2,10 +2,20 @@
 """MISRA Pipeline CLI - Distribution and project initialization tool.
 
 Commands:
-  init       Initialize .agents/ directory in current project
-  upgrade    Upgrade installed .agents/ to latest version
-  version    Show CLI and project version
-  doctor     Check installation and environment
+  init         Initialize .agents/ directory in current project
+  upgrade      Upgrade installed .agents/ to latest version
+  version      Show CLI and project version
+  env-check    Check CLI installation and environment
+  config       Manage CLI configuration
+  split        Split cppcheck XML into runtime chunks
+  run          Run the agent fixing pipeline
+  merge        Merge runtime results into reports
+  verify       Verify one chunk result
+  bootstrap    Generate agent compatibility files
+  doctor       Run pipeline diagnostics
+  validate     Run provider validation test
+  oneshot      Run the one-shot agent entrypoint
+  policy       Manage policy configuration
 """
 
 from __future__ import annotations
@@ -18,6 +28,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import importlib
+import inspect
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -143,8 +155,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     # version subcommand
     subparsers.add_parser("version", help="Show CLI and project version.")
 
-    # doctor subcommand
-    subparsers.add_parser("doctor", help="Check installation and environment.")
+    # env-check subcommand
+    subparsers.add_parser("env-check", help="Check CLI installation and environment.")
 
     # config subcommand
     config_parser = subparsers.add_parser("config", help="Manage CLI configuration.")
@@ -759,10 +771,10 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
     return 0
 
 
-# ── Doctor command ───────────────────────────────────────────────────────────
+# ── Env-check command ────────────────────────────────────────────────────────
 
-def cmd_doctor(args: argparse.Namespace) -> int:
-    """Check installation and environment."""
+def cmd_env_check(args: argparse.Namespace) -> int:
+    """Check CLI installation and environment."""
     checks = [
         ("Python version (>=3.8)", check_python_version()),
         ("CLI installed", check_cli_installed()),
@@ -796,8 +808,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_init(args)
     elif args.subcommand == "upgrade":
         return cmd_upgrade(args)
-    elif args.subcommand == "doctor":
-        return cmd_doctor(args)
+    elif args.subcommand == "env-check":
+        return cmd_env_check(args)
     elif args.subcommand == "config":
         return cmd_config(args)
 
