@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
+import sys
+import threading
 from pathlib import Path
 from typing import Any, Dict
 
@@ -72,16 +75,28 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
     if prompt_via == "arg":
         cmd.append(prompt)
 
+    stdin_desc = "stdin=<prompt>" if prompt_via == "stdin" else "stdin=DEVNULL"
+    print(f"[agent_runner] provider={provider_name} chunk={chunk_index} prompt_via={prompt_via} {stdin_desc}")
+    print(f"[agent_runner] cwd={cwd}")
+    print(f"[agent_runner] argv: {shlex.join(cmd)}")
+    if len(cmd) != len([a for a in cmd if a == cmd[cmd.index(a)]]):
+        print(f"[agent_runner] full_argv: {cmd}")
+
+    # --- Popen + streaming stdout ---
+    popen_kwargs: Dict[str, Any] = dict(
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=str(cwd),
+        env=env,
+    )
+    if prompt_via == "stdin":
+        popen_kwargs["stdin"] = subprocess.PIPE
+    else:
+        popen_kwargs["stdin"] = subprocess.DEVNULL
+
     try:
-        completed = subprocess.run(
-            cmd,
-            input=prompt if prompt_via == "stdin" else None,
-            text=True,
-            capture_output=True,
-            cwd=str(cwd),
-            env=env,
-            check=False,
-        )
+        proc = subprocess.Popen(cmd, **popen_kwargs)
     except OSError as exc:
         return {
             "returncode": 1,
@@ -91,7 +106,40 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
             "prompt": prompt,
         }
 
-    if completed.returncode == 0 and staging_dir is not None:
+    # Write prompt to stdin if needed, then close stdin
+    if prompt_via == "stdin":
+        try:
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+        except OSError:
+            pass
+
+    # Collect stderr in a background thread to avoid pipe deadlocks
+    stderr_buf: list[str] = []
+
+    def _read_stderr() -> None:
+        for line in proc.stderr:
+            stderr_buf.append(line)
+
+    stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
+    stderr_thread.start()
+
+    # Stream stdout line-by-line to console while capturing it
+    stdout_buf: list[str] = []
+    prefix = f"[claude:chunk_{chunk_index:03d}] "
+    for line in proc.stdout:
+        stdout_buf.append(line)
+        sys.stdout.write(f"{prefix}{line}")
+        sys.stdout.flush()
+
+    proc.wait()
+    stderr_thread.join(timeout=5)
+
+    returncode = proc.returncode
+    stdout_text = "".join(stdout_buf)
+    stderr_text = "".join(stderr_buf)
+
+    if returncode == 0 and staging_dir is not None:
         try:
             runtime_dir = runtime_dir_for_root(current_root)
             imported_paths = import_chunk_staging_artifacts(
@@ -103,7 +151,7 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
         except (FileNotFoundError, OSError, ValueError) as exc:
             return {
                 "returncode": 1,
-                "stdout": completed.stdout,
+                "stdout": stdout_text,
                 "stderr": str(exc),
                 "error_kind": ERROR_KIND_IMPORT_ERROR,
                 "prompt": prompt,
@@ -113,18 +161,17 @@ def run_chunk_agent(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str, 
 
     # Classify error if execution failed
     error_kind = ""
-    if completed.returncode != 0:
+    if returncode != 0:
         classify_fn = getattr(provider, "classify_runtime_error", None)
         if callable(classify_fn):
-            error_kind = classify_fn(completed.stderr, completed.stdout, completed.returncode)
+            error_kind = classify_fn(stderr_text, stdout_text, returncode)
         else:
-            # Fallback for providers without classify_runtime_error method
             error_kind = ERROR_KIND_RUNTIME_ERROR
 
     return {
-        "returncode": completed.returncode,
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
+        "returncode": returncode,
+        "stdout": stdout_text,
+        "stderr": stderr_text,
         "error_kind": error_kind,
         "prompt": prompt,
         "argv": cmd,

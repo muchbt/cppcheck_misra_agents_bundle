@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import io
 import json
 import os
 import sys
@@ -149,10 +150,10 @@ class ClaudeProviderTests(unittest.TestCase):
             "claude",
             "--output-format",
             "text",
-            "--permission-mode",
-            "acceptEdits",
+            "--dangerously-skip-permissions",
         ]
         config["agent"]["providers"]["claude"]["launch"]["env"] = {}
+        config["agent"]["providers"]["claude"]["launch"]["prompt_via"] = "stdin"
         chunk = {
             "chunk_index": 1,
             "fix_strategy": "conservative",
@@ -186,13 +187,209 @@ class ClaudeProviderTests(unittest.TestCase):
                 spec = claude_provider.build_launch_spec(config, chunk)
 
         self.assertEqual(spec["argv"][0], "claude")
-        self.assertEqual(spec["argv"][-1], "--print")
+        self.assertIn("--dangerously-skip-permissions", spec["argv"])
+        self.assertNotIn("--print", spec["argv"])
+        self.assertNotIn("-p", spec["argv"])
         self.assertIn("--add-dir", spec["argv"])
         self.assertIn(str(staging_dir / "chunk_001"), spec["argv"])
         self.assertIn("--append-system-prompt", spec["argv"])
         self.assertEqual(spec["prompt_via"], "stdin")
         self.assertIn(".agents/staging/chunk_001/chunk_result.json", spec["prompt"])
         self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
+
+    def test_claude_provider_preserves_explicit_permission_mode(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "claude"
+        config["agent"]["providers"]["claude"]["launch"]["argv"] = [
+            "claude",
+            "--output-format",
+            "text",
+            "--permission-mode",
+            "acceptEdits",
+        ]
+        config["agent"]["providers"]["claude"]["launch"]["env"] = {}
+        config["agent"]["providers"]["claude"]["launch"]["prompt_via"] = "stdin"
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n{chunk_result_json_path}\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(json.dumps(chunk), encoding="utf-8")
+
+            claude_provider = importlib.import_module("providers.claude")
+            provider_base = importlib.import_module("providers.base")
+            with patch.object(claude_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                provider_base, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
+            ):
+                spec = claude_provider.build_launch_spec(config, chunk)
+
+        self.assertNotIn("--dangerously-skip-permissions", spec["argv"])
+        self.assertIn("--permission-mode", spec["argv"])
+        self.assertIn("acceptEdits", spec["argv"])
+        self.assertNotIn("--print", spec["argv"])
+        self.assertNotIn("-p", spec["argv"])
+
+    def test_claude_provider_removes_dash_p_in_stdin_mode(self) -> None:
+        """When prompt_via=stdin, -p/--print should be removed so pipe detection works."""
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "claude"
+        config["agent"]["providers"]["claude"]["launch"]["argv"] = [
+            "claude",
+            "-p",
+            "--output-format",
+            "text",
+        ]
+        config["agent"]["providers"]["claude"]["launch"]["env"] = {}
+        config["agent"]["providers"]["claude"]["launch"]["prompt_via"] = "stdin"
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n{chunk_result_json_path}\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(json.dumps(chunk), encoding="utf-8")
+
+            claude_provider = importlib.import_module("providers.claude")
+            provider_base = importlib.import_module("providers.base")
+            with patch.object(claude_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                provider_base, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
+            ):
+                spec = claude_provider.build_launch_spec(config, chunk)
+
+        # prompt_via=stdin: -p should be removed entirely
+        self.assertNotIn("-p", spec["argv"])
+        self.assertNotIn("--print", spec["argv"])
+        self.assertIn("--output-format", spec["argv"])
+
+    def test_claude_provider_arg_mode_moves_dash_p_to_end(self) -> None:
+        """When prompt_via=arg, -p should be moved to argv end so prompt follows it."""
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "claude"
+        config["agent"]["providers"]["claude"]["launch"]["argv"] = [
+            "claude",
+            "-p",
+            "--output-format",
+            "text",
+        ]
+        config["agent"]["providers"]["claude"]["launch"]["prompt_via"] = "arg"
+        config["agent"]["providers"]["claude"]["launch"]["env"] = {}
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n{chunk_result_json_path}\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(json.dumps(chunk), encoding="utf-8")
+
+            claude_provider = importlib.import_module("providers.claude")
+            provider_base = importlib.import_module("providers.base")
+            with patch.object(claude_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                provider_base, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
+            ):
+                spec = claude_provider.build_launch_spec(config, chunk)
+
+        # prompt_via=arg: -p must be at end so agent_runner can append prompt text
+        self.assertEqual(spec["argv"][-1], "-p")
+        self.assertEqual(spec["prompt_via"], "arg")
+
+    def test_claude_provider_arg_mode_adds_dash_p_if_absent(self) -> None:
+        """When prompt_via=arg and no -p/--print in argv, -p should be appended."""
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        config["agent"]["provider"] = "claude"
+        config["agent"]["providers"]["claude"]["launch"]["argv"] = [
+            "claude",
+            "--output-format",
+            "text",
+            "--dangerously-skip-permissions",
+        ]
+        config["agent"]["providers"]["claude"]["launch"]["prompt_via"] = "arg"
+        config["agent"]["providers"]["claude"]["launch"]["env"] = {}
+        chunk = {
+            "chunk_index": 1,
+            "fix_strategy": "conservative",
+            "contains_high_risk": False,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime_dir = root / "runtime"
+            prompts_dir = root / "prompts"
+            chunks_dir = runtime_dir / "chunks"
+            staging_dir = root / ".agents" / "staging"
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            chunks_dir.mkdir(parents=True)
+            staging_dir.mkdir(parents=True)
+
+            (prompts_dir / "fix_chunk_prompt.txt").write_text(
+                "Read chunk {chunk_index}\n{chunk_result_json_path}\n{strategy_instructions}\n",
+                encoding="utf-8",
+            )
+            (chunks_dir / "chunk_001.json").write_text(json.dumps(chunk), encoding="utf-8")
+
+            claude_provider = importlib.import_module("providers.claude")
+            provider_base = importlib.import_module("providers.base")
+            with patch.object(claude_provider, "RUNTIME_DIR", runtime_dir), patch.object(
+                provider_base, "PROMPTS_DIR", prompts_dir
+            ), patch.object(
+                provider_base, "resolve_agent_staging_dir", return_value=staging_dir
+            ):
+                spec = claude_provider.build_launch_spec(config, chunk)
+
+        self.assertEqual(spec["argv"][-1], "-p")
+        self.assertEqual(spec["prompt_via"], "arg")
 
 
 class OpenCodeProviderTests(unittest.TestCase):
@@ -297,7 +494,65 @@ class OpenCodeProviderTests(unittest.TestCase):
         self.assertEqual(spec["staging_dir"], str(staging_dir / "chunk_001"))
 
 
+class _MockProc:
+    """Lightweight mock for subprocess.Popen used by agent_runner streaming tests."""
+
+    def __init__(self, returncode: int = 0, stdout_text: str = "", stderr_text: str = "") -> None:
+        self.returncode = returncode
+        self.stdout = io.StringIO(stdout_text)
+        self.stderr = io.StringIO(stderr_text)
+        self._stdin_writes: list[str] = []
+        self.stdin = SimpleNamespace(
+            write=lambda s: self._stdin_writes.append(s),
+            close=lambda: None,
+        )
+
+    def wait(self) -> int:
+        return self.returncode
+
+
 class AgentRunnerTests(unittest.TestCase):
+    def test_run_chunk_agent_closes_stdin_for_prompt_via_arg(self) -> None:
+        config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
+        chunk = {"chunk_index": 1}
+        agent_runner = importlib.import_module("agent_runner")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            staging_dir = root / ".agents" / "staging" / "chunk_001"
+            common.save_json(root / ".agents" / "runtime" / "issue_status.json", {})
+            common.save_json(root / ".agents" / "runtime" / "file_change_index.json", {})
+
+            def build_spec(current_config: dict, current_chunk: dict) -> dict:
+                return {
+                    "argv": ["opencode", "run", "--dangerously-skip-permissions"],
+                    "prompt_via": "arg",
+                    "cwd_mode": "project_root",
+                    "env": {},
+                    "requires_tty": False,
+                    "output_mode": "exit_code",
+                    "prompt": "prompt body",
+                    "staging_dir": str(staging_dir),
+                }
+
+            def fake_popen(*args, **kwargs):
+                common.save_json(staging_dir / "issue_status_delta.json", {})
+                common.save_json(staging_dir / "file_change_delta.json", {})
+                common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 1})
+                (staging_dir / "chunk_result.md").write_text("# chunk 1\n", encoding="utf-8")
+                return _MockProc(returncode=0, stdout_text="ok\n")
+
+            with patch.object(agent_runner, "ROOT", root), patch.object(
+                agent_runner,
+                "get_provider",
+                return_value=SimpleNamespace(build_launch_spec=build_spec),
+            ), patch.object(agent_runner.subprocess, "Popen", side_effect=fake_popen) as popen_mock:
+                result = agent_runner.run_chunk_agent(config, chunk)
+                kwargs = popen_mock.call_args.kwargs
+
+            self.assertEqual(kwargs["stdin"], agent_runner.subprocess.DEVNULL)
+            self.assertEqual(result["returncode"], 0)
+
     def test_run_chunk_agent_passes_prompt_via_stdin(self) -> None:
         config = common.load_json(REPO_ROOT / ".agents" / "config" / "pipeline.json", {})
         chunk = {"chunk_index": 1}
@@ -321,28 +576,32 @@ class AgentRunnerTests(unittest.TestCase):
                     "staging_dir": str(staging_dir),
                 }
 
-            def fake_run(*args, **kwargs):
+            mock_proc = _MockProc(returncode=0, stdout_text="ok\n")
+
+            def fake_popen(*args, **kwargs):
                 common.save_json(staging_dir / "issue_status_delta.json", {"issue-a": {"status": "fixed"}})
                 common.save_json(staging_dir / "file_change_delta.json", {"src/a.c": {"edits": []}})
                 common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 1})
                 (staging_dir / "chunk_result.md").write_text("# chunk 1\n", encoding="utf-8")
-                return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                return mock_proc
 
             with patch.object(agent_runner, "ROOT", root), patch.object(
                 agent_runner,
                 "get_provider",
                 return_value=SimpleNamespace(build_launch_spec=build_spec),
-            ), patch.object(agent_runner.subprocess, "run", side_effect=fake_run) as run_mock:
+            ), patch.object(agent_runner.subprocess, "Popen", side_effect=fake_popen) as popen_mock:
                 result = agent_runner.run_chunk_agent(config, chunk)
-                kwargs = run_mock.call_args.kwargs
+                kwargs = popen_mock.call_args.kwargs
                 imported_result = common.load_json(
                     root / ".agents" / "runtime" / "results" / "chunk_001_result.json",
                     {},
                 )
 
-            self.assertEqual(kwargs["input"], "prompt body")
+            self.assertEqual(mock_proc._stdin_writes, ["prompt body"])
+            self.assertEqual(kwargs["stdin"], agent_runner.subprocess.PIPE)
             self.assertEqual(kwargs["text"], True)
-            self.assertTrue(kwargs["capture_output"])
+            self.assertEqual(kwargs["stdout"], agent_runner.subprocess.PIPE)
+            self.assertEqual(kwargs["stderr"], agent_runner.subprocess.PIPE)
             self.assertEqual(kwargs["cwd"], str(root))
             self.assertEqual(
                 kwargs["env"]["CODEX_HOME"],
@@ -386,8 +645,8 @@ class AgentRunnerTests(unittest.TestCase):
                         "staging_dir": str(staging_dir),
                     }
                 ),
-            ), patch.object(agent_runner.subprocess, "run") as run_mock:
-                run_mock.return_value = SimpleNamespace(returncode=0, stdout="ok", stderr="")
+            ), patch.object(agent_runner.subprocess, "Popen") as popen_mock:
+                popen_mock.return_value = _MockProc(returncode=0, stdout_text="ok\n")
                 result = agent_runner.run_chunk_agent(config, chunk)
 
         self.assertEqual(result["error_kind"], "import_error")
@@ -422,7 +681,7 @@ class AgentRunnerTests(unittest.TestCase):
                         "staging_dir": str(staging_dir),
                     }
                 ),
-            ), patch.object(agent_runner.subprocess, "run", side_effect=OSError("permission denied")):
+            ), patch.object(agent_runner.subprocess, "Popen", side_effect=OSError("permission denied")):
                 result = agent_runner.run_chunk_agent(config, chunk)
 
         self.assertEqual(result["error_kind"], "spawn_error")
@@ -469,19 +728,19 @@ class AgentRunnerTests(unittest.TestCase):
                     "prompt": "prompt body",
                     "staging_dir": str(root / ".agents" / "staging" / "chunk_001"),
                 },
-            ), patch.object(agent_runner.subprocess, "run") as run_mock:
+            ), patch.object(agent_runner.subprocess, "Popen") as popen_mock:
                 staging_dir = root / ".agents" / "staging" / "chunk_001"
                 common.save_json(root / ".agents" / "runtime" / "issue_status.json", {})
                 common.save_json(root / ".agents" / "runtime" / "file_change_index.json", {})
 
-                def fake_run(*args, **kwargs):
+                def fake_popen(*args, **kwargs):
                     common.save_json(staging_dir / "issue_status_delta.json", {})
                     common.save_json(staging_dir / "file_change_delta.json", {})
                     common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 1})
                     (staging_dir / "chunk_result.md").write_text("# chunk 1\n", encoding="utf-8")
-                    return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                    return _MockProc(returncode=0, stdout_text="ok\n")
 
-                run_mock.side_effect = fake_run
+                popen_mock.side_effect = fake_popen
                 result = agent_runner.run_chunk_agent(config, chunk)
 
             self.assertEqual(result["returncode"], 0)
