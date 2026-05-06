@@ -433,11 +433,39 @@ def add_rule(
     return 0
 
 
+def _select_template_interactive() -> List[str]:
+    """Interactively select a template when none specified."""
+    template_list = list(AVAILABLE_TEMPLATES.items())
+    default_template = "misra_c2012_relaxed"
+    if not sys.stdin.isatty():
+        print(f"Warning: No --template specified and not running in a terminal. Using default: '{default_template}'", file=sys.stderr)
+        return [default_template]
+
+    print("Available templates:\n")
+    for i, (name, description) in enumerate(template_list, 1):
+        print(f"  [{i}] {name:30s} - {description}")
+    print()
+
+    default_choice = "2"
+    while True:
+        choice = input(f"Select template number [{default_choice}]: ").strip()
+        if not choice:
+            choice = default_choice
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(template_list):
+                selected = template_list[idx][0]
+                print(f"\nSelected: {selected}")
+                return [selected]
+        except ValueError:
+            pass
+        print(f"Invalid choice. Enter a number between 1 and {len(template_list)}.", file=sys.stderr)
+
+
 def init_policy(templates: List[str], output_path: Path, force: bool) -> int:
     """Initialize policy from one or more templates (merged)."""
     if not templates:
-        templates = [list(AVAILABLE_TEMPLATES.keys())[0]]
-        print(f"No template specified, using default: '{templates[0]}'")
+        templates = _select_template_interactive()
 
     if output_path.exists() and not force:
         print(
