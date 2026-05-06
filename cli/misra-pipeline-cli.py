@@ -199,27 +199,28 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
             default=None,
             help="Override agent provider (sets PIPELINE_AGENT_PROVIDER env var)",
         )
-        cmd_parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments passed to the command")
 
-    # policy subcommand (REMAINDER forwarding, not dual-parsing)
+    # policy subcommand (forward remaining args to policy_init)
     policy_parser = subparsers.add_parser(
         "policy",
         help="Manage policy configuration",
-        epilog=(
-            "Examples:\n"
-            "  misra-pipeline policy init --template misra_c2012_relaxed\n"
-            "  misra-pipeline policy list\n"
-            "  misra-pipeline policy list --rule-id misra*\n"
-            "  misra-pipeline policy test --rule-id R1.1 --file test.c\n"
-            "  misra-pipeline policy add --rule-id R1.1 --action auto_fix\n"
-            "\n"
-            "Use 'misra-pipeline policy -- --help' to see policy_init's full help."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    policy_parser.add_argument("policy_args", nargs=argparse.REMAINDER, help="Arguments passed to policy_init")
+    policy_parser.add_argument(
+        "--provider", "-P",
+        choices=["codex", "claude", "opencode", "kimi"],
+        default=None,
+        help="Override agent provider (sets PIPELINE_AGENT_PROVIDER env var)",
+    )
 
-    return parser.parse_args(argv if argv is not None else sys.argv[1:])
+    # Use parse_known_args so --flags like --dry-run pass through to subcommands
+    parsed, forwarded = parser.parse_known_args(argv if argv is not None else sys.argv[1:])
+    # Attach forwarded args to the namespace
+    if parsed.subcommand in PIPELINE_COMMANDS:
+        parsed.args = forwarded
+    elif parsed.subcommand == "policy":
+        parsed.policy_args = forwarded
+
+    return parsed
 
 
 # ── Version helpers ──────────────────────────────────────────────────────────
@@ -905,10 +906,6 @@ def _dispatch_pipeline_command(command: str, args: list[str], provider: Optional
         print("Check that .agents/ is properly installed.", file=sys.stderr)
         return 1
 
-    # Strip leading '--' argparse REMAINDER separator before forwarding
-    if args and args[0] == "--":
-        args = args[1:]
-
     # Set PIPELINE_AGENT_PROVIDER env var if --provider is specified
     original_provider = os.environ.get("PIPELINE_AGENT_PROVIDER")
     try:
@@ -956,10 +953,6 @@ def _dispatch_policy_command(policy_args: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
-
-    # Strip leading '--' argparse REMAINDER separator before forwarding
-    if policy_args and policy_args[0] == "--":
-        policy_args = policy_args[1:]
 
     original_argv = sys.argv
     try:

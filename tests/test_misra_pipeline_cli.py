@@ -23,7 +23,7 @@ class MisraPipelineCliTests(unittest.TestCase):
         """Test version command shows CLI version from VERSION file."""
         result = misra_pipeline_cli.cmd_version_mock()
         self.assertIn("CLI version:", result)
-        self.assertIn("v0.3.0", result)
+        self.assertIn("v0.4.0", result)
 
     def test_parse_args_version_subcommand(self):
         """Test parse_args for 'version' subcommand."""
@@ -98,16 +98,16 @@ class MisraPipelineCliTests(unittest.TestCase):
         self.assertTrue(args.yes)
 
     def test_parse_args_split_subcommand(self):
-        """Test parse_args for 'split' subcommand."""
-        args = misra_pipeline_cli.parse_args(["split", "--", "--input", "cppcheck.xml"])
+        """Test parse_args for 'split' subcommand with forwarded args."""
+        args = misra_pipeline_cli.parse_args(["split", "--input", "cppcheck.xml"])
         self.assertEqual(args.subcommand, "split")
-        self.assertEqual(args.args, ["--", "--input", "cppcheck.xml"])
+        self.assertEqual(args.args, ["--input", "cppcheck.xml"])
 
     def test_parse_args_run_subcommand(self):
-        """Test parse_args for 'run' subcommand."""
-        args = misra_pipeline_cli.parse_args(["run", "--", "--dry-run"])
+        """Test parse_args for 'run' subcommand with forwarded args."""
+        args = misra_pipeline_cli.parse_args(["run", "--dry-run"])
         self.assertEqual(args.subcommand, "run")
-        self.assertEqual(args.args, ["--", "--dry-run"])
+        self.assertEqual(args.args, ["--dry-run"])
 
     def test_parse_args_merge_subcommand(self):
         """Test parse_args for 'merge' subcommand."""
@@ -115,7 +115,7 @@ class MisraPipelineCliTests(unittest.TestCase):
         self.assertEqual(args.subcommand, "merge")
 
     def test_parse_args_verify_subcommand(self):
-        """Test parse_args for 'verify' subcommand."""
+        """Test parse_args for 'verify' subcommand with positional args."""
         args = misra_pipeline_cli.parse_args(["verify", "chunk_001"])
         self.assertEqual(args.subcommand, "verify")
         self.assertEqual(args.args, ["chunk_001"])
@@ -151,7 +151,7 @@ class MisraPipelineCliTests(unittest.TestCase):
             misra_pipeline_cli.parse_args(["run", "--provider", "invalid"])
 
     def test_parse_args_policy_subcommand(self):
-        """Test parse_args for 'policy' with REMAINDER args."""
+        """Test parse_args for 'policy' with forwarded args."""
         args = misra_pipeline_cli.parse_args(["policy", "init", "--template", "misra_c2012_relaxed"])
         self.assertEqual(args.subcommand, "policy")
         self.assertEqual(args.policy_args, ["init", "--template", "misra_c2012_relaxed"])
@@ -508,7 +508,7 @@ class MisraPipelineUpgradeTests(unittest.TestCase):
 
 class MisraPipelineDispatchTests(unittest.TestCase):
     def test_dispatch_strips_leading_double_dash(self):
-        """Test that _dispatch_pipeline_command strips leading '--' from REMAINDER args."""
+        """Test that _dispatch_pipeline_command handles forwarded args correctly."""
         seen = {}
 
         class FakeModuleWithArgs:
@@ -523,7 +523,7 @@ class MisraPipelineDispatchTests(unittest.TestCase):
             with patch.object(misra_pipeline_cli.Path, "cwd", return_value=Path(tmp)):
                 with patch.object(misra_pipeline_cli.importlib, "import_module", return_value=FakeModuleWithArgs()):
                     result = misra_pipeline_cli._dispatch_pipeline_command(
-                        "split", ["--", "--input", "test.xml"]
+                        "split", ["--input", "test.xml"]
                     )
 
         self.assertEqual(result, 0)
