@@ -1,3 +1,5 @@
+# Project AGENTS
+
 <!-- BEGIN AUTO-GENERATED: cppcheck-misra-fix -->
 ## Static analysis / cppcheck / MISRA workflow
 

@@ -1,10 +1,13 @@
+# Project AGENTS
+
 <!-- BEGIN AUTO-GENERATED: cppcheck-misra-fix -->
 ## Static analysis / cppcheck / MISRA workflow
 
 - Read the current chunk JSON first
 - Only process the current chunk
 - Only inspect files listed in the current chunk unless strictly necessary
-- Apply minimal edits only
+- Apply minimal edits only — change only the lines necessary to resolve each issue; do not reformat, refactor, or restructure surrounding code
+- For every code change, add a brief inline comment at the modified line(s) identifying the fixed issue and the fix method, e.g. `/* fix: misra-c2012-11.3 — added explicit cast */`
 - Do not do unrelated refactors or formatting
 - Do not infer behavior from comments; use actual code/data/control flow
 - Follow the current chunk's fix_strategy and each issue's strategy_action

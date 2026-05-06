@@ -13,7 +13,8 @@ Fix high-confidence cppcheck and MISRA findings from one chunk at a time.
 - Follow the chunk's `fix_strategy` and each issue's `strategy_action`
 - In `conservative` mode, prefer local, high-confidence fixes only
 - In `all_auto` mode, attempt every issue when a technically valid minimal edit is possible
-- Keep edits minimal
+- Keep edits minimal — change only the lines necessary to resolve each issue; do not reformat, refactor, or restructure surrounding code
+- For every code change, add a brief inline comment at the modified line(s) identifying the fixed issue and the fix method, e.g. `/* fix: misra-c2012-11.3 — added explicit cast */` or `/* fix: nullPointer — added NULL guard */`
 - Do not infer code intent from comments
 - For high-risk fixes, keep edits isolated and mark them for human review
 - In `conservative` mode, mark high-risk MISRA/volatile/interrupt/register/RTE/MCAL findings as `needs_manual_review`
