@@ -51,6 +51,18 @@ VERSION_FILE = CLI_DIR / "VERSION"
 
 MIN_PYTHON = (3, 8)
 
+# Pipeline command mapping: subcommand -> module_name in .agents/tools/
+PIPELINE_COMMANDS: Dict[str, str] = {
+    "split": "split_cppcheck_xml",
+    "run": "run_fix_pipeline",
+    "merge": "merge_results",
+    "verify": "verify_chunk",
+    "bootstrap": "bootstrap_agents",
+    "doctor": "doctor",
+    "validate": "validate_real",
+    "oneshot": "oneshot",
+}
+
 # Error kinds for agent execution
 ERROR_KIND_LAUNCH_FAILED = "launch_failed"
 ERROR_KIND_TIMEOUT = "timeout"
@@ -167,6 +179,45 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     config_set.add_argument("value", help="Value to set")
     config_reset = config_subparsers.add_parser("reset", help="Reset configuration to defaults.")
     config_reset.add_argument("--yes", "-y", action="store_true", help="Skip confirmation")
+
+    # Pipeline commands (forward to .agents/tools/ modules)
+    for cmd_name, module_name in PIPELINE_COMMANDS.items():
+        cmd_help = {
+            "split": "Split cppcheck XML into runtime chunks",
+            "run": "Run the agent fixing pipeline",
+            "merge": "Merge runtime results into reports",
+            "verify": "Verify one chunk result",
+            "bootstrap": "Generate agent compatibility files",
+            "doctor": "Run pipeline diagnostics",
+            "validate": "Provider validation test (formerly 'validate-real')",
+            "oneshot": "Run the one-shot agent entrypoint",
+        }.get(cmd_name, f"Run {module_name}")
+        cmd_parser = subparsers.add_parser(cmd_name, help=cmd_help)
+        cmd_parser.add_argument(
+            "--provider", "-P",
+            choices=["codex", "claude", "opencode", "kimi"],
+            default=None,
+            help="Override agent provider (sets PIPELINE_AGENT_PROVIDER env var)",
+        )
+        cmd_parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments passed to the command")
+
+    # policy subcommand (REMAINDER forwarding, not dual-parsing)
+    policy_parser = subparsers.add_parser(
+        "policy",
+        help="Manage policy configuration",
+        epilog=(
+            "Examples:\n"
+            "  misra-pipeline policy init --template misra_c2012_relaxed\n"
+            "  misra-pipeline policy list\n"
+            "  misra-pipeline policy list --rule-id misra*\n"
+            "  misra-pipeline policy test --rule-id R1.1 --file test.c\n"
+            "  misra-pipeline policy add --rule-id R1.1 --action auto_fix\n"
+            "\n"
+            "Use 'misra-pipeline policy -- --help' to see policy_init's full help."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    policy_parser.add_argument("policy_args", nargs=argparse.REMAINDER, help="Arguments passed to policy_init")
 
     return parser.parse_args(argv if argv is not None else sys.argv[1:])
 
@@ -796,6 +847,106 @@ def cmd_env_check(args: argparse.Namespace) -> int:
         return 1
 
 
+# ── Pipeline command dispatch ────────────────────────────────────────────────
+
+def _call_module_main(module, args: list[str]) -> int:
+    """Call module.main() with or without argv depending on its signature.
+
+    merge_results, bootstrap_agents, verify_chunk have main() with no args.
+    All other modules have main(argv=None).
+    """
+    sig = inspect.signature(module.main)
+    if len(sig.parameters) > 0:
+        result = module.main(args)
+    else:
+        result = module.main()
+    return result if isinstance(result, int) else 0
+
+
+def _dispatch_pipeline_command(command: str, args: list[str], provider: Optional[str] = None) -> int:
+    """Dispatch a pipeline command to its implementation module in .agents/tools/."""
+    tools_dir = Path.cwd() / ".agents" / "tools"
+    if not tools_dir.exists():
+        print(
+            f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    tools_dir_str = str(tools_dir.resolve())
+    if tools_dir_str not in sys.path:
+        sys.path.insert(0, tools_dir_str)
+
+    module_name = PIPELINE_COMMANDS[command]
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError as exc:
+        print(
+            f"Error: Failed to import module '{module_name}': {exc}",
+            file=sys.stderr,
+        )
+        print("Check that .agents/ is properly installed.", file=sys.stderr)
+        return 1
+
+    # Set PIPELINE_AGENT_PROVIDER env var if --provider is specified
+    original_provider = os.environ.get("PIPELINE_AGENT_PROVIDER")
+    try:
+        if provider:
+            os.environ["PIPELINE_AGENT_PROVIDER"] = provider
+        elif original_provider is not None:
+            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+        original_argv = sys.argv
+        try:
+            sys.argv = [f"{module_name}.py", *args]
+            return _call_module_main(module, args)
+        except Exception as exc:
+            print(f"Error running {command}: {exc}", file=sys.stderr)
+            return 1
+        finally:
+            sys.argv = original_argv
+    finally:
+        # Restore original PIPELINE_AGENT_PROVIDER state
+        if original_provider is not None:
+            os.environ["PIPELINE_AGENT_PROVIDER"] = original_provider
+        else:
+            os.environ.pop("PIPELINE_AGENT_PROVIDER", None)
+
+
+def _dispatch_policy_command(policy_args: list[str]) -> int:
+    """Dispatch policy command to policy_init module using REMAINDER forwarding."""
+    tools_dir = Path.cwd() / ".agents" / "tools"
+    if not tools_dir.exists():
+        print(
+            f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    tools_dir_str = str(tools_dir.resolve())
+    if tools_dir_str not in sys.path:
+        sys.path.insert(0, tools_dir_str)
+
+    try:
+        policy_init = importlib.import_module("policy_init")
+    except ImportError as exc:
+        print(
+            f"Error: Failed to import policy_init: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    original_argv = sys.argv
+    try:
+        sys.argv = ["policy_init.py", *policy_args]
+        return _call_module_main(policy_init, policy_args)
+    except Exception as exc:
+        print(f"Error running policy: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        sys.argv = original_argv
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -812,6 +963,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_env_check(args)
     elif args.subcommand == "config":
         return cmd_config(args)
+    elif args.subcommand in PIPELINE_COMMANDS:
+        provider = getattr(args, "provider", None)
+        return _dispatch_pipeline_command(args.subcommand, args.args, provider=provider)
+    elif args.subcommand == "policy":
+        return _dispatch_policy_command(args.policy_args)
 
     return 0
 
