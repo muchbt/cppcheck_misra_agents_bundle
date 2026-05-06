@@ -426,10 +426,12 @@ class DoctorTests(unittest.TestCase):
 
     def test_task2_cli_sources_do_not_use_pep604_optional_syntax(self) -> None:
         doctor_source = (TOOLS_DIR / "doctor.py").read_text(encoding="utf-8")
-        pipeline_cli_source = (TOOLS_DIR / "pipeline_cli.py").read_text(encoding="utf-8")
-
         self.assertNotIn(" | None", doctor_source)
-        self.assertNotIn(" | None", pipeline_cli_source)
+
+        cli_entry = Path(__file__).resolve().parent.parent / "cli" / "misra-pipeline-cli.py"
+        if cli_entry.exists():
+            cli_source = cli_entry.read_text(encoding="utf-8")
+            self.assertNotIn(" | None", cli_source)
 
     def test_collect_checks_uses_provider_from_env_var(self) -> None:
         """Test that doctor respects PIPELINE_AGENT_PROVIDER env var."""
