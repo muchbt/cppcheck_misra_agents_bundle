@@ -110,3 +110,82 @@ def create_bundle(
             log = logs_dir / f"chunk_{idx:03d}.log"
             if log.exists():
                 tar.add(log, arcname=f"logs/chunk_{idx:03d}.log")
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="export_chunks")
+    parser.add_argument(
+        "--output", "-o", dest="output", default=None,
+        help="Output bundle path (default: export-<run_id>-<host_id>.tar.gz)",
+    )
+    parser.add_argument(
+        "--host-id", dest="host_id", default=None,
+        help="Override host identifier",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
+    progress = load_json(RUNTIME_DIR / "progress.json", {})
+    run_id = progress.get("run_id", "unknown")
+    completed = set(progress.get("completed_chunks", []))
+    failed = set(progress.get("failed_chunks", []))
+
+    config = load_json(CONFIG_DIR / "pipeline.json", {})
+    staging_base = resolve_agent_staging_dir(config)
+    completed_export = []
+    failed_export = []
+    missing_staging = []
+
+    for idx in sorted(completed):
+        chunk_staging = staging_base / f"chunk_{idx:03d}"
+        if (chunk_staging / "chunk_result.json").exists():
+            completed_export.append(idx)
+        else:
+            missing_staging.append(idx)
+
+    for idx in sorted(failed):
+        chunk_staging = staging_base / f"chunk_{idx:03d}"
+        if (chunk_staging / "chunk_result.json").exists():
+            failed_export.append(idx)
+
+    if missing_staging:
+        print(f"[export] 警告: completed chunk {missing_staging} 的 staging 产出物缺失，将跳过")
+
+    all_ids = sorted(completed | failed)
+    if not all_ids:
+        print("[export] 无已处理 chunk，无需导出。")
+        return 0
+
+    patch_content, patch_msg = try_generate_patch()
+    print(f"[export] {patch_msg}")
+
+    host_id = resolve_host_id(args)
+    manifest = build_manifest(
+        run_id=run_id,
+        host_id=host_id,
+        completed_chunks=completed_export,
+        failed_chunks=sorted(failed),
+        chunk_ids_requested=all_ids,
+        has_source_patch=patch_content is not None,
+        staging_dirs=[f"staging/chunk_{idx:03d}" for idx in completed_export],
+    )
+
+    output_path = Path(args.output) if args.output else Path(f"export-{run_id}-{host_id}.tar.gz")
+    create_bundle(
+        output_path=output_path,
+        manifest=manifest,
+        patch_content=patch_content,
+        completed_export=completed_export,
+        staging_base=staging_base,
+        all_ids=all_ids,
+        logs_dir=LOGS_DIR,
+    )
+
+    print(f"[export] 已导出 {len(completed_export)} completed + {len(failed_export)} failed chunk → {output_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

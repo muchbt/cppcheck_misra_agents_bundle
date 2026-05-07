@@ -107,3 +107,57 @@ def test_create_bundle_writes_tar_gz(tmp_path):
     assert "manifest.json" in names
     assert "staging/chunk_003/chunk_result.json" in names
     assert "logs/chunk_003.log" in names
+
+
+def test_main_no_chunks_prints_message(tmp_path, capsys):
+    with patch("export_chunks.RUNTIME_DIR", tmp_path / "runtime"):
+        with patch("export_chunks.CONFIG_DIR", tmp_path / "config"):
+            with patch("export_chunks.LOGS_DIR", tmp_path / "logs"):
+                runtime_dir = tmp_path / "runtime"
+                runtime_dir.mkdir(parents=True)
+                config_dir = tmp_path / "config"
+                config_dir.mkdir(parents=True)
+                (runtime_dir / "progress.json").write_text(
+                    '{"run_id": "20260507-001", "completed_chunks": [], "failed_chunks": []}'
+                )
+                (config_dir / "pipeline.json").write_text(
+                    '{"agent": {"staging_dir": ".agents/staging"}}'
+                )
+                rc = export_chunks.main(["--output", str(tmp_path / "out.tar.gz")])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "无已处理 chunk" in captured.out
+
+
+def test_main_exports_completed_chunk(tmp_path, capsys):
+    with patch("export_chunks.RUNTIME_DIR", tmp_path / "runtime"):
+        with patch("export_chunks.CONFIG_DIR", tmp_path / "config"):
+            with patch("export_chunks.LOGS_DIR", tmp_path / "logs"):
+                with patch("export_chunks.ROOT", tmp_path):
+                    with patch("export_chunks.subprocess.run") as mock_git:
+                        mock_git.return_value.returncode = 0
+                        mock_git.return_value.stdout = ""
+                        runtime_dir = tmp_path / "runtime"
+                        runtime_dir.mkdir(parents=True)
+                        config_dir = tmp_path / "config"
+                        config_dir.mkdir(parents=True)
+                        staging_base = tmp_path / ".agents" / "staging"
+                        staging_base.mkdir(parents=True)
+                        chunk_dir = staging_base / "chunk_003"
+                        chunk_dir.mkdir()
+                        (chunk_dir / "chunk_result.json").write_text('{"ok": true}')
+                        (chunk_dir / "issue_status_delta.json").write_text('{}')
+                        (chunk_dir / "file_change_delta.json").write_text('{}')
+                        (chunk_dir / "chunk_result.md").write_text("# Result")
+                        (runtime_dir / "progress.json").write_text(
+                            '{"run_id": "20260507-001", "completed_chunks": [3], "failed_chunks": []}'
+                        )
+                        (config_dir / "pipeline.json").write_text(
+                            '{"agent": {"staging_dir": ".agents/staging"}}'
+                        )
+                        output = tmp_path / "out.tar.gz"
+                        rc = export_chunks.main(["--output", str(output)])
+    assert rc == 0
+    assert output.exists()
+    captured = capsys.readouterr()
+    assert "已导出" in captured.out
