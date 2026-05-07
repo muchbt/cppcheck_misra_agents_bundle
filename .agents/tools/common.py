@@ -631,13 +631,21 @@ def _as_string_list(value: Any) -> List[str]:
     return [text] if text else []
 
 
+_KNOWN_FILE_CHANGES_KEYS = ("file_changes", "files_changed", "changes", "modified_files")
+
+
 def normalize_file_change_delta(
     base_file_change_index: Dict[str, Any],
     file_change_delta: Dict[str, Any],
     chunk_index: int,
 ) -> Dict[str, Any]:
-    file_changes = file_change_delta.get("file_changes")
-    if isinstance(file_changes, list):
+    file_changes = None
+    for key in _KNOWN_FILE_CHANGES_KEYS:
+        candidate = file_change_delta.get(key)
+        if isinstance(candidate, list):
+            file_changes = candidate
+            break
+    if file_changes is not None:
         normalized: Dict[str, Any] = {}
         for item in file_changes:
             if not isinstance(item, dict):
