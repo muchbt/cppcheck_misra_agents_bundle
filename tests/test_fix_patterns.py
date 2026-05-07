@@ -140,3 +140,11 @@ def test_chunk_unique_fix_patterns_all_none():
             if fp is not None:
                 seen[rid] = fp
     assert len(seen) == 0
+
+
+def test_split_without_fix_patterns_file_graceful_fallback():
+    """When fix_patterns is empty dict (file missing), all lookups return None."""
+    empty_patterns = {}
+    assert spm.lookup_fix_pattern("unusedVariable", "low", empty_patterns) is None
+    assert spm.lookup_fix_pattern("misra-c2012-17.7", "high", empty_patterns) is None
+    assert spm.lookup_fix_pattern("anyRule", "medium", empty_patterns) is None
