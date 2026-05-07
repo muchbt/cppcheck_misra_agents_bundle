@@ -517,7 +517,7 @@ def read_text(path: Path, default: str = "") -> str:
 
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8", newline="\n")
+    path.write_bytes(content.encode("utf-8"))
 
 def load_json(path: Path, default: Any = None) -> Any:
     if not path.exists():

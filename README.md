@@ -370,19 +370,19 @@ python3 .agents/tools/pipeline_cli.py bootstrap --mode merge
 ### Linux 安装
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | bash
 ```
 
 指定版本：
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh -s -- --version v1.2.3
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | bash -s -- --version v1.2.3
 ```
 
 指定自定义仓库：
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | sh -s -- --repo-url https://gitlab.company.com/tools/misra-pipeline
+curl -sSL https://raw.githubusercontent.com/muchbt/cppcheck_misra_agents_bundle/refs/heads/main/install.sh | bash -s -- --repo-url https://gitlab.company.com/tools/misra-pipeline
 ```
 
 ### Windows 安装
