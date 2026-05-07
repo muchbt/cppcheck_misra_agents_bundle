@@ -46,7 +46,34 @@ misra-pipeline run --provider kimi
 | `bootstrap` | 生成 agent 兼容层（AGENTS.md、SKILL.md） |
 | `verify` | 验证单个 chunk 结果 |
 | `validate` | provider 验证测试 |
+| `export` | 导出已处理的 chunk 结果为 bundle（多设备工作流） |
+| `collect` | 从 worker 设备回收 bundle 并导入（多设备工作流） |
 | `policy` | 策略模板管理（list/init/test/add） |
+
+## 分布式多设备工作流
+
+支持将 chunk 分配到多台设备并行处理，最后统一回收：
+
+```bash
+# 1. Coordinator 切分
+misra-pipeline run --stage split
+
+# 2. 同步项目到各 Worker（git/rsync）
+
+# 3. 各 Worker 处理指定 chunk
+misra-pipeline run --stage agent --chunk-id 3-4
+misra-pipeline export  # → export-<run_id>-<host>.tar.gz
+
+# 4. Coordinator 回收
+misra-pipeline collect --from export-*.tar.gz
+
+# 5. 合并生成报告
+misra-pipeline run --stage merge
+```
+
+- `export` 打包 staging delta、日志和可选的 git patch
+- `collect` 校验 run_id、检测冲突、复用 `import_chunk_staging_artifacts` 导入
+- 支持多次 `collect`，幂等（已完成的 chunk 自动跳过）
 
 ## 目录结构
 
