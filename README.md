@@ -8,7 +8,7 @@
 - 调用本地 agent CLI
 - 记录 issue 状态、修改点、chunk 结果、统一运行日志
 - 支持按 `年月日-序号` 的 `run_id` 归档
-- 支持 `oneshot` 统一入口和默认续跑
+- 支持 `run` 统一入口和默认续跑
 - 通过 `.agents/` 统一管理，并自动生成兼容层
 
 ## 系统要求
@@ -28,23 +28,24 @@
 切换 provider 只需修改 `.agents/config/pipeline.json` 中的 `agent.provider` 字段，或通过 CLI 参数覆盖：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py --provider kimi oneshot
+misra-pipeline run --provider kimi
 ```
 
 ## CLI 命令
 
-唯一入口：`pipeline_cli.py`
+唯一入口：`misra-pipeline`（开发模式下：`python3 cli/misra-pipeline-cli.py`）
 
 | 命令 | 功能 |
 |------|------|
-| `oneshot` | 一键执行 split → run → merge，支持自动续跑 |
+| `run` | 执行 split → agent → merge，支持自动续跑 |
+| `oneshot` | 已废弃，使用 `run` 代替 |
 | `split` | 解析 cppcheck.xml，按策略切分 chunk |
-| `run` | 执行 agent 修复 pipeline |
 | `merge` | 合并结果，生成中文报告和归档 |
+| `status` | 显示当前运行进度 |
 | `doctor` | 运行环境诊断检查 |
 | `bootstrap` | 生成 agent 兼容层（AGENTS.md、SKILL.md） |
 | `verify` | 验证单个 chunk 结果 |
-| `validate-real` | 真实 provider 验证（1 issue / 1 chunk） |
+| `validate` | provider 验证测试 |
 | `policy` | 策略模板管理（list/init/test/add） |
 
 ## 目录结构
@@ -53,7 +54,7 @@ python3 .agents/tools/pipeline_cli.py --provider kimi oneshot
 - `.agents/config/templates/*.json`：策略模板
 - `.agents/prompts/*.txt`：prompt 模板
 - `.agents/skills/*`：主 skill 源
-- `.agents/tools/*.py`：工具脚本（仅通过 pipeline_cli 调用）
+- `.agents/tools/*.py`：工具脚本（仅通过 misra-pipeline CLI 调用）
 - `.agents/runtime/*`：当前运行态、chunk、结果、日志
 - `.agents/reports/*`：当前运行的中文报告
 - `.agents/runs/<run_id>/*`：历史归档
@@ -73,19 +74,19 @@ python3 .agents/tools/pipeline_cli.py --provider kimi oneshot
 
 ```bash
 # 查看可用模板
-python3 .agents/tools/pipeline_cli.py policy list
+misra-pipeline policy list
 
 # 从单个模板初始化策略文件
-python3 .agents/tools/pipeline_cli.py policy init misra_c2012_relaxed
+misra-pipeline policy init misra_c2012_relaxed
 
 # 从多个模板初始化（合并，后面的覆盖前面的冲突规则）
-python3 .agents/tools/pipeline_cli.py policy init --template misra_c2012_relaxed --template cppcheck_common
+misra-pipeline policy init --template misra_c2012_relaxed --template cppcheck_common
 
 # 测试规则匹配
-python3 .agents/tools/pipeline_cli.py policy test misra-c2012-2.2
+misra-pipeline policy test misra-c2012-2.2
 
 # 添加自定义规则
-python3 .agents/tools/pipeline_cli.py policy add misra-c2012-8.1 --action auto_fix --risk-level low
+misra-pipeline policy add misra-c2012-8.1 --action auto_fix --risk-level low
 ```
 
 ### 多模板合并规则
@@ -104,7 +105,7 @@ python3 .agents/tools/pipeline_cli.py policy add misra-c2012-8.1 --action auto_f
 假设模板 A 定义 `misra-c2012-2.2 → auto_fix`，模板 B 定义 `misra-c2012-2.2 → needs_manual_review`：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py policy init --template misra_c2012_relaxed --template misra_c2012_conservative
+misra-pipeline policy init --template misra_c2012_relaxed --template misra_c2012_conservative
 ```
 
 结果：`misra-c2012-2.2` 动作取决于顺序：
@@ -243,38 +244,38 @@ chunk prompt 模板（`.agents/prompts/fix_chunk_prompt.txt`）新增：
 首次接入、环境异常、命令失败时，先运行：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py doctor
+misra-pipeline doctor
 ```
 
 日常使用推荐直接运行：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py oneshot
+misra-pipeline run
 ```
 
-`oneshot` 会自动完成：
+`run` 会自动完成：
 
 1. 预检查（doctor）
 2. `split`（解析 XML、切 chunk）
 3. `run`（执行 agent 修复）
 4. `merge`（生成报告、归档）
 
-如果检测到已有未完成运行，`oneshot` 会默认续跑。
+如果检测到已有未完成运行，`run` 会默认续跑。
 
 ## fresh 与续跑
 
-默认情况下，只要 `.agents/runtime/progress.json` 的状态是 `ready`、`running`、`partial` 或 `failed`，`oneshot` 就会续跑。
+默认情况下，只要 `.agents/runtime/progress.json` 的状态是 `ready`、`running`、`partial` 或 `failed`，`run` 就会续跑。
 
 强制从头开始：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py oneshot --fresh
+misra-pipeline run --fresh
 ```
 
 指定策略或 run_id：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto --run-id 20260423-001
+misra-pipeline run --fresh --strategy all_auto --run-id 20260423-001
 ```
 
 ## 分步命令
@@ -282,16 +283,16 @@ python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto --run-
 需要拆开执行时：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py split --strategy conservative
-python3 .agents/tools/pipeline_cli.py run --strategy conservative
-python3 .agents/tools/pipeline_cli.py merge
+misra-pipeline split --strategy conservative
+misra-pipeline run --strategy conservative
+misra-pipeline merge
 ```
 
 Windows 下：
 
 ```bat
-py .agents\tools\pipeline_cli.py doctor
-py .agents\tools\pipeline_cli.py oneshot
+misra-pipeline doctor
+misra-pipeline run
 ```
 
 ## 修复策略（fix_strategy）
@@ -304,7 +305,7 @@ py .agents\tools\pipeline_cli.py oneshot
 使用 `all_auto` 让 agent 尝试修复更多问题：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
+misra-pipeline run --fresh --strategy all_auto
 ```
 
 `all_auto` 会把高风险问题也分发给 agent，但结果必须保留 `risk_level`、`risk_reason` 和 `review_required_after_fix=true`。
@@ -337,10 +338,10 @@ needs_manual_review  + all_auto     →     降级为 careful_fix，但仍标记
 
 ```bash
 # 1. 从模板初始化规则策略
-python3 .agents/tools/pipeline_cli.py policy init misra_c2012_relaxed
+misra-pipeline policy init misra_c2012_relaxed
 
 # 2. 使用 all_auto 模式运行
-python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
+misra-pipeline run --fresh --strategy all_auto
 ```
 
 执行时：
@@ -354,16 +355,16 @@ python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
 
 ```bash
 # 保守模式：保守模板 + conservative（最严格）
-python3 .agents/tools/pipeline_cli.py policy init misra_c2012_conservative
-python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy conservative
+misra-pipeline policy init misra_c2012_conservative
+misra-pipeline run --fresh --strategy conservative
 
 # 放宽模式：宽松模板 + all_auto（最大修复范围）
-python3 .agents/tools/pipeline_cli.py policy init misra_c2012_relaxed
-python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy all_auto
+misra-pipeline policy init misra_c2012_relaxed
+misra-pipeline run --fresh --strategy all_auto
 
 # AUTOSAR 模式：AUTOSAR 模板 + conservative（保护架构层）
-python3 .agents/tools/pipeline_cli.py policy init autosar_baseline
-python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy conservative
+misra-pipeline policy init autosar_baseline
+misra-pipeline run --fresh --strategy conservative
 ```
 
 ### 配置来源说明
@@ -401,7 +402,7 @@ python3 .agents/tools/pipeline_cli.py oneshot --fresh --strategy conservative
 同步兼容层：
 
 ```bash
-python3 .agents/tools/pipeline_cli.py bootstrap --mode merge
+misra-pipeline bootstrap --mode merge
 ```
 
 模式说明：
