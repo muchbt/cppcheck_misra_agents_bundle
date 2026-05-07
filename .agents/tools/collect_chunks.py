@@ -95,3 +95,44 @@ def import_one_bundle(bundle_path: Path) -> CollectResult:
         skipped_conflicts=sorted(conflicts),
         failed_chunks=sorted(remote_failed),
     )
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="collect_chunks")
+    parser.add_argument(
+        "--from",
+        dest="bundles",
+        action="append",
+        required=True,
+        help="Path to export bundle .tar.gz (repeatable)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
+    results = []
+    for bundle in args.bundles:
+        print(f"[collect] 正在导入 {bundle} ...")
+        r = import_one_bundle(Path(bundle))
+        results.append(r)
+        print(
+            f"[collect] {r.host_id}: 导入 {len(r.imported_chunks)} chunk, "
+            f"跳过 {len(r.skipped_conflicts)} 冲突, "
+            f"失败 {len(r.failed_chunks)}"
+        )
+
+    progress = load_json(RUNTIME_DIR / "progress.json", {})
+    total = progress.get("total_chunks", 0)
+    done = len(progress.get("completed_chunks", []))
+    print(f"[collect] 汇总: {done}/{total} chunk 已完成")
+    if done >= total and total > 0:
+        print("[collect] 所有 chunk 已完成，可继续: misra-pipeline run --stage merge")
+    else:
+        remaining = total - done
+        print(f"[collect] 还剩 {remaining} chunk 未完成")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
