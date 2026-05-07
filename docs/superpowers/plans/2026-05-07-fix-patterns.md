@@ -4,7 +4,7 @@
 
 **Goal:** Implement fix_patterns.json data layer and per-chunk dynamic injection to constrain LLM fix behavior while minimizing token usage.
 
-**Architecture:** A static `fix_patterns.json` file maps rule_ids to canonical fix patterns. `split_cppcheck_xml.py` loads this file at startup, attaches pattern data to issues via a standalone `lookup_fix_pattern()` function, and writes deduplicated `unique_fix_patterns` at the chunk level. The prompt template adds a single line directing LLMs to follow the patterns. No changes to `classify_issue()`, `base.py`, or `SKILL.md`.
+**Architecture:** A static `fix_patterns.json` file maps rule_ids to canonical fix patterns. `split_cppcheck_xml.py` loads this file at startup, computes deduplicated `unique_fix_patterns` at chunk assembly time via a standalone `lookup_fix_pattern()` function, and writes the result into each chunk JSON. `parse_xml()` is not modified. The prompt template adds a single line directing LLMs to follow the patterns. No changes to `classify_issue()`, `parse_xml()`, `base.py`, or `SKILL.md`.
 
 **Tech Stack:** Python 3, pytest, JSON config files
 
@@ -326,81 +326,36 @@ git commit -m "feat: add lookup_fix_pattern() function with risk-based field fil
 
 ---
 
-## Task 4: Integrate fix_pattern lookup into parse_xml() and chunk assembly
+## Task 4: Compute unique_fix_patterns during chunk assembly in main()
 
 **Files:**
-- Modify: `.agents/tools/split_cppcheck_xml.py` (lines 121-175 for `parse_xml` and lines 222-322 for `main`)
+- Modify: `.agents/tools/split_cppcheck_xml.py` (lines 222-322 for `main`)
 - Test: `tests/test_fix_patterns.py` (add integration tests)
 
-- [ ] **Step 1: Modify parse_xml() to accept fix_patterns parameter and attach _fix_pattern**
+This task only modifies `main()`. `parse_xml()` is not changed at all — pattern lookup happens at chunk assembly time via `lookup_fix_pattern()` called directly with each issue's `rule_id` and `risk_level`.
 
-Change the `parse_xml` function signature to accept `fix_patterns`:
+- [ ] **Step 1: Load fix_patterns.json in main() and compute unique_fix_patterns during chunk assembly**
 
-```python
-def parse_xml(xml_file: Path, config: Dict[str, Any], policy: Dict[str, Any], strategy: str, fix_patterns: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-```
-
-After the `classify_issue()` call on line 157, add:
-
-```python
-        issue_policy = classify_issue(rule_id, msg, policy, strategy, strategy_config)
-
-        # Lookup fix pattern (independent of classify_issue)
-        fix_pattern = lookup_fix_pattern(rule_id, issue_policy.get("risk_level", "high"), fix_patterns)
-```
-
-In the `dedup[key]` dict (line 163), add `_fix_pattern`:
-
-```python
-        dedup[key] = {
-            "issue_key": build_issue_key(file_path, line, rule_id, msg),
-            "file": file_path,
-            "line": line,
-            "severity": severity,
-            "rule_id": rule_id,
-            "msg": msg,
-            "is_misra": is_misra_rule(rule_id, detect_prefixes),
-            "fix_strategy": strategy,
-            **issue_policy,
-            "_fix_pattern": fix_pattern,
-        }
-```
-
-- [ ] **Step 2: Modify main() to load fix_patterns.json, strip _fix_pattern before saving issues_master.json, and compute unique_fix_patterns in chunks**
-
-Near the top of `main()`, after loading policy (line 225), add fix_patterns loading:
+Near the top of `main()`, after loading policy (around line 225), add fix_patterns loading:
 
 ```python
     policy = load_json(CONFIG_DIR / "rule_policy.json", {})
     fix_patterns = load_json(FIX_PATTERNS_PATH, {})
 ```
 
-Change the `parse_xml` call (line 239) to pass fix_patterns:
+**Do not change the `parse_xml()` call.** It remains:
 
 ```python
-    issues = parse_xml(xml_file, config, policy, strategy, fix_patterns)
+    issues = parse_xml(xml_file, config, policy, strategy)
 ```
 
-**Critical**: The `_fix_pattern` temporary field must be stripped from `issues` before `issues_master.json` is saved, to prevent internal fields from leaking into persisted files. Add stripping between `save_json(RUNTIME_DIR / "issues_master.json", issues)` and `issue_status` construction:
-
-```python
-    save_json(RUNTIME_DIR / "issues_master.json", issues)
-
-    # Strip temporary _fix_pattern field from issues before persisting to issue_status
-    # (_fix_pattern is only needed during chunk assembly for unique_fix_patterns)
-    for issue in issues:
-        issue.pop("_fix_pattern", None)
-```
-
-After building chunks (after line 281), add unique_fix_patterns computation. Note: at this point `_fix_pattern` has already been stripped from issues, so we need a different approach — enrich issues with pattern data during chunk assembly rather than relying on `_fix_pattern` persisting from parse_xml.
-
-**Revised approach**: Instead of using `_fix_pattern` as a temporary field on issues throughout the pipeline, compute `unique_fix_patterns` at chunk assembly time by calling `lookup_fix_pattern()` directly with the rule_id and risk_level from each issue. This avoids any temporary field leakage.
+After building chunks, replace the existing chunk-writing loop (lines 283-294) with a version that computes `unique_fix_patterns`:
 
 ```python
     chunks = build_chunks(issues, config)
     total = len(chunks)
     for idx, chunk in enumerate(chunks, start=1):
-        # Compute unique_fix_patterns by looking up each unique rule_id in the chunk
+        # Compute unique_fix_patterns by looking up each unique rule_id
         seen_patterns = {}
         for issue in chunk:
             rid = issue["rule_id"]
@@ -422,13 +377,9 @@ After building chunks (after line 281), add unique_fix_patterns computation. Not
         save_json(CHUNKS_DIR / f"chunk_{idx:03d}.json", payload)
 ```
 
-With this approach, `_fix_pattern` is never stored on the issue dict — it's looked up fresh during chunk assembly via `lookup_fix_pattern()`.
+This is the only code change in `main()`. No `_fix_pattern` temporary field is used on issue dicts. Pattern data is looked up fresh from `fix_patterns` during chunk assembly. `issues_master.json` and `issue_status.json` remain completely unchanged.
 
-**Update parse_xml()**: Remove `_fix_pattern` from the dedup dict since it's no longer needed there. The `parse_xml` step 1 should NOT add `"_fix_pattern": fix_pattern` to dedup. The signature change and `lookup_fix_pattern` call in `parse_xml()` should also be removed — all pattern lookup happens in `main()` during chunk assembly.
-
-So the final `parse_xml()` change is: **no change to parse_xml() at all**. The `lookup_fix_pattern()` function added in Task 3 is used only in `main()` during chunk assembly.
-
-- [ ] **Step 3: Add test for chunk-level unique_fix_patterns computation**
+- [ ] **Step 2: Add test for chunk-level unique_fix_patterns computation**
 
 Add to `tests/test_fix_patterns.py`:
 
@@ -504,21 +455,21 @@ def test_chunk_unique_fix_patterns_all_none():
     assert len(seen) == 0
 ```
 
-- [ ] **Step 4: Run all fix_pattern tests**
+- [ ] **Step 3: Run all fix_pattern tests**
 
 Run: `cd /home/ubuntu/code/cppcheck_misra_agents_bundle_v2 && python3 -m pytest tests/test_fix_patterns.py -v`
 Expected: All 11 tests PASS (8 from Task 3 + 3 from Task 4)
 
-- [ ] **Step 5: Run full test suite**
+- [ ] **Step 4: Run full test suite**
 
 Run: `cd /home/ubuntu/code/cppcheck_misra_agents_bundle_v2 && python3 -m pytest tests/ -v --tb=short`
 Expected: All existing tests + new tests PASS
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .agents/tools/split_cppcheck_xml.py tests/test_fix_patterns.py
-git commit -m "feat: integrate fix_pattern lookup into parse_xml and chunk assembly with dedup"
+git commit -m "feat: compute unique_fix_patterns during chunk assembly"
 ```
 
 ---
@@ -531,9 +482,9 @@ git commit -m "feat: integrate fix_pattern lookup into parse_xml and chunk assem
 
 - [ ] **Step 1: Verify the fallback behavior is already implicit**
 
-The `load_json()` from common.py returns `{}` when the file doesn't exist (default parameter). The `lookup_fix_pattern()` already handles `None` or `{}` patterns by returning `None`. In `parse_xml()`, the default `fix_patterns=None` means if not provided, all lookup returns `None`.
+The `load_json()` from common.py returns `{}` when the file doesn't exist (default parameter). The `lookup_fix_pattern()` already handles `None` or `{}` patterns by returning `None`.
 
-Verify in `main()` — the line `fix_patterns = load_json(FIX_PATTERNS_PATH, {})` will return `{}` if the file doesn't exist, and `lookup_fix_pattern()` with `{}` returns `None`.
+Verify in `main()` — the line `fix_patterns = load_json(FIX_PATTERNS_PATH, {})` will return `{}` if the file doesn't exist, and `lookup_fix_pattern()` with `{}` returns `None`. The `parse_xml()` function is not modified and does not receive `fix_patterns` at all.
 
 - [ ] **Step 2: Add explicit test for missing file fallback**
 
@@ -709,7 +660,8 @@ git commit -m "test: add integration and schema validation tests for fix_pattern
 - [x] **Placeholder scan**: No TBD/TODO in this plan
 - [x] **Type consistency**: `lookup_fix_pattern()` signature (rule_id: str, risk_level: str, fix_patterns: Optional[Dict]) matches usage in main() chunk assembly; no `_fix_pattern` temp field on issues (looked up fresh during chunk assembly); chunk JSON structure matches design doc
 - [x] **Risk_level source**: fix_patterns.json has no risk_level field; policy risk_level used for field filtering via RISK_DETAIL_FIELDS — matches review correction #2
-- [x] **No _fix_pattern leak**: _fix_pattern is never attached to issue dicts in parse_xml(); pattern lookup happens at chunk assembly time in main() via lookup_fix_pattern(), so issues_master.json and issue_status.json never contain internal temp fields
+- [x] **No _fix_pattern leak**: _fix_pattern is never attached to issue dicts; pattern lookup happens at chunk assembly time in main() via lookup_fix_pattern(), so issues_master.json and issue_status.json never contain internal temp fields
+- [x] **parse_xml not modified**: Task 4 only modifies main() chunk assembly loop; parse_xml() signature and logic remain untouched — review issue resolved
 - [x] **FIX_PATTERNS_PATH placement**: After REPORTS_DIR (line 25), grouped with other path constants — review issue #1
 - [x] **Validation checks**: Task 2 Step 3 now also validates no risk_level in patterns — review issue #2
 - [x] **pytest.skip**: Task 7 uses pytest.skip() instead of bare return — review issue #4
