@@ -72,3 +72,71 @@ def test_lookup_fix_pattern_unknown_risk_level_defaults_high():
     assert result is not None
     assert "pitfalls" in result
     assert "context_notes" in result
+
+
+def test_chunk_unique_fix_patterns_dedup():
+    """Verify unique_fix_patterns computed from issues with dedup by rule_id."""
+    fix_patterns = {
+        "patterns": {
+            "misra-c2012-11.3": {"fix": "cast", "example": "x", "pitfalls": "align", "context_notes": "check"},
+            "misra-c2012-8.4": {"fix": "declare", "example": "y"},
+        }
+    }
+    issues = [
+        {"rule_id": "misra-c2012-11.3", "risk_level": "high"},
+        {"rule_id": "misra-c2012-11.3", "risk_level": "high"},
+        {"rule_id": "misra-c2012-8.4", "risk_level": "medium"},
+    ]
+    seen = {}
+    for issue in issues:
+        rid = issue["rule_id"]
+        if rid not in seen:
+            fp = spm.lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+            if fp is not None:
+                seen[rid] = fp
+    assert len(seen) == 2
+    assert "misra-c2012-11.3" in seen
+    assert "misra-c2012-8.4" in seen
+    assert "pitfalls" in seen["misra-c2012-11.3"]
+    assert "context_notes" in seen["misra-c2012-11.3"]
+    assert "caution" not in seen["misra-c2012-8.4"]
+
+
+def test_chunk_unique_fix_patterns_none_pattern():
+    """Issues whose rule_id has no pattern should not appear in unique_fix_patterns."""
+    fix_patterns = {
+        "patterns": {
+            "misra-c2012-11.3": {"fix": "cast", "example": "x"},
+        }
+    }
+    issues = [
+        {"rule_id": "unknownRule", "risk_level": "low"},
+        {"rule_id": "misra-c2012-11.3", "risk_level": "medium"},
+    ]
+    seen = {}
+    for issue in issues:
+        rid = issue["rule_id"]
+        if rid not in seen:
+            fp = spm.lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+            if fp is not None:
+                seen[rid] = fp
+    assert len(seen) == 1
+    assert "unknownRule" not in seen
+    assert "misra-c2012-11.3" in seen
+
+
+def test_chunk_unique_fix_patterns_all_none():
+    """When all rule_ids have no pattern, unique_fix_patterns is empty."""
+    fix_patterns = {"patterns": {}}
+    issues = [
+        {"rule_id": "rule1", "risk_level": "low"},
+        {"rule_id": "rule2", "risk_level": "medium"},
+    ]
+    seen = {}
+    for issue in issues:
+        rid = issue["rule_id"]
+        if rid not in seen:
+            fp = spm.lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+            if fp is not None:
+                seen[rid] = fp
+    assert len(seen) == 0

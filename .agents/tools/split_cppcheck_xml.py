@@ -241,6 +241,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     config = load_json(CONFIG_DIR / "pipeline.json", {})
     policy = load_json(CONFIG_DIR / "rule_policy.json", {})
+    fix_patterns = load_json(FIX_PATTERNS_PATH, {})
     policy_errors, policy_warnings = validate_rule_policy(policy)
     if policy_errors:
         for err in policy_errors:
@@ -299,6 +300,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     chunks = build_chunks(issues, config)
     total = len(chunks)
     for idx, chunk in enumerate(chunks, start=1):
+        seen_patterns = {}
+        for issue in chunk:
+            rid = issue["rule_id"]
+            if rid not in seen_patterns:
+                fp = lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+                if fp is not None:
+                    seen_patterns[rid] = fp
         payload = {
             "chunk_index": idx,
             "chunk_total": total,
@@ -307,6 +315,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "fix_strategy": strategy,
             "contains_high_risk": any(x.get("risk_level") == "high" for x in chunk),
             "requires_review_after_fix_count": sum(1 for x in chunk if x.get("requires_review_after_fix")),
+            "unique_fix_patterns": seen_patterns,
             "issues": chunk,
         }
         save_json(CHUNKS_DIR / f"chunk_{idx:03d}.json", payload)
