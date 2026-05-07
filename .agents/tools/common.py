@@ -23,6 +23,7 @@ CHUNKS_DIR = RUNTIME_DIR / "chunks"
 RESULTS_DIR = RUNTIME_DIR / "results"
 LOGS_DIR = RUNTIME_DIR / "logs"
 REPORTS_DIR = AGENTS_DIR / "reports"
+FIX_PATTERNS_PATH = CONFIG_DIR / "fix_patterns.json"
 TZ = timezone(timedelta(hours=8))
 RUN_ID_RE = re.compile(r"^(?P<date>\d{8})-(?P<seq>\d{3})$")
 

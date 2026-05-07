@@ -34,6 +34,12 @@ def test_logs_dir_constant_exists():
     assert common.LOGS_DIR == common.RUNTIME_DIR / "logs"
 
 
+def test_fix_patterns_path_constant():
+    """Test that FIX_PATTERNS_PATH points to the expected file."""
+    assert hasattr(common, "FIX_PATTERNS_PATH")
+    assert common.FIX_PATTERNS_PATH == common.CONFIG_DIR / "fix_patterns.json"
+
+
 def test_ensure_dirs_includes_logs_dir(tmp_path):
     """Test that ensure_dirs creates LOGS_DIR and all other directories."""
     # Use patch to isolate all directory constants
