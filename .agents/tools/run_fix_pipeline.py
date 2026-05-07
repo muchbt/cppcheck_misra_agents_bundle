@@ -136,6 +136,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Allow previously failed chunks to be reconsidered in this run.",
     )
     parser.add_argument(
+        "--chunk-id",
+        action="append",
+        default=[],
+        help=(
+            "Only run specific chunk(s). Accepts single id (e.g. 5) or range "
+            "(e.g. 3-7). Can be specified multiple times. Unknown ids are warned "
+            "and skipped."
+        ),
+    )
+    parser.add_argument(
         "--strategy",
         choices=sorted(VALID_STRATEGIES),
         default=None,
@@ -223,12 +233,13 @@ def chunk_matches_filters(chunk_index: int, selected_rules: Set[str], misra_only
     return has_selected_rule and has_misra
 
 
-def next_chunk(progress: dict, selected_rules: Set[str], misra_only: bool, include_failed: bool) -> Optional[int]:
+def next_chunk(progress: dict, selected_rules: Set[str], misra_only: bool, include_failed: bool, requested_ids: Optional[List[int]] = None) -> Optional[int]:
     done = set(progress.get("completed_chunks", []))
     failed = set(progress.get("failed_chunks", []))
     total = int(progress.get("total_chunks", 0))
 
-    for idx in range(1, total + 1):
+    candidates = requested_ids if requested_ids else range(1, total + 1)
+    for idx in candidates:
         if idx in done:
             continue
         if not include_failed and idx in failed:
@@ -276,6 +287,23 @@ def main(argv: Optional[List[str]] = None) -> int:
             "Run split_cppcheck_xml.py again with the requested --strategy."
         )
 
+    total_chunks_for_parse = int(progress.get("total_chunks", 0))
+    requested_ids, chunk_id_warnings = parse_chunk_id_specs(
+        args.chunk_id, total_chunks_for_parse
+    )
+    for w in chunk_id_warnings:
+        print(f"[run] 警告: {w}")
+    # 一次性输出 failed-chunk 提示，避免循环中重复打印
+    if requested_ids:
+        failed_set = set(progress.get("failed_chunks", []))
+        for rid in requested_ids:
+            if rid in failed_set and not args.include_failed:
+                print(f"[run] chunk {rid} 在 failed_chunks 中，使用 --include-failed 可重跑")
+    if args.chunk_id and not requested_ids:
+        print("[run] 未提供任何有效 chunk-id，未执行 agent 阶段。"
+              "如已完成所有 chunk，可继续：misra-pipeline run --stage merge")
+        return 0
+
     progress["status"] = "running"
     progress["last_run_filters"] = {
         "max_chunks": args.max_chunks,
@@ -284,6 +312,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "misra_only": args.misra_only,
         "include_failed": args.include_failed,
         "strategy": requested_strategy,
+        "chunk_ids": requested_ids or None,
     }
     save_json(progress_path, progress)
     append_pipeline_event(
@@ -317,10 +346,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Stopped after processing {processed_this_run} chunk(s) due to --max-chunks.")
             return 0
 
-        idx = next_chunk(progress, selected_rules, args.misra_only, args.include_failed)
+        idx = next_chunk(progress, selected_rules, args.misra_only, args.include_failed, requested_ids)
         if idx is None:
-            progress["status"] = "done"
+            progress["status"] = "partial" if requested_ids else "done"
             save_json(progress_path, progress)
+            if requested_ids:
+                print(f"[run] 指定的 chunk-id {requested_ids} 已全部处理完毕（或被过滤跳过）。")
+                print("[run] 如需汇总报告，请继续：misra-pipeline run --stage merge")
+            else:
+                print("No more eligible chunks to process.")
             append_pipeline_event(
                 RUNTIME_DIR,
                 event="run_completed",
@@ -332,7 +366,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "failed_chunks": len(progress.get("failed_chunks", [])),
                 },
             )
-            print("No more eligible chunks to process.")
             return 0
 
         progress["current_chunk"] = idx
