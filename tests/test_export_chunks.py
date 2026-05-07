@@ -46,3 +46,64 @@ def test_try_generate_patch_returns_content_and_message(tmp_path):
         content, msg = export_chunks.try_generate_patch(tmp_path)
     assert content == "diff --git a/foo.c b/foo.c\n"
     assert "已生成 source patch" in msg
+
+
+def test_build_manifest_contains_expected_fields():
+    manifest = export_chunks.build_manifest(
+        run_id="20260507-001",
+        host_id="device-B",
+        completed_chunks=[3, 4],
+        failed_chunks=[5],
+        chunk_ids_requested=[3, 4, 5],
+        has_source_patch=True,
+        staging_dirs=["staging/chunk_003", "staging/chunk_004"],
+    )
+    assert manifest["format_version"] == 1
+    assert manifest["run_id"] == "20260507-001"
+    assert manifest["host_id"] == "device-B"
+    assert manifest["completed_chunks"] == [3, 4]
+    assert manifest["failed_chunks"] == [5]
+    assert manifest["has_source_patch"] is True
+    assert manifest["source_patch_file"] == "patches/source.patch"
+    assert "exported_at" in manifest
+
+
+def test_create_bundle_writes_tar_gz(tmp_path):
+    staging_base = tmp_path / "staging"
+    chunk_dir = staging_base / "chunk_003"
+    chunk_dir.mkdir(parents=True)
+    (chunk_dir / "chunk_result.json").write_text('{"ok": true}')
+    (chunk_dir / "issue_status_delta.json").write_text('{}')
+    (chunk_dir / "file_change_delta.json").write_text('{}')
+    (chunk_dir / "chunk_result.md").write_text("# Result")
+
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "chunk_003.log").write_text("log line")
+
+    output = tmp_path / "export.tar.gz"
+    manifest = export_chunks.build_manifest(
+        run_id="20260507-001",
+        host_id="device-B",
+        completed_chunks=[3],
+        failed_chunks=[],
+        chunk_ids_requested=[3],
+        has_source_patch=False,
+        staging_dirs=["staging/chunk_003"],
+    )
+    export_chunks.create_bundle(
+        output_path=output,
+        manifest=manifest,
+        patch_content=None,
+        completed_export=[3],
+        staging_base=staging_base,
+        all_ids=[3],
+        logs_dir=log_dir,
+    )
+    assert output.exists()
+    import tarfile
+    with tarfile.open(output, "r:gz") as tar:
+        names = tar.getnames()
+    assert "manifest.json" in names
+    assert "staging/chunk_003/chunk_result.json" in names
+    assert "logs/chunk_003.log" in names
