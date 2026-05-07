@@ -253,23 +253,23 @@ chunk prompt 模板（`.agents/prompts/fix_chunk_prompt.txt`）新增：
 
 | 组成部分 | 字符数 | 估算 Tokens |
 |---|---|---|
-| AGENTS.md（固定） | ~3,800 | ~960 |
-| SKILL.md（固定） | ~4,400 | ~1,100 |
-| Prompt 模板（固定） | ~2,100 | ~520 |
-| Chunk JSON（5-10 issues，3-8 patterns） | ~5,700-9,500 | ~1,400-2,400 |
+| AGENTS.md（固定） | ~2,900 | ~720-820 |
+| SKILL.md（固定） | ~4,000 | ~1,000-1,140 |
+| Prompt 模板（固定） | ~2,100 | ~520-600 |
+| Chunk JSON（5-10 issues，3-8 patterns） | ~5,700-9,500 | ~1,600-2,700 |
 | 源文件内容（1-3 个 C 文件） | 2k-20k | 500-5,000 |
 | Agent provider 开销 | — | 200-500 |
 
 | 场景 | 估算 Input Tokens | 估算 Output Tokens |
 |---|---|---|
-| 典型 chunk（5-10 issues，3-8 patterns） | ~6,000 - 8,000 | ~2,000 - 5,000 |
-| 中等 chunk（10-15 issues，8-15 patterns） | ~7,000 - 10,500 | ~3,000 - 6,000 |
-| 大 chunk（15-20 issues，15-30 patterns） | ~9,000 - 14,000 | ~4,000 - 8,000 |
+| 典型 chunk（5-10 issues，3-8 patterns） | ~4,600-8,800 | ~2,000-5,000 |
+| 中等 chunk（10-15 issues，8-15 patterns） | ~5,700-10,600 | ~2,000-7,000 |
+| 大 chunk（15-20 issues，15-30 patterns） | ~6,900-13,200 | ~2,000-8,000 |
 
 **关键点：**
 
 - `unique_fix_patterns` 是按 chunk 去重注入，不是全量 `fix_patterns.json`（63KB）。典型 chunk 只含 3-15 条 pattern，增加约 500-1,500 tokens
-- AGENTS.md + SKILL.md 是固定开销，约 ~2,060 tokens/次
+- AGENTS.md + SKILL.md 是固定开销，约 ~2,240-2,560 tokens/次（含别名兜底层和确定性约束）
 - 每个 issue 条目增加约 100-150 tokens
 - 每个 pattern 条目（high risk，含 pitfalls + context_notes）约 80-120 tokens
 - 字符/token 比率约 3.5-4（混合 C/JSON 内容）

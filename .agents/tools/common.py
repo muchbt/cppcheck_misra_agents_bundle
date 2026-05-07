@@ -631,7 +631,24 @@ def _as_string_list(value: Any) -> List[str]:
     return [text] if text else []
 
 
-_KNOWN_FILE_CHANGES_KEYS = ("file_changes", "files_changed", "changes", "modified_files")
+def _first_matching_str(item: Dict[str, Any], keys: Tuple[str, ...], default: str = "") -> str:
+    for key in keys:
+        candidate = str(item.get(key, "")).strip()
+        if candidate:
+            return candidate
+    return default
+
+
+_KNOWN_FILE_CHANGES_KEYS = ("file_changes", "files_changed", "files_touched", "changes", "modified_files", "file_edits")
+_KNOWN_FILE_PATH_KEYS = ("file", "file_path", "path")
+_KNOWN_STATUS_CHANGES_KEYS = ("status_changes", "issue_status_changes", "issue_status_delta")
+_STATUS_FIELD_ALIASES: Dict[str, str] = {
+    "review_required_after_fix": "requires_review_after_fix",
+    "requires_review": "requires_review_after_fix",
+    "fix_method": "fix_summary",
+    "status_after": "status",
+    "status": "status",
+}
 
 
 def normalize_file_change_delta(
@@ -650,7 +667,7 @@ def normalize_file_change_delta(
         for item in file_changes:
             if not isinstance(item, dict):
                 raise ValueError("file_changes entry must be an object")
-            file_path = str(item.get("file", "")).strip()
+            file_path = _first_matching_str(item, _KNOWN_FILE_PATH_KEYS)
             if not file_path:
                 raise ValueError("file_changes entry must include file")
 
@@ -701,7 +718,7 @@ def normalize_file_change_delta(
         for item in files_inspected:
             if not isinstance(item, dict):
                 continue
-            file_path = str(item.get("file", "")).strip()
+            file_path = _first_matching_str(item, _KNOWN_FILE_PATH_KEYS)
             if not file_path:
                 continue
             entry: Dict[str, Any] = {"edits": []}
@@ -713,9 +730,14 @@ def normalize_file_change_delta(
 
     # Handle single-file format: {"file": "path/to/file", "edits": [...], ...}
     # This format is sometimes output by agents that don't wrap in file_changes array
-    single_file_path = file_change_delta.get("file")
-    if isinstance(single_file_path, str) and single_file_path.strip():
-        file_path = single_file_path.strip()
+    single_file_path = None
+    for key in _KNOWN_FILE_PATH_KEYS:
+        candidate = file_change_delta.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            single_file_path = candidate.strip()
+            break
+    if single_file_path is not None:
+        file_path = single_file_path
         current_entry = {"edits": []}
         edits_raw = file_change_delta.get("edits", [])
         if isinstance(edits_raw, list):
@@ -783,9 +805,55 @@ def _build_issue_edit_index(file_change_delta: Dict[str, Any]) -> Dict[str, List
             edit_id = str(edit.get("edit_id", "")).strip()
             if not edit_id:
                 continue
-            for issue_key in _as_string_list(edit.get("related_issue_keys")):
+            related_issue_keys = _as_string_list(edit.get("related_issue_keys"))
+            if not related_issue_keys:
+                related_issue_keys = _as_string_list(edit.get("linked_issues"))
+            if not related_issue_keys:
+                related_issue_keys = _as_string_list(edit.get("linked_issue_keys"))
+            for issue_key in related_issue_keys:
                 issue_edit_ids.setdefault(issue_key, []).append(edit_id)
     return issue_edit_ids
+
+
+_PASSTHROUGH_STATUS_KEYS = ("risk_level", "risk_reason", "requires_review_after_fix", "verified", "fix_summary")
+_REASON_ALIAS_KEYS = ("reason", "blocker_reason", "message")
+
+
+def _normalize_status_item(
+    item: Dict[str, Any],
+    issue_key: str,
+    edit_ids: List[str],
+    chunk_index: int,
+) -> Dict[str, Any]:
+    patch: Dict[str, Any] = {
+        "chunk_index": int(chunk_index),
+        "edit_ids": edit_ids,
+    }
+    new_status = ""
+    for alias in ("new_status", "status_after", "status"):
+        candidate = str(item.get(alias, "")).strip()
+        if candidate:
+            new_status = candidate
+            break
+    if new_status:
+        patch["status"] = new_status
+    for key in _PASSTHROUGH_STATUS_KEYS:
+        value = item.get(key)
+        if value is not None:
+            patch[key] = value
+    for alias_key, canonical_key in _STATUS_FIELD_ALIASES.items():
+        if alias_key not in item or canonical_key in patch:
+            continue
+        patch[canonical_key] = item[alias_key]
+    reason = ""
+    for alias in _REASON_ALIAS_KEYS:
+        candidate = str(item.get(alias, "")).strip()
+        if candidate:
+            reason = candidate
+            break
+    if reason:
+        patch["reason"] = reason
+    return patch
 
 
 def normalize_issue_status_delta(
@@ -793,9 +861,12 @@ def normalize_issue_status_delta(
     file_change_delta: Dict[str, Any],
     chunk_index: int,
 ) -> Dict[str, Any]:
-    status_changes = issue_status_delta.get("status_changes")
-    if not isinstance(status_changes, list):
-        status_changes = issue_status_delta.get("issue_status_changes")
+    status_changes = None
+    for key in _KNOWN_STATUS_CHANGES_KEYS:
+        candidate = issue_status_delta.get(key)
+        if isinstance(candidate, list):
+            status_changes = candidate
+            break
     if isinstance(status_changes, list):
         issue_edit_ids = _build_issue_edit_index(file_change_delta)
         normalized: Dict[str, Any] = {}
@@ -805,49 +876,17 @@ def normalize_issue_status_delta(
             issue_key = str(item.get("issue_key", "")).strip()
             if not issue_key:
                 raise ValueError("status_changes entry must include issue_key")
-            patch: Dict[str, Any] = {
-                "chunk_index": int(chunk_index),
-                "edit_ids": issue_edit_ids.get(issue_key, []),
-            }
-            new_status = str(item.get("new_status", "")).strip() or str(item.get("status_after", "")).strip()
-            if new_status:
-                patch["status"] = new_status
-            for key in ("risk_level", "risk_reason", "requires_review_after_fix", "verified"):
-                if key in item:
-                    patch[key] = item.get(key)
-            reason = (
-                str(item.get("reason", "")).strip()
-                or str(item.get("blocker_reason", "")).strip()
-                or str(item.get("message", "")).strip()
-            )
-            if reason:
-                patch["reason"] = reason
+            patch = _normalize_status_item(item, issue_key, issue_edit_ids.get(issue_key, []), chunk_index)
             normalized[issue_key] = patch
         return normalized
 
-    # Handle single-issue format: {"issue_key": "...", "status": "fixed", ...}
+    # Handle single-issue format: {"issue_key": "...", "new_status": "fixed", ...}
     # This format is sometimes output by agents that don't wrap in status_changes array
     single_issue_key = issue_status_delta.get("issue_key")
     if isinstance(single_issue_key, str) and single_issue_key.strip():
         issue_key = single_issue_key.strip()
         issue_edit_ids = _build_issue_edit_index(file_change_delta)
-        patch: Dict[str, Any] = {
-            "chunk_index": int(chunk_index),
-            "edit_ids": issue_edit_ids.get(issue_key, []),
-        }
-        new_status = str(issue_status_delta.get("new_status", "")).strip() or str(issue_status_delta.get("status", "")).strip()
-        if new_status:
-            patch["status"] = new_status
-        for key in ("risk_level", "risk_reason", "requires_review_after_fix", "verified"):
-            if key in issue_status_delta:
-                patch[key] = issue_status_delta.get(key)
-        reason = (
-            str(issue_status_delta.get("reason", "")).strip()
-            or str(issue_status_delta.get("blocker_reason", "")).strip()
-            or str(issue_status_delta.get("message", "")).strip()
-        )
-        if reason:
-            patch["reason"] = reason
+        patch = _normalize_status_item(issue_status_delta, issue_key, issue_edit_ids.get(issue_key, []), chunk_index)
         return {issue_key: patch}
 
     normalized = {}
