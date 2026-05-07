@@ -133,7 +133,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     failed = set(progress.get("failed_chunks", []))
 
     config = load_json(CONFIG_DIR / "pipeline.json", {})
-    staging_base = resolve_agent_staging_dir(config)
+    staging_base = resolve_agent_staging_dir(config, root=ROOT)
     completed_export = []
     failed_export = []
     missing_staging = []
