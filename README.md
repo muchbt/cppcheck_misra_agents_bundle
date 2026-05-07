@@ -239,6 +239,41 @@ chunk prompt 模板（`.agents/prompts/fix_chunk_prompt.txt`）新增：
 - `fix_patterns.json` 缺失时，`load_json()` 返回 `{}`，所有 `lookup_fix_pattern()` 返回 `None`，chunk JSON 中 `unique_fix_patterns` 为空字典 — 不影响正常流程
 - 规则未在 `fix_patterns.json` 中出现时，该规则不会有修复模式条目
 
+### 修复确定性约束
+
+为减少 LLM 多次运行间同一 issue 的修复发散，SKILL 和 prompt 中施加了以下确定性约束：
+
+1. **注释格式确定性** — 行内修复注释必须使用 `/* fix: <rule_id> — <action> */` 格式，C 块注释、em-dash、past-tense 动词词组；有 `unique_fix_patterns.example` 时必须原样复制
+2. **修改顺序确定性** — 按 chunk JSON 数组顺序处理 issue，文件内从上到下按行号，同行从左到右，逐条修改不批改
+3. **Fix 选择确定性** — 有 pattern 时必须使用指定方法；无 pattern 时偏好最简单行修改，仍需标注 `/* fix: <rule_id> — <cause & method> */`
+
+### 单 Chunk Token 消耗估算
+
+每个 chunk 的 LLM 调用 token 消耗主要取决于 issue 数量、pattern 数量和源文件大小：
+
+| 组成部分 | 字符数 | 估算 Tokens |
+|---|---|---|
+| AGENTS.md（固定） | ~3,800 | ~960 |
+| SKILL.md（固定） | ~4,400 | ~1,100 |
+| Prompt 模板（固定） | ~2,100 | ~520 |
+| Chunk JSON（5-10 issues，3-8 patterns） | ~5,700-9,500 | ~1,400-2,400 |
+| 源文件内容（1-3 个 C 文件） | 2k-20k | 500-5,000 |
+| Agent provider 开销 | — | 200-500 |
+
+| 场景 | 估算 Input Tokens | 估算 Output Tokens |
+|---|---|---|
+| 典型 chunk（5-10 issues，3-8 patterns） | ~6,000 - 8,000 | ~2,000 - 5,000 |
+| 中等 chunk（10-15 issues，8-15 patterns） | ~7,000 - 10,500 | ~3,000 - 6,000 |
+| 大 chunk（15-20 issues，15-30 patterns） | ~9,000 - 14,000 | ~4,000 - 8,000 |
+
+**关键点：**
+
+- `unique_fix_patterns` 是按 chunk 去重注入，不是全量 `fix_patterns.json`（63KB）。典型 chunk 只含 3-15 条 pattern，增加约 500-1,500 tokens
+- AGENTS.md + SKILL.md 是固定开销，约 ~2,060 tokens/次
+- 每个 issue 条目增加约 100-150 tokens
+- 每个 pattern 条目（high risk，含 pitfalls + context_notes）约 80-120 tokens
+- 字符/token 比率约 3.5-4（混合 C/JSON 内容）
+
 ## 推荐用法
 
 首次接入、环境异常、命令失败时，先运行：
