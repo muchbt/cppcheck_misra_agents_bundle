@@ -2,6 +2,8 @@ Read .agents/runtime/chunks/chunk_{chunk_index:03d}.json and use the cppcheck-mi
 
 {strategy_instructions}
 
+For each issue whose rule_id appears in unique_fix_patterns, you MUST use the exact fix approach described there. Do NOT invent alternative fix methods when a pattern is provided.
+
 Requirements:
 1. Process only the current chunk
 2. Inspect only files listed in the chunk unless strictly necessary
