@@ -1,7 +1,7 @@
 # Fix Patterns 设计文档
 
 > 日期：2026-05-07
-> 状态：待审核
+> 状态：已审核修订 v2
 
 ## 目标
 
@@ -21,11 +21,15 @@
 
 ```
 fix_patterns.json          ← 全量规则→修复模式映射（静态数据文件，不进 prompt）
-    ↓ split_cppcheck_xml.py 分类阶段查找
-chunk JSON                 ← 每个对象携带 fix_pattern 字段 + chunk 级去重锚点
+    ↓ split_cppcheck_xml.py parse_xml() 阶段 lookup_fix_pattern() 查找
+chunk JSON                 ← chunk 级 unique_fix_patterns 去重锚点（issue 级不存 fix_pattern）
     ↓ LLM 读取 chunk JSON 时自然获取
 SKILL.md (不变)            ← 通用原则（不膨胀）
 ```
+
+### 降级/容错
+
+如果 `fix_patterns.json` 不存在或 `patterns` 为空，split 正常运行，`unique_fix_patterns` 为空对象 `{}`。LLM 回退到 SKILL.md 通用原则，不影响现有流程。
 
 ## Section 1：数据层 — fix_patterns.json
 
@@ -35,7 +39,7 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
 
 ```json
 {
-  "_meta": "Canonical fix patterns for cppcheck/MISRA rules. Injected into chunk JSON per-rule.",
+  "_meta": "Canonical fix patterns for cppcheck/MISRA rules. Injected into chunk JSON per-rule. risk_level comes from rule_policy, not from this file.",
   "risk_detail_levels": {
     "low": ["fix", "example"],
     "medium": ["fix", "example", "caution"],
@@ -43,7 +47,6 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
   },
   "patterns": {
     "<rule_id>": {
-      "risk_level": "low|medium|high",
       "fix": "简要修复描述",
       "example": "代码示例 /* fix: rule_id — 修复说明 */",
       "caution": "中等风险注意事项（仅 medium+）",
@@ -54,9 +57,13 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
 }
 ```
 
+**重要**：`fix_patterns.json` 中不存 `risk_level`。分级裁剪时使用 `classify_issue()` 返回的 `risk_level`（来自 rule_policy）作为唯一来源。pattern 与 policy 解耦：policy 管"能不能做 + 风险等级"，pattern 管"怎么做"。
+
 ### 分级详细度
 
-| risk_level | 包含字段 | 预估 token/条 |
+risk_level 来自 rule_policy（`classify_issue()` 返回值），用于决定输出哪些字段：
+
+| risk_level (from policy) | 包含字段 | 预估 token/条 |
 |---|---|---|
 | low | `fix` + `example` | ~30-50 |
 | medium | `fix` + `example` + `caution` | ~60-80 |
@@ -65,8 +72,8 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
 ### 覆盖范围
 
 - 所有去重后的 rule_id（跨 `misra_c2012_conservative.json`、`misra_c2012_relaxed.json`、`cppcheck_common.json`、`autosar_baseline.json`、`rule_policy.json`）
-- risk_level 来自 rule_policy（exact match → pattern match → default）
-- pattern 与 policy 解耦：policy 管"能不能做"，pattern 管"怎么做"
+- risk_level 单一来源：由 `classify_issue()` 从 rule_policy 决定，不在 `fix_patterns.json` 中存储
+- pattern 与 policy 解耦：policy 管"能不能做 + 风险等级"，pattern 管"怎么做"
 - 对于 fix_patterns.json 中没有条目的 rule_id，LLM 回退到 SKILL.md 通用原则
 
 ### 示例
@@ -74,18 +81,15 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
 ```json
 {
   "unusedVariable": {
-    "risk_level": "low",
     "fix": "Remove the unused variable declaration.",
     "example": "/* fix: unusedVariable — removed unused variable 'x' */"
   },
   "misra-c2012-8.13": {
-    "risk_level": "medium",
     "fix": "Add const qualifier to pointer parameter where the pointed-to data is not modified.",
     "example": "void foo(uint8_t * const p); /* fix: misra-c2012-8.13 — added const qualifier */",
     "caution": "Verify that the function implementation does not modify the data through this pointer."
   },
   "misra-c2012-17.7": {
-    "risk_level": "high",
     "fix": "Cast unused return value to void, or capture and check the return value.",
     "example": "(void)memset(buf, 0, sz); /* fix: misra-c2012-17.7 — discard unused return */",
     "pitfalls": "Silently discarding return values may hide errors. If the function can fail, prefer capturing and checking the return value.",
@@ -96,36 +100,11 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
 
 ## Section 2：Chunk JSON 变更
 
-### Issue 对象新增字段
+### 设计决策：只保留 chunk 级 `unique_fix_patterns`
 
-每个 issue 对象增加 `fix_pattern` 字段：
+issue 级不存 `fix_pattern` 字段。LLM 通过 issue 的 `rule_id` 查阅 chunk 顶层的 `unique_fix_patterns`。
 
-```json
-{
-  "issue_key": "cppcheck_error.c:3:misra-c2012-8.4:4a2c80d8",
-  "file": "cppcheck_error.c",
-  "line": 3,
-  "severity": "style",
-  "rule_id": "misra-c2012-8.4",
-  "msg": "misra violation (use --rule-texts=<file> to get proper output)",
-  "is_misra": true,
-  "fix_strategy": "all_auto",
-  "action": "needs_manual_review",
-  "strategy_action": "careful_fix",
-  "risk_level": "high",
-  "risk_tags": ["unknown_rule"],
-  "risk_reason": "No rule-specific auto-fix policy is configured.",
-  "requires_review_after_fix": true,
-  "fix_pattern": {
-    "fix": "Add or reconcile forward declaration to match definition.",
-    "example": "extern uint8_t foo(void); /* fix: misra-c2012-8.4 — reconciled declaration */",
-    "pitfalls": "Mismatch between declaration and definition can indicate link-time errors or subtle type differences.",
-    "context_notes": "Verify that declaration, definition, and all call sites agree on return type and parameter types."
-  }
-}
-```
-
-如果 rule_id 在 fix_patterns.json 中无条目，`fix_pattern` 为 `null`。
+**理由**：避免冗余。典型 chunk 含 12 个 issue、3 个 unique rule_id。如果 issue 级也存 `fix_pattern`，同一 pattern 出现 3+12=15 次 vs 3 次。
 
 ### Chunk 级别新增 `unique_fix_patterns` 字段
 
@@ -152,18 +131,28 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
       "caution": "Verify target type alignment."
     }
   },
-  "issues": [ ... ]
+  "issues": [
+    {
+      "issue_key": "cppcheck_error.c:3:misra-c2012-8.4:4a2c80d8",
+      "file": "cppcheck_error.c",
+      "line": 3,
+      "rule_id": "misra-c2012-8.4",
+      ...
+    }
+  ]
 }
 ```
 
 典型 chunk 有 3~8 个 unique rule_id，注入量约 **100~400 token**。
 
+如果 rule_id 在 `fix_patterns.json` 中无条目，该 rule_id 不出现在 `unique_fix_patterns` 中（LLM 回退到 SKILL.md 通用原则）。
+
 ## Section 3：代码变更 — split_cppcheck_xml.py
 
 ### 变更点
 
-1. **脚本启动时**：加载 `fix_patterns.json`（一次性读入，传给 `classify_issue()`）
-2. **`classify_issue()` 扩展**：
+1. **脚本启动时**：加载 `fix_patterns.json`（一次性读入）
+2. **新增独立函数 `lookup_fix_pattern()`**：不修改 `classify_issue()` 签名，pattern 查找作为独立步骤
    ```python
    RISK_DETAIL_FIELDS = {
        "low": ["fix", "example"],
@@ -171,26 +160,34 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
        "high": ["fix", "example", "pitfalls", "context_notes"],
    }
 
-   def classify_issue(issue, rule_policy, fix_patterns):
-       ...  # 现有 policy 查找逻辑
-       
-       rule_id = issue.get("rule_id", "")
-       pattern_data = fix_patterns.get("patterns", {}).get(rule_id)
-       if pattern_data:
-           detail_fields = RISK_DETAIL_FIELDS.get(
-               pattern_data.get("risk_level", "high"),
-               RISK_DETAIL_FIELDS["high"]
-           )
-           issue["fix_pattern"] = {k: pattern_data[k] for k in detail_fields if k in pattern_data}
-       else:
-           issue["fix_pattern"] = None
+   def lookup_fix_pattern(rule_id: str, risk_level: str, fix_patterns: Dict) -> Optional[Dict]:
+       pattern = fix_patterns.get("patterns", {}).get(rule_id)
+       if not pattern:
+           return None
+       fields = RISK_DETAIL_FIELDS.get(risk_level, RISK_DETAIL_FIELDS["high"])
+       return {k: pattern[k] for k in fields if k in pattern}
    ```
-3. **Chunk 组装后**：计算 `unique_fix_patterns`
+3. **在 `parse_xml()` 中 `classify_issue()` 返回后附加 pattern 查找**：
+   ```python
+   # 现有逻辑
+   issue_policy = classify_issue(rule_id, msg, policy, strategy, strategy_config)
+   
+   # 新增：fix_pattern 查找（独立于 classify_issue）
+   fix_pattern = lookup_fix_pattern(rule_id, issue_policy.get("risk_level", "high"), fix_patterns)
+   
+   dedup[key] = {
+       ...,
+       **issue_policy,
+       # fix_pattern 暂存在 issue 对象，chunk 组装时提取到 unique_fix_patterns 后删除
+       "_fix_pattern": fix_pattern,
+   }
+   ```
+4. **Chunk 组装后计算 `unique_fix_patterns`，然后从 issue 对象中删除临时字段**：
    ```python
    seen = {}
    for issue in chunk["issues"]:
        rid = issue["rule_id"]
-       fp = issue.get("fix_pattern")
+       fp = issue.pop("_fix_pattern", None)
        if fp and rid not in seen:
            seen[rid] = fp
    chunk["unique_fix_patterns"] = seen
@@ -198,9 +195,17 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
 
 ### 改动范围
 
-- `split_cppcheck_xml.py`：修改 `classify_issue()` 签名和逻辑 + 新增 chunk 去重逻辑
+- `split_cppcheck_xml.py`：新增 `lookup_fix_pattern()` 函数 + `parse_xml()` 中附加查找 + chunk 组装后去重
 - `common.py`：可选增加 `FIX_PATTERNS_PATH` 常量或加载辅助函数
+- **不改** `classify_issue()` 签名
 - **不改** `base.py` / `build_chunk_prompt()`
+
+### 降级/容错
+
+- 如果 `fix_patterns.json` 不存在或 `patterns` 为空，`lookup_fix_pattern()` 返回 `None`
+- `parse_xml()` 中 `fix_patterns` 参数默认为 `None`，此时跳过 pattern 查找
+- 所有 issue 无 `_fix_pattern`，`unique_fix_patterns` 为空对象 `{}`
+- 不影响现有 `classify_issue()` 和 chunk 生成逻辑
 
 ## Section 4：Prompt 模板 + SKILL.md
 
@@ -209,7 +214,7 @@ SKILL.md (不变)            ← 通用原则（不膨胀）
 仅在 `{strategy_instructions}` 后新增一行：
 
 ```
-For each issue, follow the fix pattern specified in the chunk JSON's "unique_fix_patterns" field for that rule_id. If a pattern exists, use the exact approach described; if not, apply the general minimal-edit principle from the skill.
+For each issue whose rule_id appears in unique_fix_patterns, you MUST use the exact fix approach described there. Do NOT invent alternative fix methods when a pattern is provided.
 ```
 
 ### SKILL.md
@@ -219,3 +224,15 @@ For each issue, follow the fix pattern specified in the chunk JSON's "unique_fix
 ### base.py / build_chunk_prompt()
 
 **不变**。fix_pattern 已经预写入 chunk JSON，LLM 自行读取。
+
+## Section 5：测试规划
+
+改动涉及 `split_cppcheck_xml.py` 核心路径，应补充以下测试用例：
+
+| 测试用例 | 验证点 |
+|---|---|
+| `test_lookup_fix_pattern_low_risk` | low risk_level 只输出 `fix` + `example` |
+| `test_lookup_fix_pattern_high_risk_includes_pitfalls` | high risk_level 输出 `fix` + `example` + `pitfalls` + `context_notes` |
+| `test_lookup_fix_pattern_missing_returns_none` | rule_id 在 `fix_patterns.json` 中无条目时返回 `None` |
+| `test_chunk_unique_fix_patterns_dedup` | chunk 中同 rule_id 多条 issue 时 `unique_fix_patterns` 只出现一次 |
+| `test_split_without_fix_patterns_file_graceful_fallback` | `fix_patterns.json` 不存在时，`unique_fix_patterns` 为空对象，现有流程不受影响 |
