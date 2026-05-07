@@ -26,7 +26,11 @@ Fix high-confidence cppcheck and MISRA findings from one chunk at a time.
 - When multiple issues affect the same line, fix them left-to-right in the order they appear in the issues array
 - Do NOT batch-rewrite a file region; apply one issue's fix at a time in sequence
 - When `unique_fix_patterns` contains a pattern for an issue's rule_id, apply that exact fix approach — do not choose an alternative method
-- When no pattern is provided, prefer the simplest single-line change that resolves the issue
+- When `unique_fix_patterns` does NOT contain a pattern for an issue's rule_id:
+  - Still add an inline fix comment using the mandatory format: `/* fix: <rule_id> — <action> */`
+  - The `<action>` must briefly describe: what the error was, why it occurred, and what was changed — e.g. `/* fix: misra-c2012-8.13 — added const qualifier to pointer parameter (data not modified) */`
+  - Prefer the simplest single-line change that resolves the issue
+  - Do NOT choose an elaborate fix when a minimal one suffices; do NOT refactor surrounding code
 - Do not infer code intent from comments
 - For high-risk fixes, keep edits isolated and mark them for human review
 - In `conservative` mode, mark high-risk MISRA/volatile/interrupt/register/RTE/MCAL findings as `needs_manual_review`
