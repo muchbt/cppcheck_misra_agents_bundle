@@ -21,8 +21,8 @@
 
 ```
 fix_patterns.json          ← 全量规则→修复模式映射（静态数据文件，不进 prompt）
-    ↓ split_cppcheck_xml.py parse_xml() 阶段 lookup_fix_pattern() 查找
-chunk JSON                 ← chunk 级 unique_fix_patterns 去重锚点（issue 级不存 fix_pattern）
+    ↓ split_cppcheck_xml.py main() chunk 组装阶段 lookup_fix_pattern() 查找
+chunk JSON                 ← chunk 级 unique_fix_patterns（chunk 组装时直接计算，issue 级不存临时字段）
     ↓ LLM 读取 chunk JSON 时自然获取
 SKILL.md (不变)            ← 通用原则（不膨胀）
 ```
@@ -167,45 +167,39 @@ issue 级不存 `fix_pattern` 字段。LLM 通过 issue 的 `rule_id` 查阅 chu
        fields = RISK_DETAIL_FIELDS.get(risk_level, RISK_DETAIL_FIELDS["high"])
        return {k: pattern[k] for k in fields if k in pattern}
    ```
-3. **在 `parse_xml()` 中 `classify_issue()` 返回后附加 pattern 查找**：
+3. **在 `main()` 中 chunk 组装时查找 pattern 并计算 `unique_fix_patterns`**：
    ```python
-   # 现有逻辑
-   issue_policy = classify_issue(rule_id, msg, policy, strategy, strategy_config)
-   
-   # 新增：fix_pattern 查找（独立于 classify_issue）
-   fix_pattern = lookup_fix_pattern(rule_id, issue_policy.get("risk_level", "high"), fix_patterns)
-   
-   dedup[key] = {
-       ...,
-       **issue_policy,
-       # fix_pattern 暂存在 issue 对象，chunk 组装时提取到 unique_fix_patterns 后删除
-       "_fix_pattern": fix_pattern,
-   }
+   for idx, chunk in enumerate(chunks, start=1):
+       # Compute unique_fix_patterns by looking up each unique rule_id
+       seen_patterns = {}
+       for issue in chunk:
+           rid = issue["rule_id"]
+           if rid not in seen_patterns:
+               fp = lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+               if fp is not None:
+                   seen_patterns[rid] = fp
+       payload = {
+           ...,
+           "unique_fix_patterns": seen_patterns,
+           "issues": chunk,
+       }
    ```
-4. **Chunk 组装后计算 `unique_fix_patterns`，然后从 issue 对象中删除临时字段**：
-   ```python
-   seen = {}
-   for issue in chunk["issues"]:
-       rid = issue["rule_id"]
-       fp = issue.pop("_fix_pattern", None)
-       if fp and rid not in seen:
-           seen[rid] = fp
-   chunk["unique_fix_patterns"] = seen
-   ```
+   **注意**：`parse_xml()` 不修改，`_fix_pattern` 不附加到 issue 对象。pattern 查找在 chunk 组装时通过 `lookup_fix_pattern()` 重新进行，避免临时字段泄漏到 `issues_master.json` 或 `issue_status.json`。
 
 ### 改动范围
 
-- `split_cppcheck_xml.py`：新增 `lookup_fix_pattern()` 函数 + `parse_xml()` 中附加查找 + chunk 组装后去重
-- `common.py`：可选增加 `FIX_PATTERNS_PATH` 常量或加载辅助函数
+- `split_cppcheck_xml.py`：新增 `lookup_fix_pattern()` 函数 + `main()` 中 chunk 组装时查找并去重
+- `common.py`：可选增加 `FIX_PATTERNS_PATH` 常量
 - **不改** `classify_issue()` 签名
+- **不改** `parse_xml()` 签名或逻辑
 - **不改** `base.py` / `build_chunk_prompt()`
 
 ### 降级/容错
 
 - 如果 `fix_patterns.json` 不存在或 `patterns` 为空，`lookup_fix_pattern()` 返回 `None`
-- `parse_xml()` 中 `fix_patterns` 参数默认为 `None`，此时跳过 pattern 查找
-- 所有 issue 无 `_fix_pattern`，`unique_fix_patterns` 为空对象 `{}`
-- 不影响现有 `classify_issue()` 和 chunk 生成逻辑
+- `main()` 中 `fix_patterns` 默认为 `{}`，chunk 组装时 `unique_fix_patterns` 为空对象 `{}`
+- **不修改 `parse_xml()` 签名或逻辑**，`_fix_pattern` 临时字段不附加到 issue 对象
+- 不影响现有 `classify_issue()`、`parse_xml()` 和 chunk 生成逻辑
 
 ## Section 4：Prompt 模板 + SKILL.md
 

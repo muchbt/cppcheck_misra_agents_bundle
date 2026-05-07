@@ -15,7 +15,7 @@
 | File | Action | Responsibility |
 |---|---|---|
 | `.agents/config/fix_patterns.json` | Create | Static rule_id → fix pattern mapping (all deduplicated rules) |
-| `.agents/tools/split_cppcheck_xml.py` | Modify | Add `lookup_fix_pattern()`, attach patterns in `parse_xml()`, deduplicate in `main()` |
+| `.agents/tools/split_cppcheck_xml.py` | Modify | Add `lookup_fix_pattern()`, use it in `main()` during chunk assembly to compute `unique_fix_patterns` |
 | `.agents/tools/common.py` | Modify | Add `FIX_PATTERNS_PATH` constant |
 | `.agents/prompts/fix_chunk_prompt.txt` | Modify | Add 1 line about `unique_fix_patterns` |
 | `tests/test_fix_patterns.py` | Create | Unit tests for `lookup_fix_pattern()` and chunk dedup |
@@ -25,12 +25,12 @@
 ## Task 1: Add `FIX_PATTERNS_PATH` constant to common.py
 
 **Files:**
-- Modify: `.agents/tools/common.py:18` (after `PROMPTS_DIR` line)
+- Modify: `.agents/tools/common.py:25` (after `REPORTS_DIR` line, with other path constants)
 - Test: `tests/test_common.py`
 
 - [ ] **Step 1: Add the constant**
 
-In `.agents/tools/common.py`, after line 18 (`PROMPTS_DIR = AGENTS_DIR / "prompts"`), add:
+In `.agents/tools/common.py`, after line 25 (`REPORTS_DIR = AGENTS_DIR / "reports"`), add alongside the other path constants:
 
 ```python
 FIX_PATTERNS_PATH = CONFIG_DIR / "fix_patterns.json"
@@ -125,7 +125,7 @@ The full file must include entries for every unique rule_id found across all tem
 Run: `python3 -c "import json; json.load(open('.agents/config/fix_patterns.json')); print('JSON valid')"`
 Expected: `JSON valid`
 
-- [ ] **Step 3: Verify all rule_ids from templates are covered**
+- [ ] **Step 3: Verify all rule_ids from templates are covered and no risk_level in patterns**
 
 Run: `python3 -c "
 import json, sys
@@ -154,8 +154,15 @@ if missing:
     sys.exit(1)
 else:
     print(f'All {len(all_ids)} rule_ids covered in fix_patterns.json')
+
+# Verify no risk_level in patterns (per design: it comes from policy)
+for rule_id, pattern in fp['patterns'].items():
+    if 'risk_level' in pattern:
+        print(f'ERROR: {rule_id} should not have risk_level in fix_patterns.json')
+        sys.exit(1)
+print('No risk_level found in patterns — correct.')
 "`
-Expected: `All N rule_ids covered in fix_patterns.json`
+Expected: `All N rule_ids covered in fix_patterns.json` followed by `No risk_level found in patterns — correct.`
 
 - [ ] **Step 4: Commit**
 
@@ -359,7 +366,7 @@ In the `dedup[key]` dict (line 163), add `_fix_pattern`:
         }
 ```
 
-- [ ] **Step 2: Modify main() to load fix_patterns.json and compute unique_fix_patterns**
+- [ ] **Step 2: Modify main() to load fix_patterns.json, strip _fix_pattern before saving issues_master.json, and compute unique_fix_patterns in chunks**
 
 Near the top of `main()`, after loading policy (line 225), add fix_patterns loading:
 
@@ -374,19 +381,33 @@ Change the `parse_xml` call (line 239) to pass fix_patterns:
     issues = parse_xml(xml_file, config, policy, strategy, fix_patterns)
 ```
 
-After building chunks (after line 281), add unique_fix_patterns computation and cleanup:
+**Critical**: The `_fix_pattern` temporary field must be stripped from `issues` before `issues_master.json` is saved, to prevent internal fields from leaking into persisted files. Add stripping between `save_json(RUNTIME_DIR / "issues_master.json", issues)` and `issue_status` construction:
+
+```python
+    save_json(RUNTIME_DIR / "issues_master.json", issues)
+
+    # Strip temporary _fix_pattern field from issues before persisting to issue_status
+    # (_fix_pattern is only needed during chunk assembly for unique_fix_patterns)
+    for issue in issues:
+        issue.pop("_fix_pattern", None)
+```
+
+After building chunks (after line 281), add unique_fix_patterns computation. Note: at this point `_fix_pattern` has already been stripped from issues, so we need a different approach — enrich issues with pattern data during chunk assembly rather than relying on `_fix_pattern` persisting from parse_xml.
+
+**Revised approach**: Instead of using `_fix_pattern` as a temporary field on issues throughout the pipeline, compute `unique_fix_patterns` at chunk assembly time by calling `lookup_fix_pattern()` directly with the rule_id and risk_level from each issue. This avoids any temporary field leakage.
 
 ```python
     chunks = build_chunks(issues, config)
     total = len(chunks)
     for idx, chunk in enumerate(chunks, start=1):
-        # Compute unique_fix_patterns and remove _fix_pattern from issues
+        # Compute unique_fix_patterns by looking up each unique rule_id in the chunk
         seen_patterns = {}
         for issue in chunk:
-            fp = issue.pop("_fix_pattern", None)
             rid = issue["rule_id"]
-            if fp is not None and rid not in seen_patterns:
-                seen_patterns[rid] = fp
+            if rid not in seen_patterns:
+                fp = lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+                if fp is not None:
+                    seen_patterns[rid] = fp
         payload = {
             "chunk_index": idx,
             "chunk_total": total,
@@ -401,61 +422,85 @@ After building chunks (after line 281), add unique_fix_patterns computation and 
         save_json(CHUNKS_DIR / f"chunk_{idx:03d}.json", payload)
 ```
 
-- [ ] **Step 3: Add test for chunk-level unique_fix_patterns dedup**
+With this approach, `_fix_pattern` is never stored on the issue dict — it's looked up fresh during chunk assembly via `lookup_fix_pattern()`.
+
+**Update parse_xml()**: Remove `_fix_pattern` from the dedup dict since it's no longer needed there. The `parse_xml` step 1 should NOT add `"_fix_pattern": fix_pattern` to dedup. The signature change and `lookup_fix_pattern` call in `parse_xml()` should also be removed — all pattern lookup happens in `main()` during chunk assembly.
+
+So the final `parse_xml()` change is: **no change to parse_xml() at all**. The `lookup_fix_pattern()` function added in Task 3 is used only in `main()` during chunk assembly.
+
+- [ ] **Step 3: Add test for chunk-level unique_fix_patterns computation**
 
 Add to `tests/test_fix_patterns.py`:
 
 ```python
 def test_chunk_unique_fix_patterns_dedup():
-    """Verify unique_fix_patterns appears at chunk level and deduplicates by rule_id."""
+    """Verify unique_fix_patterns computed from issues with dedup by rule_id."""
+    fix_patterns = {
+        "patterns": {
+            "misra-c2012-11.3": {"fix": "cast", "example": "x", "pitfalls": "align", "context_notes": "check"},
+            "misra-c2012-8.4": {"fix": "declare", "example": "y"},
+        }
+    }
     issues = [
-        {"rule_id": "misra-c2012-11.3", "file": "a.c", "line": 1, "_fix_pattern": {"fix": "cast", "example": "x"}},
-        {"rule_id": "misra-c2012-11.3", "file": "a.c", "line": 5, "_fix_pattern": {"fix": "cast", "example": "x"}},
-        {"rule_id": "misra-c2012-8.4", "file": "b.c", "line": 1, "_fix_pattern": {"fix": "declare", "example": "y"}},
+        {"rule_id": "misra-c2012-11.3", "risk_level": "high"},
+        {"rule_id": "misra-c2012-11.3", "risk_level": "high"},
+        {"rule_id": "misra-c2012-8.4", "risk_level": "medium"},
     ]
+    # Simulate chunk assembly logic
     seen = {}
     for issue in issues:
-        fp = issue.pop("_fix_pattern", None)
         rid = issue["rule_id"]
-        if fp is not None and rid not in seen:
-            seen[rid] = fp
+        if rid not in seen:
+            fp = spm.lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+            if fp is not None:
+                seen[rid] = fp
     assert len(seen) == 2
     assert "misra-c2012-11.3" in seen
     assert "misra-c2012-8.4" in seen
-    assert "_fix_pattern" not in issues[0]
-    assert "_fix_pattern" not in issues[1]
-    assert "_fix_pattern" not in issues[2]
+    # misra-c2012-11.3 is high risk, so should have pitfalls and context_notes
+    assert "pitfalls" in seen["misra-c2012-11.3"]
+    assert "context_notes" in seen["misra-c2012-11.3"]
+    # misra-c2012-8.4 is medium risk, so should have caution but not pitfalls
+    assert "caution" not in seen["misra-c2012-8.4"]
 
 
 def test_chunk_unique_fix_patterns_none_pattern():
-    """Issues without fix_pattern should not appear in unique_fix_patterns."""
+    """Issues whose rule_id has no pattern should not appear in unique_fix_patterns."""
+    fix_patterns = {
+        "patterns": {
+            "misra-c2012-11.3": {"fix": "cast", "example": "x"},
+        }
+    }
     issues = [
-        {"rule_id": "unknownRule", "file": "a.c", "line": 1},
-        {"rule_id": "misra-c2012-11.3", "file": "a.c", "line": 5, "_fix_pattern": {"fix": "cast", "example": "x"}},
+        {"rule_id": "unknownRule", "risk_level": "low"},
+        {"rule_id": "misra-c2012-11.3", "risk_level": "medium"},
     ]
     seen = {}
     for issue in issues:
-        fp = issue.pop("_fix_pattern", None)
         rid = issue["rule_id"]
-        if fp is not None and rid not in seen:
-            seen[rid] = fp
+        if rid not in seen:
+            fp = spm.lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+            if fp is not None:
+                seen[rid] = fp
     assert len(seen) == 1
     assert "unknownRule" not in seen
     assert "misra-c2012-11.3" in seen
 
 
 def test_chunk_unique_fix_patterns_all_none():
-    """When all issues have no fix_pattern, unique_fix_patterns is empty."""
+    """When all rule_ids have no pattern, unique_fix_patterns is empty."""
+    fix_patterns = {"patterns": {}}
     issues = [
-        {"rule_id": "rule1", "file": "a.c", "line": 1},
-        {"rule_id": "rule2", "file": "a.c", "line": 5},
+        {"rule_id": "rule1", "risk_level": "low"},
+        {"rule_id": "rule2", "risk_level": "medium"},
     ]
     seen = {}
     for issue in issues:
-        fp = issue.pop("_fix_pattern", None)
         rid = issue["rule_id"]
-        if fp is not None and rid not in seen:
-            seen[rid] = fp
+        if rid not in seen:
+            fp = spm.lookup_fix_pattern(rid, issue.get("risk_level", "high"), fix_patterns)
+            if fp is not None:
+                seen[rid] = fp
     assert len(seen) == 0
 ```
 
@@ -583,6 +628,7 @@ Add to `tests/test_fix_patterns.py`:
 import json
 import tempfile
 from pathlib import Path
+import pytest
 
 
 def test_split_produces_unique_fix_patterns_in_chunks():
@@ -590,8 +636,7 @@ def test_split_produces_unique_fix_patterns_in_chunks():
     # Use the real fix_patterns.json if it exists
     fp_path = Path(__file__).resolve().parents[1] / ".agents" / "config" / "fix_patterns.json"
     if not fp_path.exists():
-        # Skip if fix_patterns.json not yet populated
-        return
+        pytest.skip("fix_patterns.json not yet populated")
 
     fix_patterns = json.loads(fp_path.read_text())
 
@@ -617,7 +662,7 @@ def test_lookup_with_real_fix_patterns_covers_all_resources():
     """Verify fix_patterns.json covers key cppcheck rules."""
     fp_path = Path(__file__).resolve().parents[1] / ".agents" / "config" / "fix_patterns.json"
     if not fp_path.exists():
-        return
+        pytest.skip("fix_patterns.json not yet populated")
 
     fix_patterns = json.loads(fp_path.read_text())
     patterns = fix_patterns.get("patterns", {})
@@ -660,7 +705,11 @@ git commit -m "test: add integration and schema validation tests for fix_pattern
 
 ## Self-Review Checklist
 
-- [x] **Spec coverage**: Section 1 (fix_patterns.json schema) → Tasks 2, 7; Section 2 (chunk JSON with unique_fix_patterns) → Task 4; Section 3 (lookup_fix_pattern + parse_xml integration) → Tasks 3, 4, 5; Section 4 (prompt template) → Task 6; Section 5 (tests) → Tasks 3, 4, 5, 7
+- [x] **Spec coverage**: Section 1 (fix_patterns.json schema) → Tasks 2, 7; Section 2 (chunk JSON with unique_fix_patterns) → Task 4; Section 3 (lookup_fix_pattern + chunk assembly) → Tasks 3, 4, 5; Section 4 (prompt template) → Task 6; Section 5 (tests) → Tasks 3, 4, 5, 7
 - [x] **Placeholder scan**: No TBD/TODO in this plan
-- [x] **Type consistency**: `lookup_fix_pattern()` signature (rule_id: str, risk_level: str, fix_patterns: Optional[Dict]) matches usage in parse_xml(); `_fix_pattern` temp field is popped and moved to `unique_fix_patterns`; chunk JSON structure matches design doc
+- [x] **Type consistency**: `lookup_fix_pattern()` signature (rule_id: str, risk_level: str, fix_patterns: Optional[Dict]) matches usage in main() chunk assembly; no `_fix_pattern` temp field on issues (looked up fresh during chunk assembly); chunk JSON structure matches design doc
 - [x] **Risk_level source**: fix_patterns.json has no risk_level field; policy risk_level used for field filtering via RISK_DETAIL_FIELDS — matches review correction #2
+- [x] **No _fix_pattern leak**: _fix_pattern is never attached to issue dicts in parse_xml(); pattern lookup happens at chunk assembly time in main() via lookup_fix_pattern(), so issues_master.json and issue_status.json never contain internal temp fields
+- [x] **FIX_PATTERNS_PATH placement**: After REPORTS_DIR (line 25), grouped with other path constants — review issue #1
+- [x] **Validation checks**: Task 2 Step 3 now also validates no risk_level in patterns — review issue #2
+- [x] **pytest.skip**: Task 7 uses pytest.skip() instead of bare return — review issue #4
