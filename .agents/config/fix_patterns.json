@@ -1,0 +1,977 @@
+{
+  "_meta": "Canonical fix patterns for cppcheck/MISRA rules. risk_level comes from rule_policy, not from this file. Injected into chunk JSON per-rule via lookup_fix_pattern().",
+  "risk_detail_levels": {
+    "low": ["fix", "example"],
+    "medium": ["fix", "example", "caution"],
+    "high": ["fix", "example", "pitfalls", "context_notes"]
+  },
+  "patterns": {
+    "unusedVariable": {
+      "fix": "Remove the unused variable declaration.",
+      "example": "/* fix: unusedVariable — removed unused variable 'x' */"
+    },
+    "unreadVariable": {
+      "fix": "Remove the unread variable or use its value in a meaningful expression.",
+      "example": "result = calc(x); /* fix: unreadVariable — use return value */",
+      "caution": "Verify the variable is not intentionally kept for debugging or assertion."
+    },
+    "constVariable": {
+      "fix": "Add const qualifier to the variable declaration.",
+      "example": "const uint8_t val = 10; /* fix: constVariable — added const qualifier */"
+    },
+    "uninitvar": {
+      "fix": "Initialize the variable at its declaration point.",
+      "example": "int count = 0; /* fix: uninitvar — initialized to zero */",
+      "caution": "Choose the correct initial value; zero may not always be appropriate.",
+      "pitfalls": "Masking a real logic error with a default value can hide bugs. Verify the intended initial state.",
+      "context_notes": "In safety-critical code, prefer explicit initialization matching the domain's default state."
+    },
+    "uninitStructMember": {
+      "fix": "Initialize the struct member, preferably via memset or designated initializer.",
+      "example": "memset(&obj, 0, sizeof(obj)); /* fix: uninitStructMember — zero-init struct */",
+      "caution": "Verify that zero is the correct initial value for all members.",
+      "pitfalls": "Struct may contain pointer members where zero-init creates NULL pointers; ensure callers handle this.",
+      "context_notes": "In embedded code, prefer designated initializers over memset for structs with non-trivial layouts."
+    },
+    "nullPointer": {
+      "fix": "Add NULL guard before the first dereference of the pointer.",
+      "example": "if (ptr == NULL) { return ERR_NULL; } /* fix: nullPointer — added NULL guard */",
+      "caution": "Verify all code paths that reach this dereference.",
+      "pitfalls": "Adding a NULL guard changes control flow. If the pointer should never be NULL by contract, consider assert instead.",
+      "context_notes": "In safety-critical code, prefer returning an explicit error code rather than silently continuing."
+    },
+    "nullPointerRedundantCheck": {
+      "fix": "Remove the redundant NULL check, or restructure the logic so the check is consistent.",
+      "example": "/* fix: nullPointerRedundantCheck — removed redundant NULL check (already dereferenced above) */",
+      "caution": "Verify that the earlier dereference truly guarantees non-NULL at this point."
+    },
+    "bufferAccessOutOfBounds": {
+      "fix": "Fix the buffer size or clamp the access index to stay within bounds.",
+      "example": "if (idx < sizeof(buf)) { buf[idx] = val; } /* fix: bufferAccessOutOfBounds — bounds check */",
+      "caution": "Verify the buffer size calculation accounts for all possible input sizes.",
+      "pitfalls": "Off-by-one errors are common. Double-check whether the bound should be < or <=.",
+      "context_notes": "In safety-critical code, consider adding runtime assertions for buffer bounds."
+    },
+    "arrayIndexOutOfBounds": {
+      "fix": "Ensure the array index is within [0, array_size - 1].",
+      "example": "if (i < ARRAY_SIZE) { arr[i] = v; } /* fix: arrayIndexOutOfBounds — added bounds check */",
+      "caution": "Verify the array size constant matches the actual declaration.",
+      "pitfalls": "The index expression may depend on external input; validate at the source.",
+      "context_notes": "Prefer compile-time array size macros (e.g., sizeof(arr)/sizeof(arr[0])) over hardcoded constants."
+    },
+    "memoryLeak": {
+      "fix": "Free the allocated memory on all code paths, including error paths.",
+      "example": "free(buf); buf = NULL; /* fix: memoryLeak — freed allocation on error path */",
+      "caution": "Ensure the pointer is not used after free.",
+      "pitfalls": "Adding free on error paths may introduce double-free if the pointer is aliased.",
+      "context_notes": "In embedded systems, consider whether dynamic allocation should be replaced with static allocation."
+    },
+    "resourceLeak": {
+      "fix": "Close or release the resource on all code paths, including error paths.",
+      "example": "fclose(fp); /* fix: resourceLeak — closed file on error path */",
+      "caution": "Ensure the resource handle is valid before closing.",
+      "pitfalls": "If the resource handle is shared, closing it may affect other users.",
+      "context_notes": "Consider using RAII-style cleanup patterns (goto cleanup) for multiple resources."
+    },
+    "doubleFree": {
+      "fix": "Remove the duplicate free call or set pointer to NULL after first free.",
+      "example": "free(ptr); ptr = NULL; /* fix: doubleFree — set to NULL after free to prevent double-free */",
+      "pitfalls": "The second free may be on a different code path; trace all paths to the pointer.",
+      "context_notes": "In safety-critical code, always set pointer to NULL immediately after free."
+    },
+    "deallocDealloc": {
+      "fix": "Remove the duplicate deallocation or guard with a NULL check.",
+      "example": "if (ptr != NULL) { free(ptr); ptr = NULL; } /* fix: deallocDealloc — guarded dealloc */",
+      "pitfalls": "Multiple deallocation paths may indicate a deeper ownership confusion.",
+      "context_notes": "Consider consolidating cleanup into a single function to prevent double deallocation."
+    },
+    "useClosedFile": {
+      "fix": "Check file status before use, or restructure to not use the file after close.",
+      "example": "/* fix: useClosedFile — moved fclose() after all file operations */",
+      "pitfalls": "Reordering file operations may change the output or error handling sequence.",
+      "context_notes": "Ensure error handling does not close the file prematurely."
+    },
+    "leakNoVarFunctionCall": {
+      "fix": "Capture the allocated pointer from the function call and free it when done.",
+      "example": "char *tmp = strdup(s); use(tmp); free(tmp); /* fix: leakNoVarFunctionCall — captured and freed */",
+      "caution": "Ensure the captured pointer is freed on all code paths."
+    },
+    "leakReturnValNotUsed": {
+      "fix": "Capture the return value and free/release it, or pass it to the caller.",
+      "example": "char *p = alloc_func(); /* fix: leakReturnValNotUsed — captured return value */",
+      "caution": "If the return value is intentionally discarded, document why and suppress the warning."
+    },
+    "returnLocalVariable": {
+      "fix": "Return a copy of the data, or allocate on the heap and document ownership.",
+      "example": "char *result = strdup(local_buf); return result; /* fix: returnLocalVariable — heap copy */",
+      "pitfalls": "Heap allocation shifts ownership responsibility to the caller.",
+      "context_notes": "In embedded code, prefer caller-provided buffers over heap allocation."
+    },
+    "returnReference": {
+      "fix": "Return a copy instead of a reference to a local variable.",
+      "example": "return local_val; /* fix: returnReference — return by value, not by reference */",
+      "pitfalls": "For large objects, returning by value may have performance implications."
+    },
+    "autoVariables": {
+      "fix": "Do not store address of auto (stack) variable in a pointer that outlives the scope.",
+      "example": "static int val = 0; *out = &val; /* fix: autoVariables — use static or heap storage */",
+      "pitfalls": "Using static storage makes the function non-reentrant.",
+      "context_notes": "In multithreaded or interrupt context, static storage can cause data races."
+    },
+    "danglingTemporaryLifetime": {
+      "fix": "Extend the object's lifetime by storing it in a named variable.",
+      "example": "struct S obj = make_s(); use(&obj); /* fix: danglingTemporaryLifetime — extended lifetime */",
+      "pitfalls": "Ensure the named variable lives long enough for all uses of its address."
+    },
+    "comparisonError": {
+      "fix": "Fix the comparison operator or operand to match the intended logic.",
+      "example": "if (a < b) /* fix: comparisonError — corrected comparison from <= to < */",
+      "caution": "Verify the intended boundary condition (< vs <= vs == vs !=)."
+    },
+    "misra-c2012-2.1": {
+      "fix": "Remove unreachable code or fix the control flow so the code becomes reachable.",
+      "example": "/* fix: misra-c2012-2.1 — removed unreachable code after return */",
+      "caution": "Unreachable code may be intentional for defensive programming; verify intent.",
+      "pitfalls": "Removing code after a conditional return may break future maintenance if the condition changes.",
+      "context_notes": "In safety-critical code, unreachable code may indicate a logic error in the control flow."
+    },
+    "misra-c2012-2.2": {
+      "fix": "Remove dead code (code whose result is never used).",
+      "example": "/* fix: misra-c2012-2.2 — removed dead assignment to 'x' */"
+    },
+    "misra-c2012-2.3": {
+      "fix": "Remove the unused type declaration (typedef).",
+      "example": "/* fix: misra-c2012-2.3 — removed unused typedef 'MyType' */"
+    },
+    "misra-c2012-2.4": {
+      "fix": "Remove the unused tag declaration, or use it.",
+      "example": "/* fix: misra-c2012-2.4 — removed unused struct tag 'S' */",
+      "caution": "The tag may be used in other translation units via a shared header."
+    },
+    "misra-c2012-2.5": {
+      "fix": "Remove the unused macro definition (#define).",
+      "example": "/* fix: misra-c2012-2.5 — removed unused macro 'MAX_SIZE' */",
+      "caution": "The macro may be used by other translation units or configuration headers."
+    },
+    "misra-c2012-2.6": {
+      "fix": "Remove the unused label.",
+      "example": "/* fix: misra-c2012-2.6 — removed unused label 'cleanup' */",
+      "caution": "The label may be part of incomplete error-handling refactoring."
+    },
+    "misra-c2012-2.7": {
+      "fix": "Cast the unused parameter to (void) to suppress the warning.",
+      "example": "(void)param; /* fix: misra-c2012-2.7 — suppressed unused parameter */"
+    },
+    "misra-c2012-3.1": {
+      "fix": "Remove or escape the /* or // sequence inside a comment.",
+      "example": "/* fix: misra-c2012-3.1 — removed nested comment sequence */",
+      "caution": "Ensure the comment content is still correct after modification."
+    },
+    "misra-c2012-3.2": {
+      "fix": "Remove the line splice (backslash-newline) inside a // comment.",
+      "example": "/* fix: misra-c2012-3.2 — removed line splice in comment */"
+    },
+    "misra-c2012-4.1": {
+      "fix": "Use only valid escape sequences (\\n, \\t, \\0, etc.) or hex escapes.",
+      "example": "char c = '\\x41'; /* fix: misra-c2012-4.1 — used hex escape instead of octal */",
+      "pitfalls": "Incorrect escape sequences can silently produce wrong character values.",
+      "context_notes": "In embedded displays, verify the character encoding matches the target hardware."
+    },
+    "misra-c2012-4.2": {
+      "fix": "Replace trigraph sequences (??X) with the intended character.",
+      "example": "/* fix: misra-c2012-4.2 — replaced trigraph ??= with # */"
+    },
+    "misra-c2012-5.1": {
+      "fix": "Shorten the external identifier to ensure uniqueness within the first 31 characters.",
+      "example": "/* fix: misra-c2012-5.1 — shortened identifier for 31-char uniqueness */",
+      "caution": "Renaming an external identifier affects all translation units that reference it."
+    },
+    "misra-c2012-5.2": {
+      "fix": "Rename the inner-scope identifier to avoid hiding the outer-scope identifier.",
+      "example": "int inner_val = 0; /* fix: misra-c2012-5.2 — renamed to avoid hiding outer 'val' */",
+      "caution": "Ensure all references to the renamed identifier are updated consistently."
+    },
+    "misra-c2012-5.3": {
+      "fix": "Rename the identifier to avoid hiding a broader-scope name.",
+      "example": "int local_count = 0; /* fix: misra-c2012-5.3 — renamed to avoid hiding 'count' */",
+      "caution": "Check that the new name does not conflict with other identifiers in scope."
+    },
+    "misra-c2012-5.4": {
+      "fix": "Rename the macro to ensure identifier uniqueness.",
+      "example": "#define MOD_MAX_SIZE (100) /* fix: misra-c2012-5.4 — prefixed macro for uniqueness */",
+      "caution": "Macro renaming may affect all files that include the header."
+    },
+    "misra-c2012-5.5": {
+      "fix": "Rename the macro to avoid clashing with identifiers in other namespaces.",
+      "example": "#define MOD_STATUS (0) /* fix: misra-c2012-5.5 — prefixed to avoid namespace clash */",
+      "caution": "Update all references to the renamed macro across headers."
+    },
+    "misra-c2012-5.6": {
+      "fix": "Ensure typedef name is unique and not reused for different types.",
+      "example": "typedef uint8_t ModuleStatus_t; /* fix: misra-c2012-5.6 — unique typedef name */"
+    },
+    "misra-c2012-5.7": {
+      "fix": "Ensure struct/union/enum tag is unique.",
+      "example": "struct ModuleConfig { ... }; /* fix: misra-c2012-5.7 — unique tag name */"
+    },
+    "misra-c2012-5.8": {
+      "fix": "Ensure identifiers with external linkage are unique across translation units.",
+      "example": "/* fix: misra-c2012-5.8 — renamed external identifier for uniqueness */"
+    },
+    "misra-c2012-5.9": {
+      "fix": "Ensure identifiers with internal linkage are unique within the translation unit.",
+      "example": "/* fix: misra-c2012-5.9 — renamed static identifier for uniqueness */"
+    },
+    "misra-c2012-6.1": {
+      "fix": "Use an explicitly signed or unsigned integer type for the bit-field.",
+      "example": "unsigned int flag : 1; /* fix: misra-c2012-6.1 — explicit unsigned for bit-field */",
+      "caution": "Changing int to unsigned int may affect sign-extension behavior."
+    },
+    "misra-c2012-6.2": {
+      "fix": "Use unsigned type for single-bit bit-fields to avoid sign ambiguity.",
+      "example": "unsigned int active : 1; /* fix: misra-c2012-6.2 — unsigned for single-bit field */",
+      "caution": "Verify that the bit-field value interpretation does not depend on sign."
+    },
+    "misra-c2012-7.1": {
+      "fix": "Replace octal constant with decimal or hexadecimal equivalent.",
+      "example": "int mask = 0x1F; /* fix: misra-c2012-7.1 — replaced octal 037 with hex 0x1F */"
+    },
+    "misra-c2012-7.2": {
+      "fix": "Add a U suffix to unsigned integer constants.",
+      "example": "uint32_t mask = 0xFFU; /* fix: misra-c2012-7.2 — added U suffix */"
+    },
+    "misra-c2012-7.3": {
+      "fix": "Use uppercase L suffix for long constants instead of lowercase l.",
+      "example": "long val = 100L; /* fix: misra-c2012-7.3 — uppercase L suffix */"
+    },
+    "misra-c2012-7.4": {
+      "fix": "Assign string literal only to a pointer-to-const-char type.",
+      "example": "const char *msg = \"hello\"; /* fix: misra-c2012-7.4 — const pointer for literal */",
+      "caution": "Changing pointer type may require updating function signatures that receive it."
+    },
+    "misra-c2012-8.1": {
+      "fix": "Add explicit type specifiers to all declarations (no implicit int).",
+      "example": "int func(void); /* fix: misra-c2012-8.1 — added explicit int return type */"
+    },
+    "misra-c2012-8.2": {
+      "fix": "Add a function prototype with named parameters for all functions.",
+      "example": "int calc(int value, int scale); /* fix: misra-c2012-8.2 — added named parameters */"
+    },
+    "misra-c2012-8.3": {
+      "fix": "Ensure all declarations of a function/object use compatible types.",
+      "example": "/* fix: misra-c2012-8.3 — reconciled declaration to match definition */",
+      "caution": "Changing a declaration may affect other translation units that include the header."
+    },
+    "misra-c2012-8.4": {
+      "fix": "Add or reconcile a visible forward declaration to match the definition.",
+      "example": "extern uint8_t foo(void); /* fix: misra-c2012-8.4 — added compatible declaration */",
+      "caution": "Ensure the declaration is in a shared header, not duplicated locally.",
+      "pitfalls": "Mismatched declarations across translation units cause silent undefined behavior.",
+      "context_notes": "In large projects, use a lint or build check to detect declaration mismatches."
+    },
+    "misra-c2012-8.5": {
+      "fix": "Ensure an external object/function is defined in exactly one translation unit.",
+      "example": "/* fix: misra-c2012-8.5 — moved definition to single .c file, kept extern in .h */",
+      "caution": "Moving definitions may affect link order and initialization."
+    },
+    "misra-c2012-8.6": {
+      "fix": "Provide exactly one external definition for each identifier with external linkage.",
+      "example": "/* fix: misra-c2012-8.6 — consolidated duplicate definitions */",
+      "caution": "Removing a duplicate definition may break other translation units."
+    },
+    "misra-c2012-8.7": {
+      "fix": "Reduce scope: add static qualifier if the object/function is only used in one file.",
+      "example": "static int helper(void) { ... } /* fix: misra-c2012-8.7 — added static for file scope */",
+      "caution": "Verify the identifier is truly not referenced from other translation units."
+    },
+    "misra-c2012-8.8": {
+      "fix": "Add static keyword for functions/objects with internal linkage.",
+      "example": "static void internal_func(void); /* fix: misra-c2012-8.8 — added static */",
+      "caution": "Verify the function is not referenced from other files."
+    },
+    "misra-c2012-8.9": {
+      "fix": "Move the object declaration to the narrowest possible scope (block scope).",
+      "example": "void f(void) { int local = 0; /* fix: misra-c2012-8.9 — moved to block scope */ }",
+      "caution": "Moving a variable to a narrower scope changes its lifetime and may affect initialization order."
+    },
+    "misra-c2012-8.10": {
+      "fix": "Add static qualifier to inline functions with internal linkage.",
+      "example": "static inline int max(int a, int b) { ... } /* fix: misra-c2012-8.10 — added static */",
+      "caution": "Verify the inline function is not needed externally."
+    },
+    "misra-c2012-8.11": {
+      "fix": "Add explicit size to extern array declarations.",
+      "example": "extern uint8_t buf[BUF_SIZE]; /* fix: misra-c2012-8.11 — added array size */"
+    },
+    "misra-c2012-8.12": {
+      "fix": "Specify all or no explicit values for enum members (do not mix).",
+      "example": "enum State { IDLE = 0, RUN = 1, STOP = 2 }; /* fix: misra-c2012-8.12 — all values explicit */"
+    },
+    "misra-c2012-8.13": {
+      "fix": "Add const qualifier to pointer parameter when the pointed-to data is not modified.",
+      "example": "void foo(const uint8_t *p); /* fix: misra-c2012-8.13 — added const qualifier */",
+      "caution": "Verify the function implementation does not modify data through this pointer."
+    },
+    "misra-c2012-8.14": {
+      "fix": "Remove the restrict qualifier from the pointer declaration.",
+      "example": "void copy(uint8_t *dst, const uint8_t *src); /* fix: misra-c2012-8.14 — removed restrict */",
+      "pitfalls": "Removing restrict may reduce compiler optimization opportunities.",
+      "context_notes": "MISRA forbids restrict; if performance is critical, document the deviation."
+    },
+    "misra-c2012-9.1": {
+      "fix": "Initialize the variable at declaration or on all paths before first use.",
+      "example": "int result = 0; /* fix: misra-c2012-9.1 — initialized at declaration */",
+      "caution": "Choose an appropriate initial value; zero may mask logic errors.",
+      "pitfalls": "If the variable is set in multiple branches, ensure every branch assigns before use.",
+      "context_notes": "In safety-critical code, uninitialized reads are undefined behavior and may cause unpredictable results."
+    },
+    "misra-c2012-9.2": {
+      "fix": "Use fully brace-enclosed initializer lists for arrays and structs.",
+      "example": "int arr[3] = {1, 2, 3}; /* fix: misra-c2012-9.2 — brace-enclosed init */",
+      "caution": "Ensure the number of initializer elements matches the array/struct size."
+    },
+    "misra-c2012-9.3": {
+      "fix": "Either initialize all array elements explicitly or use {0} for zero-initialization.",
+      "example": "int arr[4] = {0}; /* fix: misra-c2012-9.3 — zero-initialized all elements */",
+      "caution": "Partial initialization may silently zero-fill remaining elements; verify intent."
+    },
+    "misra-c2012-9.4": {
+      "fix": "Remove duplicate initializer for the same element.",
+      "example": "/* fix: misra-c2012-9.4 — removed duplicate initializer for element [2] */",
+      "caution": "In C99 designated initializers, later values override earlier ones; verify intent."
+    },
+    "misra-c2012-9.5": {
+      "fix": "Use an explicit array size instead of relying on initializer count.",
+      "example": "int arr[3] = {1, 2, 3}; /* fix: misra-c2012-9.5 — explicit size */",
+      "caution": "The explicit size must match the actual number of initializer elements."
+    },
+    "misra-c2012-10.1": {
+      "fix": "Add an explicit cast or use an operand of the correct essential type.",
+      "example": "uint32_t r = (uint32_t)a + (uint32_t)b; /* fix: misra-c2012-10.1 — explicit cast */",
+      "caution": "Ensure the cast does not cause data truncation or unexpected sign extension."
+    },
+    "misra-c2012-10.2": {
+      "fix": "Do not use char type in arithmetic; cast to an appropriate integer type.",
+      "example": "int offset = (int)ch - (int)'A'; /* fix: misra-c2012-10.2 — explicit int cast */",
+      "pitfalls": "The sign of plain char is implementation-defined; casting to int may produce negative values.",
+      "context_notes": "Use unsigned char for byte arithmetic to avoid sign issues."
+    },
+    "misra-c2012-10.3": {
+      "fix": "Add an explicit cast when assigning to a narrower or different essential type.",
+      "example": "uint8_t val = (uint8_t)wide_val; /* fix: misra-c2012-10.3 — explicit narrowing cast */",
+      "caution": "Verify the value fits in the target type; narrowing may lose data."
+    },
+    "misra-c2012-10.4": {
+      "fix": "Ensure both operands of arithmetic/comparison have the same essential type.",
+      "example": "if ((uint32_t)a == (uint32_t)b) /* fix: misra-c2012-10.4 — same essential type */",
+      "caution": "Casting to a wider type may hide logic errors if the original types differ intentionally."
+    },
+    "misra-c2012-10.5": {
+      "fix": "Replace the inappropriate cast with one between compatible essential types.",
+      "example": "uint8_t flags = (uint8_t)(reg & 0xFFU); /* fix: misra-c2012-10.5 — appropriate cast */",
+      "caution": "Do not cast between boolean, enum, and integer types without review."
+    },
+    "misra-c2012-10.6": {
+      "fix": "Assign the composite expression result to the correct width type directly.",
+      "example": "uint32_t r = (uint32_t)a * (uint32_t)b; /* fix: misra-c2012-10.6 — widen before op */",
+      "caution": "Widening after the operation does not prevent intermediate overflow."
+    },
+    "misra-c2012-10.7": {
+      "fix": "Cast an operand to the wider type before the arithmetic operation.",
+      "example": "uint32_t r = (uint32_t)u16a + (uint32_t)u16b; /* fix: misra-c2012-10.7 — widen before op */",
+      "caution": "The wider type must be chosen to avoid both overflow and sign issues."
+    },
+    "misra-c2012-10.8": {
+      "fix": "Avoid casting a composite expression to a different essential type category; restructure.",
+      "example": "uint32_t tmp = a + b; int32_t r = (int32_t)tmp; /* fix: misra-c2012-10.8 — separate cast */",
+      "pitfalls": "Complex type conversions can mask overflow or sign-change bugs.",
+      "context_notes": "Prefer step-by-step casts through intermediate variables for clarity."
+    },
+    "misra-c2012-11.1": {
+      "fix": "Do not convert between function pointer and other pointer/integer types.",
+      "example": "/* fix: misra-c2012-11.1 — removed function pointer to void* cast */",
+      "pitfalls": "Function pointer casts can cause undefined behavior if the signature does not match.",
+      "context_notes": "If a callback registry requires void*, use a wrapper struct instead of casting."
+    },
+    "misra-c2012-11.2": {
+      "fix": "Do not convert between pointer to incomplete type and other pointer types.",
+      "example": "/* fix: misra-c2012-11.2 — used complete type definition before cast */",
+      "pitfalls": "Incomplete type casts can cause alignment and size assumptions to be wrong.",
+      "context_notes": "Provide the full struct definition in a shared header before casting."
+    },
+    "misra-c2012-11.3": {
+      "fix": "Add explicit cast between object pointer types with a justifying comment.",
+      "example": "uint8_t *p = (uint8_t *)void_ptr; /* fix: misra-c2012-11.3 — explicit cast */",
+      "caution": "Verify target type alignment requirements are satisfied."
+    },
+    "misra-c2012-11.4": {
+      "fix": "Use uintptr_t as an intermediate for integer-to-pointer conversions.",
+      "example": "uintptr_t addr = REG_BASE; volatile uint32_t *reg = (volatile uint32_t *)addr; /* fix: misra-c2012-11.4 — via uintptr_t */",
+      "pitfalls": "Integer-to-pointer casts are inherently non-portable.",
+      "context_notes": "In embedded code, document the hardware register address and access width."
+    },
+    "misra-c2012-11.5": {
+      "fix": "Add explicit cast from void* to the target object pointer type.",
+      "example": "uint8_t *buf = (uint8_t *)malloc(n); /* fix: misra-c2012-11.5 — explicit void* cast */",
+      "caution": "Verify alignment requirements of the target type."
+    },
+    "misra-c2012-11.6": {
+      "fix": "Do not cast between void* and an arithmetic type; use uintptr_t if needed.",
+      "example": "uintptr_t val = (uintptr_t)ptr; /* fix: misra-c2012-11.6 — via uintptr_t */",
+      "pitfalls": "Pointer-to-integer and integer-to-pointer casts are implementation-defined.",
+      "context_notes": "Only use this pattern for hardware register addresses or debug output."
+    },
+    "misra-c2012-11.7": {
+      "fix": "Do not cast between object pointer and non-integer arithmetic type.",
+      "example": "/* fix: misra-c2012-11.7 — removed illegal pointer-to-float cast */",
+      "pitfalls": "This type of cast produces undefined behavior in all cases.",
+      "context_notes": "Use memcpy for type-punning between pointer and non-integer types."
+    },
+    "misra-c2012-11.8": {
+      "fix": "Do not cast away const or volatile qualifiers.",
+      "example": "/* fix: misra-c2012-11.8 — preserved const qualifier in cast */",
+      "caution": "If removing const is required for legacy APIs, isolate and document the deviation."
+    },
+    "misra-c2012-11.9": {
+      "fix": "Use the NULL macro (not integer 0) as the null pointer constant.",
+      "example": "ptr = NULL; /* fix: misra-c2012-11.9 — use NULL macro */"
+    },
+    "misra-c2012-12.1": {
+      "fix": "Add explicit parentheses to clarify operator precedence.",
+      "example": "result = (a + b) * c; /* fix: misra-c2012-12.1 — added clarifying parentheses */",
+      "caution": "Verify the parenthesization matches the intended evaluation order."
+    },
+    "misra-c2012-12.2": {
+      "fix": "Ensure the shift amount is non-negative and less than the bit width of the type.",
+      "example": "uint32_t r = val << 4U; /* fix: misra-c2012-12.2 — shift within bit width */",
+      "pitfalls": "Shifting by a negative amount or beyond the type width is undefined behavior.",
+      "context_notes": "Add a compile-time or runtime check for the shift amount if it comes from a variable."
+    },
+    "misra-c2012-12.3": {
+      "fix": "Replace the comma operator with separate statements.",
+      "example": "a = 1; b = 2; /* fix: misra-c2012-12.3 — separated comma expression into statements */",
+      "caution": "In for-loop headers, the comma operator is common; restructure the loop if needed."
+    },
+    "misra-c2012-12.4": {
+      "fix": "Ensure constant expressions used in preprocessor or array sizes have no side effects.",
+      "example": "/* fix: misra-c2012-12.4 — replaced runtime expression with compile-time constant */",
+      "pitfalls": "Expressions that appear constant may depend on volatile or function calls.",
+      "context_notes": "Use enum or #define for compile-time constants instead of const variables."
+    },
+    "misra-c2012-12.5": {
+      "fix": "Do not apply sizeof to an array-typed function parameter (it gives pointer size).",
+      "example": "#define ARRAY_LEN(a) (sizeof(a)/sizeof((a)[0])) /* fix: misra-c2012-12.5 — use macro at caller */",
+      "caution": "Pass the array size as a separate parameter to the function."
+    },
+    "misra-c2012-13.1": {
+      "fix": "Move expressions with side effects out of the initializer list.",
+      "example": "int v = get_val(); int arr[] = {v, 0}; /* fix: misra-c2012-13.1 — side effect before init */",
+      "pitfalls": "Evaluation order of initializer list elements is not fully specified in C.",
+      "context_notes": "In safety-critical code, initializer lists should only contain constants or simple variables."
+    },
+    "misra-c2012-13.2": {
+      "fix": "Split the expression so each statement has at most one side effect.",
+      "example": "tmp = f(); result = tmp + g(); /* fix: misra-c2012-13.2 — one side effect per statement */",
+      "pitfalls": "Unsequenced side effects cause undefined behavior.",
+      "context_notes": "Compilers may reorder sub-expressions; splitting ensures deterministic evaluation."
+    },
+    "misra-c2012-13.3": {
+      "fix": "Separate increment/decrement operations from other expressions.",
+      "example": "i++; arr[i] = val; /* fix: misra-c2012-13.3 — separated increment from use */",
+      "caution": "Verify the intended evaluation order after separation."
+    },
+    "misra-c2012-13.4": {
+      "fix": "Move the assignment out of the controlling expression (if/while/for condition).",
+      "example": "val = get(); if (val != 0) { ... } /* fix: misra-c2012-13.4 — assignment before condition */",
+      "caution": "For while-loop patterns, use an explicit assignment inside the loop body."
+    },
+    "misra-c2012-13.5": {
+      "fix": "Move expressions with persistent side effects out of the right-hand side of && or ||.",
+      "example": "flag = has_data(); if (ready && flag) { ... } /* fix: misra-c2012-13.5 — pre-evaluated RHS */",
+      "caution": "Short-circuit evaluation means the RHS may not execute; pre-evaluation changes this."
+    },
+    "misra-c2012-13.6": {
+      "fix": "Remove expressions with side effects from the sizeof operand.",
+      "example": "size_t s = sizeof(int); /* fix: misra-c2012-13.6 — removed side effect from sizeof */"
+    },
+    "misra-c2012-14.1": {
+      "fix": "Replace the floating-point loop counter with an integer counter.",
+      "example": "for (int i = 0; i < 10; i++) /* fix: misra-c2012-14.1 — integer loop counter */",
+      "pitfalls": "Floating-point comparison in loop conditions can cause infinite loops due to precision.",
+      "context_notes": "In timing-critical loops, integer counters are both safer and faster."
+    },
+    "misra-c2012-14.2": {
+      "fix": "Ensure the for-loop has a single counter, a proper bound test, and a simple increment.",
+      "example": "for (uint8_t i = 0U; i < n; i++) /* fix: misra-c2012-14.2 — well-formed for loop */",
+      "caution": "Do not modify the loop counter inside the loop body."
+    },
+    "misra-c2012-14.3": {
+      "fix": "Review and fix the controlling expression that is always true or always false.",
+      "example": "/* fix: misra-c2012-14.3 — replaced invariant condition with runtime check */",
+      "pitfalls": "An always-true condition may indicate a logic error or missing variable update.",
+      "context_notes": "In defensive code, intentional infinite loops (while(1)) should use a documented deviation."
+    },
+    "misra-c2012-14.4": {
+      "fix": "Use an explicit boolean comparison instead of implicit truthiness.",
+      "example": "if (flag != 0U) /* fix: misra-c2012-14.4 — explicit boolean test */",
+      "caution": "For pointer checks, use (ptr != NULL) instead of (ptr)."
+    },
+    "misra-c2012-15.1": {
+      "fix": "Replace goto with structured control flow (if/else, break, return, flag variable).",
+      "example": "/* fix: misra-c2012-15.1 — replaced goto with structured control flow */",
+      "pitfalls": "Removing goto in cleanup patterns may require duplicating resource-release code.",
+      "context_notes": "In error-cleanup idioms, a single goto-cleanup may be acceptable with a documented deviation."
+    },
+    "misra-c2012-15.2": {
+      "fix": "Ensure goto jumps to a label later in the same or an enclosing block.",
+      "example": "/* fix: misra-c2012-15.2 — restructured to forward-only goto */",
+      "pitfalls": "Backward jumps can create implicit loops that bypass initialization.",
+      "context_notes": "Consider replacing with a do-while or state machine pattern."
+    },
+    "misra-c2012-15.3": {
+      "fix": "Ensure the goto label is in the same block or an enclosing block as the goto statement.",
+      "example": "/* fix: misra-c2012-15.3 — moved label to enclosing block */",
+      "pitfalls": "Cross-block jumps can skip variable initialization and resource acquisition.",
+      "context_notes": "Restructure using a flag variable or separate function to avoid cross-block goto."
+    },
+    "misra-c2012-15.4": {
+      "fix": "Ensure at most one break or goto statement per loop.",
+      "example": "/* fix: misra-c2012-15.4 — consolidated multiple breaks into single exit condition */",
+      "pitfalls": "Merging break conditions may change the loop's iteration behavior.",
+      "context_notes": "Use a found/done flag to combine multiple exit conditions into one break."
+    },
+    "misra-c2012-15.5": {
+      "fix": "Restructure the function to have a single point of return.",
+      "example": "int result = ERR; /* ... */ return result; /* fix: misra-c2012-15.5 — single return */",
+      "caution": "Single-return may require deeper nesting; balance readability with compliance."
+    },
+    "misra-c2012-15.6": {
+      "fix": "Add braces around the body of if, else, while, for, do, and switch statements.",
+      "example": "if (x > 0) { y = x; } /* fix: misra-c2012-15.6 — added compound statement */"
+    },
+    "misra-c2012-15.7": {
+      "fix": "Add a final else clause to an if-else-if chain.",
+      "example": "if (a) { ... } else if (b) { ... } else { /* default */ } /* fix: misra-c2012-15.7 — added else */"
+    },
+    "misra-c2012-16.1": {
+      "fix": "Ensure the switch body is a well-formed compound statement with only case/default labels.",
+      "example": "/* fix: misra-c2012-16.1 — restructured switch to well-formed block */",
+      "caution": "Do not place declarations or executable code before the first case label."
+    },
+    "misra-c2012-16.2": {
+      "fix": "Move case and default labels to the top level of the switch statement (no nested cases).",
+      "example": "/* fix: misra-c2012-16.2 — moved case label to switch top level */",
+      "pitfalls": "Duff's device and similar patterns violate this rule and must be refactored.",
+      "context_notes": "Use separate functions for complex cases to keep the switch structure flat."
+    },
+    "misra-c2012-16.3": {
+      "fix": "Add break (or return) at the end of every switch case clause.",
+      "example": "case 1: handle_one(); break; /* fix: misra-c2012-16.3 — added break */",
+      "caution": "If fallthrough is intentional, restructure to avoid it or document a deviation."
+    },
+    "misra-c2012-16.4": {
+      "fix": "Add a default case to the switch statement.",
+      "example": "default: break; /* fix: misra-c2012-16.4 — added default case */"
+    },
+    "misra-c2012-16.5": {
+      "fix": "Move the default case to the last position in the switch statement.",
+      "example": "/* fix: misra-c2012-16.5 — moved default to last position */"
+    },
+    "misra-c2012-16.6": {
+      "fix": "Ensure the switch statement has at least two case clauses (otherwise use if).",
+      "example": "if (val == 1) { ... } /* fix: misra-c2012-16.6 — replaced trivial switch with if */",
+      "caution": "If more cases are expected in the future, document why the switch is kept."
+    },
+    "misra-c2012-16.7": {
+      "fix": "Replace a switch on a boolean expression with an if-else.",
+      "example": "if (flag) { ... } else { ... } /* fix: misra-c2012-16.7 — replaced boolean switch with if */",
+      "caution": "Verify the switch expression is truly boolean and not an enum with two values."
+    },
+    "misra-c2012-17.1": {
+      "fix": "Do not use <stdarg.h> or variadic functions (va_list, va_start, va_arg, va_end).",
+      "example": "/* fix: misra-c2012-17.1 — replaced variadic function with fixed-parameter version */",
+      "pitfalls": "Variadic functions bypass type checking and can cause stack corruption.",
+      "context_notes": "Use arrays or structs to pass variable numbers of arguments safely."
+    },
+    "misra-c2012-17.2": {
+      "fix": "Remove direct or indirect recursion; use iteration or an explicit stack.",
+      "example": "/* fix: misra-c2012-17.2 — replaced recursion with iterative loop */",
+      "pitfalls": "Recursion removal may require an explicit stack data structure.",
+      "context_notes": "In embedded systems, recursion risks stack overflow with limited stack space."
+    },
+    "misra-c2012-17.3": {
+      "fix": "Add a proper declaration or #include for the function before the call.",
+      "example": "#include \"module.h\" /* fix: misra-c2012-17.3 — added declaration via include */",
+      "caution": "Implicit function declarations assume int return type, which may be wrong."
+    },
+    "misra-c2012-17.4": {
+      "fix": "Add a NULL check for the pointer parameter before dereferencing.",
+      "example": "if (p == NULL) { return ERR; } /* fix: misra-c2012-17.4 — NULL check for parameter */",
+      "caution": "Determine whether returning an error or asserting is more appropriate."
+    },
+    "misra-c2012-17.5": {
+      "fix": "Specify the array dimension in the function parameter declaration.",
+      "example": "void process(uint8_t data[DATA_SIZE]); /* fix: misra-c2012-17.5 — added dimension */",
+      "caution": "The dimension is for documentation only; it does not prevent out-of-bounds access."
+    },
+    "misra-c2012-17.6": {
+      "fix": "Do not modify the address stored in an array parameter.",
+      "example": "/* fix: misra-c2012-17.6 — used index instead of modifying array parameter pointer */",
+      "pitfalls": "Pointer arithmetic on array parameters obscures the original array base address."
+    },
+    "misra-c2012-17.7": {
+      "fix": "Use the return value, or explicitly cast to (void) if intentionally discarding.",
+      "example": "(void)memset(buf, 0, sz); /* fix: misra-c2012-17.7 — cast unused return to void */",
+      "caution": "Silently discarding return values may hide errors.",
+      "pitfalls": "If the function can fail, prefer capturing and checking the return value rather than (void) cast.",
+      "context_notes": "In safety-critical code, capture the return value and handle errors explicitly."
+    },
+    "misra-c2012-17.8": {
+      "fix": "Do not modify a function parameter; copy it to a local variable first.",
+      "example": "int local = param; local++; /* fix: misra-c2012-17.8 — local copy, not modify param */",
+      "caution": "Ensure the local copy is used consistently throughout the function."
+    },
+    "misra-c2012-18.1": {
+      "fix": "Add a bounds check before pointer arithmetic to ensure it stays within the array.",
+      "example": "if (idx < arr_size) { val = arr[idx]; } /* fix: misra-c2012-18.1 — bounds check */",
+      "pitfalls": "Pointer arithmetic beyond the array bounds (even without dereference) is undefined behavior.",
+      "context_notes": "Prefer array indexing over pointer arithmetic for clarity."
+    },
+    "misra-c2012-18.2": {
+      "fix": "Ensure pointer subtraction is only performed on pointers to the same array.",
+      "example": "ptrdiff_t d = &arr[i] - &arr[0]; /* fix: misra-c2012-18.2 — same array origin */",
+      "pitfalls": "Subtracting pointers to different objects is undefined behavior.",
+      "context_notes": "Use index arithmetic instead of pointer subtraction when possible."
+    },
+    "misra-c2012-18.3": {
+      "fix": "Ensure pointer comparison (< > <= >=) is only between pointers to the same array.",
+      "example": "/* fix: misra-c2012-18.3 — restructured to compare indices instead of pointers */",
+      "pitfalls": "Comparing pointers to different objects is undefined behavior.",
+      "context_notes": "Use index comparison instead of pointer comparison."
+    },
+    "misra-c2012-18.4": {
+      "fix": "Replace pointer arithmetic (+, -, +=, -=) with array indexing.",
+      "example": "val = arr[offset]; /* fix: misra-c2012-18.4 — array index instead of *(arr + offset) */",
+      "caution": "Verify the index calculation is equivalent to the original pointer arithmetic."
+    },
+    "misra-c2012-18.5": {
+      "fix": "Limit pointer indirection to at most two levels.",
+      "example": "/* fix: misra-c2012-18.5 — refactored to reduce pointer indirection depth */",
+      "caution": "Reducing indirection may require structural changes to data types."
+    },
+    "misra-c2012-18.6": {
+      "fix": "Do not use the address of an automatic variable after its scope ends; copy the data.",
+      "example": "memcpy(out, &local, sizeof(local)); /* fix: misra-c2012-18.6 — copied data before scope exit */",
+      "caution": "Ensure the destination buffer is large enough for the copied data."
+    },
+    "misra-c2012-18.7": {
+      "fix": "Replace flexible array member with a fixed-size array.",
+      "example": "uint8_t data[MAX_DATA_SIZE]; /* fix: misra-c2012-18.7 — fixed-size array */"
+    },
+    "misra-c2012-18.8": {
+      "fix": "Replace variable-length array (VLA) with a fixed-size array or dynamic allocation.",
+      "example": "uint8_t buf[MAX_BUF]; /* fix: misra-c2012-18.8 — fixed-size array instead of VLA */"
+    },
+    "misra-c2012-19.1": {
+      "fix": "Avoid assigning between overlapping objects; use a temporary or memcpy.",
+      "example": "memcpy(&dst, &src, sizeof(dst)); /* fix: misra-c2012-19.1 — safe copy via memcpy */",
+      "pitfalls": "Direct assignment of overlapping objects (e.g., union members) is undefined behavior.",
+      "context_notes": "Use memmove instead of memcpy if the memory regions may overlap."
+    },
+    "misra-c2012-19.2": {
+      "fix": "Replace union with a struct containing a type tag and separate members.",
+      "example": "struct Tagged { int type; uint8_t byte_val; uint32_t word_val; }; /* fix: misra-c2012-19.2 — tagged struct */",
+      "pitfalls": "Unions allow type punning, which is undefined behavior except for specific cases.",
+      "context_notes": "If union is required for hardware register mapping, document a deviation."
+    },
+    "misra-c2012-20.1": {
+      "fix": "Ensure only preprocessor directives and comments precede #include directives.",
+      "example": "/* fix: misra-c2012-20.1 — moved code after #include block */",
+      "caution": "Some code generators place declarations before includes; restructure if possible."
+    },
+    "misra-c2012-20.2": {
+      "fix": "Remove ', \", \\, /*, or // characters from #include header names.",
+      "example": "#include \"module_config.h\" /* fix: misra-c2012-20.2 — cleaned header name */"
+    },
+    "misra-c2012-20.3": {
+      "fix": "Ensure #include resolves to an actual source file in the include path.",
+      "example": "/* fix: misra-c2012-20.3 — verified include path resolves correctly */",
+      "caution": "Check that the include search path is correctly configured in the build system."
+    },
+    "misra-c2012-20.4": {
+      "fix": "Do not define a macro with the same name as a C keyword or standard library identifier.",
+      "example": "/* fix: misra-c2012-20.4 — renamed macro to avoid keyword collision */",
+      "pitfalls": "Redefining keywords can cause subtle compilation or behavior differences across compilers.",
+      "context_notes": "Use a project-specific prefix for all macros to avoid collisions."
+    },
+    "misra-c2012-20.5": {
+      "fix": "Do not use #undef; use conditional compilation or separate macro names instead.",
+      "example": "/* fix: misra-c2012-20.5 — removed #undef, used MODULE_FEATURE_V2 instead */",
+      "caution": "Removing #undef may expose the original macro in unexpected scopes."
+    },
+    "misra-c2012-20.6": {
+      "fix": "Ensure token pasting (##) and stringification (#) produce valid tokens.",
+      "example": "/* fix: misra-c2012-20.6 — restructured macro for well-formed token pasting */",
+      "caution": "Token pasting that produces an invalid token is undefined behavior."
+    },
+    "misra-c2012-20.7": {
+      "fix": "Parenthesize all macro parameters used in the expansion.",
+      "example": "#define SQUARE(x) ((x) * (x)) /* fix: misra-c2012-20.7 — parenthesized parameters */"
+    },
+    "misra-c2012-20.8": {
+      "fix": "Ensure #if/#elif controlling expression is well-formed and evaluates correctly.",
+      "example": "#if defined(FEATURE_A) && (FEATURE_A > 0) /* fix: misra-c2012-20.8 — well-formed #if */",
+      "caution": "Undefined macros in #if evaluate to 0, which may be unintentional."
+    },
+    "misra-c2012-20.9": {
+      "fix": "Define the macro before using it in #if; do not rely on undefined-macro-is-0 behavior.",
+      "example": "#if defined(CFG_FLAG) && (CFG_FLAG == 1) /* fix: misra-c2012-20.9 — guarded with defined() */"
+    },
+    "misra-c2012-20.10": {
+      "fix": "Avoid # (stringification) and ## (token pasting); prefer inline functions or enums.",
+      "example": "/* fix: misra-c2012-20.10 — replaced macro with inline function */",
+      "caution": "Some debug/logging macros legitimately need # for stringification; document deviation."
+    },
+    "misra-c2012-20.11": {
+      "fix": "Do not use more than one # or ## operator in a single macro definition.",
+      "example": "/* fix: misra-c2012-20.11 — split macro into two simpler macros */",
+      "caution": "Splitting macros may affect the expansion behavior; verify in all use sites."
+    },
+    "misra-c2012-20.12": {
+      "fix": "Ensure each macro parameter is used at most once per expansion (avoid side-effect duplication).",
+      "example": "#define MAX(a, b) _max_impl((a), (b)) /* fix: misra-c2012-20.12 — delegate to inline function */",
+      "caution": "Macro parameters expanded multiple times will evaluate side effects multiple times."
+    },
+    "misra-c2012-20.13": {
+      "fix": "Ensure preprocessor directives do not end with a backslash continuation.",
+      "example": "/* fix: misra-c2012-20.13 — removed trailing backslash from directive */"
+    },
+    "misra-c2012-20.14": {
+      "fix": "Use #if defined(X) syntax with parentheses instead of #ifdef or bare #if defined X.",
+      "example": "#if defined(FEATURE) /* fix: misra-c2012-20.14 — used defined() with parentheses */"
+    },
+    "misra-c2012-21.1": {
+      "fix": "Do not #define or #undef identifiers that start with underscore or match reserved names.",
+      "example": "/* fix: misra-c2012-21.1 — renamed macro to avoid reserved namespace */",
+      "pitfalls": "Redefining reserved identifiers causes undefined behavior.",
+      "context_notes": "Use a project-specific prefix (e.g., APP_ or MOD_) for all macros."
+    },
+    "misra-c2012-21.2": {
+      "fix": "Do not declare identifiers with names reserved by the standard library.",
+      "example": "/* fix: misra-c2012-21.2 — renamed to avoid reserved identifier conflict */",
+      "pitfalls": "Colliding with standard library names can silently change program behavior.",
+      "context_notes": "Check both C standard reserved names and POSIX reserved patterns."
+    },
+    "misra-c2012-21.3": {
+      "fix": "Replace malloc/calloc/realloc/free with static allocation or pre-allocated pools.",
+      "example": "static uint8_t pool[POOL_SIZE]; /* fix: misra-c2012-21.3 — static allocation */",
+      "pitfalls": "Static allocation requires knowing the maximum size at compile time.",
+      "context_notes": "In AUTOSAR/safety-critical systems, dynamic allocation is forbidden by standard."
+    },
+    "misra-c2012-21.4": {
+      "fix": "Do not use <setjmp.h> (setjmp/longjmp).",
+      "example": "/* fix: misra-c2012-21.4 — replaced setjmp/longjmp with structured error handling */",
+      "pitfalls": "setjmp/longjmp bypass destructors and cleanup code.",
+      "context_notes": "Use error codes and return-value propagation for non-local error handling."
+    },
+    "misra-c2012-21.5": {
+      "fix": "Do not use <signal.h> (signal/raise).",
+      "example": "/* fix: misra-c2012-21.5 — replaced signal handling with polling or event flag */",
+      "pitfalls": "Signal handlers have severe restrictions on what operations are safe.",
+      "context_notes": "In embedded systems, use hardware interrupt handlers instead of POSIX signals."
+    },
+    "misra-c2012-21.6": {
+      "fix": "Do not use <stdio.h> for I/O in production code; use platform-specific alternatives.",
+      "example": "/* fix: misra-c2012-21.6 — replaced printf with platform-specific debug output */",
+      "pitfalls": "stdio functions may use dynamic allocation and are not reentrant.",
+      "context_notes": "For debug builds, wrap stdio usage in #ifdef DEBUG guards."
+    },
+    "misra-c2012-21.7": {
+      "fix": "Replace atof/atoi/atol with strtol/strtod and check for conversion errors.",
+      "example": "long val = strtol(str, &end, 10); /* fix: misra-c2012-21.7 — strtol with error check */",
+      "pitfalls": "ato* functions have undefined behavior on out-of-range input.",
+      "context_notes": "Always check the end pointer and errno after strto* calls."
+    },
+    "misra-c2012-21.8": {
+      "fix": "Do not use abort/exit/getenv/system; use platform-specific alternatives.",
+      "example": "/* fix: misra-c2012-21.8 — replaced exit() with controlled shutdown sequence */",
+      "pitfalls": "abort() and exit() bypass normal cleanup; getenv() is not thread-safe.",
+      "context_notes": "In embedded systems, implement a controlled shutdown or reset procedure."
+    },
+    "misra-c2012-21.9": {
+      "fix": "Do not use bsearch/qsort from <stdlib.h>; use custom implementations.",
+      "example": "/* fix: misra-c2012-21.9 — replaced qsort with custom insertion sort */",
+      "pitfalls": "Standard library sort/search may use recursion or dynamic allocation internally.",
+      "context_notes": "Custom implementations allow control over stack usage and comparison behavior."
+    },
+    "misra-c2012-21.10": {
+      "fix": "Do not use <time.h> date/time functions; use platform-specific time API.",
+      "example": "/* fix: misra-c2012-21.10 — replaced time() with platform-specific RTC read */",
+      "pitfalls": "Standard time functions may not be available or accurate on embedded targets.",
+      "context_notes": "Use hardware timer or RTC peripherals for timing in embedded systems."
+    },
+    "misra-c2012-21.11": {
+      "fix": "Do not use <tgmath.h>; use explicit math function variants (sinf, sin, sinl).",
+      "example": "float r = sinf(x); /* fix: misra-c2012-21.11 — explicit single-precision sinf */",
+      "pitfalls": "Type-generic macros may select unexpected precision at compile time.",
+      "context_notes": "Always use the explicitly-typed math function matching your variable type."
+    },
+    "misra-c2012-21.12": {
+      "fix": "Do not use <fenv.h> floating-point environment functions except feclearexcept/fetestexcept.",
+      "example": "/* fix: misra-c2012-21.12 — removed fesetround, using compile-time rounding mode */",
+      "pitfalls": "Floating-point environment changes are global state and affect all FP operations.",
+      "context_notes": "Use compiler pragmas or attributes for rounding mode control if needed."
+    },
+    "misra-c2012-21.13": {
+      "fix": "Cast the argument to (unsigned char) before passing to ctype.h functions.",
+      "example": "if (isalpha((unsigned char)c)) /* fix: misra-c2012-21.13 — unsigned char cast */",
+      "caution": "Plain char may be signed; passing negative values to ctype functions is undefined."
+    },
+    "misra-c2012-21.14": {
+      "fix": "Do not use memcmp to compare strings; use strcmp or strncmp.",
+      "example": "if (strcmp(a, b) == 0) /* fix: misra-c2012-21.14 — strcmp instead of memcmp for strings */",
+      "pitfalls": "memcmp compares bytes beyond the null terminator, which may give wrong results.",
+      "context_notes": "Use strncmp with a length limit for bounded string comparison."
+    },
+    "misra-c2012-21.15": {
+      "fix": "Ensure both pointer arguments to memcpy/memmove/memcmp point to compatible types.",
+      "example": "memcpy(dst_arr, src_arr, sizeof(dst_arr)); /* fix: misra-c2012-21.15 — compatible types */",
+      "caution": "If types differ, use an explicit intermediate cast with a comment explaining why."
+    },
+    "misra-c2012-21.16": {
+      "fix": "Ensure both pointer arguments to memcmp point to objects of the same type.",
+      "example": "/* fix: misra-c2012-21.16 — ensured both memcmp arguments are same type */",
+      "pitfalls": "Comparing different types via memcmp may give platform-dependent results due to padding.",
+      "context_notes": "For struct comparison, compare member by member instead of using memcmp."
+    },
+    "misra-c2012-21.17": {
+      "fix": "Ensure the destination buffer is large enough for the string operation (including null terminator).",
+      "example": "strncpy(dst, src, sizeof(dst) - 1U); dst[sizeof(dst) - 1U] = '\\0'; /* fix: misra-c2012-21.17 — bounded copy */",
+      "pitfalls": "strcpy and strcat do not check bounds; always use bounded variants.",
+      "context_notes": "Prefer snprintf for formatted string operations with automatic bounds checking."
+    },
+    "misra-c2012-21.18": {
+      "fix": "Ensure the size_t argument to string functions does not exceed the buffer size.",
+      "example": "memset(buf, 0, sizeof(buf)); /* fix: misra-c2012-21.18 — size matches buffer */",
+      "pitfalls": "Passing a size larger than the buffer causes buffer overflow.",
+      "context_notes": "Use sizeof(buf) instead of hardcoded constants for buffer sizes."
+    },
+    "misra-c2012-21.19": {
+      "fix": "Do not store a pointer to a string literal in a non-const-qualified pointer.",
+      "example": "const char *msg = \"hello\"; /* fix: misra-c2012-21.19 — const pointer for literal */"
+    },
+    "misra-c2012-21.20": {
+      "fix": "Store the return value of string functions before the next call that may invalidate it.",
+      "example": "char *s1 = strdup(strtok(NULL, \",\")); /* fix: misra-c2012-21.20 — saved before next call */",
+      "caution": "Functions like strtok, asctime, and strerror return pointers to static buffers."
+    },
+    "misra-c2012-21.21": {
+      "fix": "Do not use system(); use platform-specific process or command API.",
+      "example": "/* fix: misra-c2012-21.21 — replaced system() with platform-specific API */",
+      "pitfalls": "system() is a security risk (command injection) and is not available on all targets.",
+      "context_notes": "In embedded systems, there is typically no shell to execute commands."
+    },
+    "misra-c2012-22.1": {
+      "fix": "Ensure every opened file is closed on all code paths, including error paths.",
+      "example": "fclose(fp); /* fix: misra-c2012-22.1 — added fclose on error path */",
+      "pitfalls": "Missing fclose on error paths causes resource leaks that may exhaust file descriptors.",
+      "context_notes": "Use a goto-cleanup pattern to centralize resource release."
+    },
+    "misra-c2012-22.2": {
+      "fix": "Only close a file that was successfully opened; check the file pointer first.",
+      "example": "if (fp != NULL) { fclose(fp); } /* fix: misra-c2012-22.2 — guarded fclose */",
+      "pitfalls": "Closing a NULL or invalid file pointer is undefined behavior.",
+      "context_notes": "Set file pointer to NULL after close to prevent double-close."
+    },
+    "misra-c2012-22.3": {
+      "fix": "Do not open the same file for both read and write simultaneously from different streams.",
+      "example": "/* fix: misra-c2012-22.3 — serialized file access: read then write */",
+      "pitfalls": "Concurrent read/write to the same file can produce inconsistent data.",
+      "context_notes": "Use file locking or serialize access if concurrent access is unavoidable."
+    },
+    "misra-c2012-22.4": {
+      "fix": "Do not write to a file opened in read-only mode; open with appropriate mode.",
+      "example": "fp = fopen(path, \"r+\"); /* fix: misra-c2012-22.4 — opened with read-write mode */",
+      "pitfalls": "Writing to a read-only file is undefined behavior.",
+      "context_notes": "Use the minimum required access mode to reduce risk."
+    },
+    "misra-c2012-22.5": {
+      "fix": "Do not dereference a FILE* pointer directly; use only standard I/O functions.",
+      "example": "/* fix: misra-c2012-22.5 — used fread instead of direct FILE struct access */",
+      "pitfalls": "FILE struct layout is implementation-defined; direct access is non-portable."
+    },
+    "misra-c2012-22.6": {
+      "fix": "Do not use a FILE* after it has been closed; set to NULL after fclose.",
+      "example": "fclose(fp); fp = NULL; /* fix: misra-c2012-22.6 — set NULL after close */",
+      "pitfalls": "Using a closed file pointer is undefined behavior.",
+      "context_notes": "Setting to NULL enables runtime detection of use-after-close bugs."
+    },
+    "misra-c2012-22.7": {
+      "fix": "Do not compare EOF with a char variable; use int type for the result of getc/fgetc.",
+      "example": "int c = fgetc(fp); if (c == EOF) /* fix: misra-c2012-22.7 — int type for EOF check */",
+      "pitfalls": "EOF is negative; storing in unsigned char loses the EOF signal."
+    },
+    "misra-c2012-22.8": {
+      "fix": "Set errno to zero immediately before calling a function that sets errno.",
+      "example": "errno = 0; val = strtol(str, &end, 10); /* fix: misra-c2012-22.8 — cleared errno */",
+      "pitfalls": "Stale errno values from previous calls can cause false error detection.",
+      "context_notes": "Always pair errno = 0 with the subsequent function call in a single code block."
+    },
+    "misra-c2012-22.9": {
+      "fix": "Check errno after calling a function that may set it on error.",
+      "example": "if (errno != 0) { handle_error(); } /* fix: misra-c2012-22.9 — checked errno after call */",
+      "pitfalls": "Some functions set errno even on success; check both return value and errno.",
+      "context_notes": "Consult the function documentation for which errno values indicate true errors."
+    },
+    "misra-c2012-22.10": {
+      "fix": "Only check errno after functions that are documented to set it.",
+      "example": "/* fix: misra-c2012-22.10 — removed errno check after function that does not set it */",
+      "pitfalls": "Checking errno after a non-errno-setting function reads a stale value.",
+      "context_notes": "Refer to the C standard or POSIX specification for which functions set errno."
+    },
+    "misra-c2012-22.11": {
+      "fix": "Do not use tss_get; use platform-specific thread-local storage API.",
+      "example": "/* fix: misra-c2012-22.11 — replaced tss_get with platform TLS API */",
+      "pitfalls": "C11 thread support is optional and may not be available on all platforms."
+    },
+    "misra-c2012-22.12": {
+      "fix": "Do not use mtx_timedlock; use platform-specific timed mutex API.",
+      "example": "/* fix: misra-c2012-22.12 — replaced mtx_timedlock with platform mutex API */",
+      "pitfalls": "C11 thread support is optional and may not be available on all platforms."
+    },
+    "misra-c2012-22.13": {
+      "fix": "Ensure file resources are closed on error paths, not just the success path.",
+      "example": "if (err) { fclose(fp); return ERR; } /* fix: misra-c2012-22.13 — close on error path */",
+      "pitfalls": "Early returns may skip cleanup code; use goto-cleanup pattern for multiple resources.",
+      "context_notes": "Review all error paths to ensure no resource leak."
+    },
+    "misra-c2012-22.14": {
+      "fix": "Do not share a FILE* across threads; use thread-local file handles.",
+      "example": "/* fix: misra-c2012-22.14 — moved FILE* to thread-local scope */",
+      "pitfalls": "Concurrent access to FILE* without synchronization causes data corruption.",
+      "context_notes": "If sharing is required, protect with a mutex and document the access pattern."
+    },
+    "misra-c2012-22.15": {
+      "fix": "Verify the file mode string matches the intended operations (read, write, append).",
+      "example": "fp = fopen(path, \"rb\"); /* fix: misra-c2012-22.15 — correct binary read mode */",
+      "pitfalls": "Wrong file mode can cause silent data corruption or operation failure."
+    },
+    "misra-c2012-22.16": {
+      "fix": "Do not use tmpfile() or tmpnam(); use mkstemp() or platform-specific secure temp file API.",
+      "example": "int fd = mkstemp(template); /* fix: misra-c2012-22.16 — secure temp file */",
+      "pitfalls": "tmpnam() has a TOCTOU race condition; tmpfile() may not be available on all platforms."
+    },
+    "misra-c2012-22.17": {
+      "fix": "Do not pass the same pointer to realloc and assign back to it; use a separate variable.",
+      "example": "void *tmp = realloc(ptr, new_sz); if (tmp) { ptr = tmp; } /* fix: misra-c2012-22.17 — safe realloc */",
+      "pitfalls": "If realloc fails and you assigned to the same pointer, the original memory is leaked.",
+      "context_notes": "In safety-critical code, avoid realloc entirely; use static allocation."
+    },
+    "misra-c2012-22.18": {
+      "fix": "Ensure dynamically allocated memory is freed on all code paths, including error paths.",
+      "example": "if (err) { free(buf); return ERR; } /* fix: misra-c2012-22.18 — free on error path */",
+      "pitfalls": "Missing free on error paths causes memory leaks that accumulate over time.",
+      "context_notes": "Use a goto-cleanup pattern to centralize memory release for multiple allocations."
+    }
+  }
+}
