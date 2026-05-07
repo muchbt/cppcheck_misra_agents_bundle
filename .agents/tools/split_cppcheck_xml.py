@@ -13,6 +13,7 @@ from common import (
     CHUNKS_DIR,
     RESULTS_DIR,
     RUNTIME_DIR,
+    FIX_PATTERNS_PATH,
     append_pipeline_event,
     build_issue_key,
     ensure_dirs,
@@ -26,6 +27,23 @@ from common import (
 )
 
 VALID_STRATEGIES = {"conservative", "all_auto"}
+
+RISK_DETAIL_FIELDS = {
+    "low": ["fix", "example"],
+    "medium": ["fix", "example", "caution"],
+    "high": ["fix", "example", "pitfalls", "context_notes"],
+}
+
+
+def lookup_fix_pattern(rule_id: str, risk_level: str, fix_patterns: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not fix_patterns:
+        return None
+    pattern = fix_patterns.get("patterns", {}).get(rule_id)
+    if not pattern:
+        return None
+    fields = RISK_DETAIL_FIELDS.get(risk_level, RISK_DETAIL_FIELDS["high"])
+    return {k: pattern[k] for k in fields if k in pattern}
+
 
 def is_misra_rule(rule_id: str, detect_prefixes: List[str]) -> bool:
     rid = (rule_id or "").lower()
