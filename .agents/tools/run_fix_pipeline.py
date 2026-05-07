@@ -194,10 +194,12 @@ def parse_chunk_id_specs(specs: Iterable[str], total: int) -> Tuple[List[int], L
             except ValueError:
                 warnings.append(f"忽略无效 chunk-id: '{token}'")
                 continue
-            if 1 <= i <= total:
-                valid.add(i)
-            else:
+            if i < 1:
+                warnings.append(f"忽略无效 chunk-id: '{token}'")
+            elif i > total:
                 warnings.append(f"chunk-id {i} 超出范围 (1..{total})，已跳过")
+            else:
+                valid.add(i)
     return sorted(valid), warnings
 
 
