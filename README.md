@@ -178,6 +178,66 @@ AUTOSAR 架构专用策略，覆盖 RTE/MCAL/BSW 关键路径：
 | `needs_manual_review` | 必须人工复核，agent 不自动修复 | high |
 | `skip` | 跳过该问题 | - |
 
+## 修复模式（fix_patterns）
+
+`fix_patterns.json` 为每条规则提供规范化修复指导，在 chunk 切分时按风险等级动态注入，约束 agent 修复行为。
+
+### 数据来源
+
+| 文件 | 作用 |
+|------|------|
+| `.agents/config/fix_patterns.json` | 规则 → 修复模式映射（183 条，覆盖全部 cppcheck + MISRA C:2012 规则） |
+| `.agents/config/rule_policy.json` | 规则 → 动作/风险等级映射（单一来源，fix_patterns 不含 `risk_level`） |
+
+### 工作原理
+
+```
+split_cppcheck_xml.py
+  │
+  ├── 加载 rule_policy.json → classify_issue() → 确定 risk_level
+  ├── 加载 fix_patterns.json → lookup_fix_pattern(rule_id, risk_level)
+  │
+  └── chunk 切分时：按 rule_id 去重 → unique_fix_patterns 写入 chunk JSON
+```
+
+`lookup_fix_pattern()` 根据规则的 `risk_level` 过滤字段：
+
+| risk_level | 注入字段 |
+|------------|----------|
+| `low` | `fix`, `example` |
+| `medium` | `fix`, `example`, `caution` |
+| `high` | `fix`, `example`, `pitfalls`, `context_notes` |
+
+### chunk JSON 结构变化
+
+每个 chunk JSON 新增 `unique_fix_patterns` 字段：
+
+```json
+{
+  "chunk_index": 1,
+  "unique_fix_patterns": {
+    "nullPointer": {
+      "fix": "Add NULL guard before the first dereference.",
+      "example": "if (ptr == NULL) { return ERR_NULL; } /* fix: nullPointer — added NULL guard */",
+      "pitfalls": "Adding a NULL guard changes control flow. ...",
+      "context_notes": "In safety-critical code, prefer returning an explicit error code ..."
+    }
+  },
+  "issues": [...]
+}
+```
+
+### prompt 指导
+
+chunk prompt 模板（`.agents/prompts/fix_chunk_prompt.txt`）新增：
+
+> For each issue whose rule_id appears in unique_fix_patterns, you MUST use the exact fix approach described there. Do NOT invent alternative fix methods when a pattern is provided.
+
+### 容错
+
+- `fix_patterns.json` 缺失时，`load_json()` 返回 `{}`，所有 `lookup_fix_pattern()` 返回 `None`，chunk JSON 中 `unique_fix_patterns` 为空字典 — 不影响正常流程
+- 规则未在 `fix_patterns.json` 中出现时，该规则不会有修复模式条目
+
 ## 推荐用法
 
 首次接入、环境异常、命令失败时，先运行：
