@@ -476,5 +476,326 @@ class ExecutionLogTests(unittest.TestCase):
             self.assertIn("Verbose stderr output here", output)
 
 
+class ChunkIdParserTests(unittest.TestCase):
+    def test_single_id(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["5"], 10)
+        self.assertEqual(valid, [5])
+        self.assertEqual(warnings, [])
+
+    def test_range(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["3-7"], 10)
+        self.assertEqual(valid, [3, 4, 5, 6, 7])
+        self.assertEqual(warnings, [])
+
+    def test_multiple_specs(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["3-5", "12"], 20)
+        self.assertEqual(valid, [3, 4, 5, 12])
+        self.assertEqual(warnings, [])
+
+    def test_deduplication(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["3", "3", "2-4"], 10)
+        self.assertEqual(valid, [2, 3, 4])
+        self.assertEqual(warnings, [])
+
+    def test_out_of_range_warning(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["999"], 10)
+        self.assertEqual(valid, [])
+        self.assertIn("999", warnings[0])
+
+    def test_invalid_id_warning(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["abc"], 10)
+        self.assertEqual(valid, [])
+        self.assertIn("abc", warnings[0])
+
+    def test_invalid_range_warning(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["1-abc"], 10)
+        self.assertEqual(valid, [])
+        self.assertIn("1-abc", warnings[0])
+
+    def test_empty_specs(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs([], 10)
+        self.assertEqual(valid, [])
+        self.assertEqual(warnings, [])
+
+    def test_all_valid_ids_out_of_range(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["5"], 4)
+        self.assertEqual(valid, [])
+        self.assertTrue(any("5" in w for w in warnings))
+
+    def test_reversed_range(self):
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["7-3"], 10)
+        self.assertEqual(valid, [3, 4, 5, 6, 7])
+        self.assertEqual(warnings, [])
+
+    def test_negative_id_warning(self):
+        """Negative IDs like '-5' should report as invalid chunk-id, not as range."""
+        valid, warnings = run_fix_pipeline.parse_chunk_id_specs(["-5"], 10)
+        self.assertEqual(valid, [])
+        self.assertIn("-5", warnings[0])
+        self.assertIn("无效", warnings[0])
+
+    def test_next_chunk_with_requested_ids_filters(self):
+        progress = {
+            "completed_chunks": [],
+            "failed_chunks": [],
+            "total_chunks": 10,
+        }
+        result = run_fix_pipeline.next_chunk(
+            progress, set(), False, False, requested_ids=[3, 5, 7]
+        )
+        self.assertEqual(result, 3)
+
+    def test_next_chunk_with_requested_ids_skips_done(self):
+        progress = {
+            "completed_chunks": [3, 5],
+            "failed_chunks": [],
+            "total_chunks": 10,
+        }
+        result = run_fix_pipeline.next_chunk(
+            progress, set(), False, False, requested_ids=[3, 5, 7]
+        )
+        self.assertEqual(result, 7)
+
+    def test_next_chunk_with_no_requested_ids_returns_all(self):
+        progress = {
+            "completed_chunks": [],
+            "failed_chunks": [],
+            "total_chunks": 5,
+        }
+        result = run_fix_pipeline.next_chunk(
+            progress, set(), False, False, requested_ids=None
+        )
+        self.assertEqual(result, 1)
+
+    def test_next_chunk_with_empty_requested_ids_returns_first(self):
+        progress = {
+            "completed_chunks": [],
+            "failed_chunks": [],
+            "total_chunks": 5,
+        }
+        result = run_fix_pipeline.next_chunk(
+            progress, set(), False, False, requested_ids=[]
+        )
+        self.assertEqual(result, 1)
+
+    def test_next_chunk_with_requested_ids_skips_failed_silently(self):
+        """Failed chunks are skipped silently in next_chunk; hint is printed in main()."""
+        progress = {
+            "completed_chunks": [],
+            "failed_chunks": [5],
+            "total_chunks": 10,
+        }
+        result = run_fix_pipeline.next_chunk(
+            progress, set(), False, False, requested_ids=[5]
+        )
+        self.assertIsNone(result)
+
+    def test_run_with_chunk_id_single(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = Path(tmp) / "runtime"
+            results_dir = runtime_dir / "results"
+            chunks_dir = runtime_dir / "chunks"
+            logs_dir = runtime_dir / "logs"
+            config_dir = Path(tmp) / "config"
+            runtime_dir.mkdir(parents=True)
+            results_dir.mkdir()
+            chunks_dir.mkdir()
+            logs_dir.mkdir()
+            config_dir.mkdir()
+
+            common.save_json(runtime_dir / "progress.json", {
+                "run_id": "test-chunk-id",
+                "total_chunks": 3,
+                "completed_chunks": [],
+                "failed_chunks": [],
+                "current_chunk": None,
+                "fix_strategy": "conservative",
+                "status": "ready",
+            })
+            common.save_json(chunks_dir / "chunk_002.json", {
+                "chunk_index": 2,
+                "chunk_total": 3,
+                "issues": [{"rule_id": "misra-c2012-1.1", "is_misra": True}],
+            })
+            common.save_json(config_dir / "pipeline.json", {
+                "agent": {"provider": "opencode", "staging_dir": ".agents/staging"}
+            })
+
+            def fake_run(config, chunk):
+                result_path = results_dir / f"chunk_{chunk['chunk_index']:03d}_result.json"
+                common.save_json(result_path, {"chunk_index": chunk["chunk_index"]})
+                return {
+                    "returncode": 0,
+                    "stdout": "",
+                    "stderr": "",
+                    "error_kind": "",
+                    "prompt": "",
+                    "argv": ["opencode"],
+                    "imported_paths": {"chunk_result_json_path": result_path},
+                }
+
+            stdout = io.StringIO()
+            with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
+                run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "LOGS_DIR", logs_dir
+            ), patch.object(
+                run_fix_pipeline, "CONFIG_DIR", config_dir
+            ), patch.object(
+                run_fix_pipeline, "run_chunk_agent", side_effect=fake_run
+            ), patch.object(
+                run_fix_pipeline, "verify_chunk_result", return_value={"passed": True, "mode": "light"}
+            ), redirect_stdout(stdout):
+                rc = run_fix_pipeline.main(["--chunk-id", "2"])
+
+            self.assertEqual(rc, 0)
+            output = stdout.getvalue()
+            self.assertIn("正在处理 chunk 2/3", output)
+            self.assertIn("指定的 chunk-id", output)
+
+    def test_run_with_chunk_id_sets_partial_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = Path(tmp) / "runtime"
+            results_dir = runtime_dir / "results"
+            chunks_dir = runtime_dir / "chunks"
+            logs_dir = runtime_dir / "logs"
+            config_dir = Path(tmp) / "config"
+            runtime_dir.mkdir(parents=True)
+            results_dir.mkdir()
+            chunks_dir.mkdir()
+            logs_dir.mkdir()
+            config_dir.mkdir()
+
+            common.save_json(runtime_dir / "progress.json", {
+                "run_id": "test-partial-status",
+                "total_chunks": 3,
+                "completed_chunks": [],
+                "failed_chunks": [],
+                "current_chunk": None,
+                "fix_strategy": "conservative",
+                "status": "ready",
+            })
+            common.save_json(chunks_dir / "chunk_002.json", {
+                "chunk_index": 2,
+                "chunk_total": 3,
+                "issues": [{"rule_id": "misra-c2012-1.1", "is_misra": True}],
+            })
+            common.save_json(config_dir / "pipeline.json", {
+                "agent": {"provider": "opencode", "staging_dir": ".agents/staging"}
+            })
+
+            def fake_run(config, chunk):
+                result_path = results_dir / f"chunk_{chunk['chunk_index']:03d}_result.json"
+                common.save_json(result_path, {"chunk_index": chunk["chunk_index"]})
+                return {
+                    "returncode": 0,
+                    "stdout": "",
+                    "stderr": "",
+                    "error_kind": "",
+                    "prompt": "",
+                    "argv": ["opencode"],
+                    "imported_paths": {"chunk_result_json_path": result_path},
+                }
+
+            stdout = io.StringIO()
+            with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
+                run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "LOGS_DIR", logs_dir
+            ), patch.object(
+                run_fix_pipeline, "CONFIG_DIR", config_dir
+            ), patch.object(
+                run_fix_pipeline, "run_chunk_agent", side_effect=fake_run
+            ), patch.object(
+                run_fix_pipeline, "verify_chunk_result", return_value={"passed": True, "mode": "light"}
+            ), redirect_stdout(stdout):
+                rc = run_fix_pipeline.main(["--chunk-id", "2"])
+
+            self.assertEqual(rc, 0)
+            progress = common.load_json(runtime_dir / "progress.json", {})
+            self.assertEqual(progress["status"], "partial")
+
+    def test_completed_chunk_not_rerun_with_chunk_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = Path(tmp) / "runtime"
+            results_dir = runtime_dir / "results"
+            chunks_dir = runtime_dir / "chunks"
+            logs_dir = runtime_dir / "logs"
+            config_dir = Path(tmp) / "config"
+            runtime_dir.mkdir(parents=True)
+            results_dir.mkdir()
+            chunks_dir.mkdir()
+            logs_dir.mkdir()
+            config_dir.mkdir()
+
+            common.save_json(runtime_dir / "progress.json", {
+                "run_id": "test-completed-skip",
+                "total_chunks": 3,
+                "completed_chunks": [1, 2, 3],
+                "failed_chunks": [],
+                "current_chunk": None,
+                "fix_strategy": "conservative",
+                "status": "running",
+            })
+            common.save_json(config_dir / "pipeline.json", {
+                "agent": {"provider": "opencode", "staging_dir": ".agents/staging"}
+            })
+
+            stdout = io.StringIO()
+            with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
+                run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "LOGS_DIR", logs_dir
+            ), patch.object(
+                run_fix_pipeline, "CONFIG_DIR", config_dir
+            ), redirect_stdout(stdout):
+                rc = run_fix_pipeline.main(["--chunk-id", "2"])
+
+            self.assertEqual(rc, 0)
+            output = stdout.getvalue()
+            self.assertIn("指定的 chunk-id", output)
+
+    def test_run_with_chunk_id_prints_failed_hint(self):
+        """main() 一性打印 failed-chunk 提示，而非 next_chunk 循环内重复打印。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = Path(tmp) / "runtime"
+            results_dir = runtime_dir / "results"
+            chunks_dir = runtime_dir / "chunks"
+            logs_dir = runtime_dir / "logs"
+            config_dir = Path(tmp) / "config"
+            runtime_dir.mkdir(parents=True)
+            results_dir.mkdir()
+            chunks_dir.mkdir()
+            logs_dir.mkdir()
+            config_dir.mkdir()
+
+            common.save_json(runtime_dir / "progress.json", {
+                "run_id": "test-failed-hint",
+                "total_chunks": 3,
+                "completed_chunks": [],
+                "failed_chunks": [2],
+                "current_chunk": None,
+                "fix_strategy": "conservative",
+                "status": "ready",
+            })
+            common.save_json(config_dir / "pipeline.json", {
+                "agent": {"provider": "opencode", "staging_dir": ".agents/staging"}
+            })
+
+            stdout = io.StringIO()
+            with patch.object(run_fix_pipeline, "RUNTIME_DIR", runtime_dir), patch.object(
+                run_fix_pipeline, "RESULTS_DIR", results_dir
+            ), patch.object(
+                run_fix_pipeline, "LOGS_DIR", logs_dir
+            ), patch.object(
+                run_fix_pipeline, "CONFIG_DIR", config_dir
+            ), redirect_stdout(stdout):
+                rc = run_fix_pipeline.main(["--chunk-id", "2"])
+
+            self.assertEqual(rc, 0)
+            output = stdout.getvalue()
+            self.assertIn("使用 --include-failed 可重跑", output)
+
+
 if __name__ == "__main__":
     unittest.main()
