@@ -226,6 +226,24 @@ class MisraPipelineCliTests(unittest.TestCase):
         args = misra_pipeline_cli.parse_args(["run", "--chunk-id", "3-7", "--chunk-id", "12"])
         self.assertEqual(args.chunk_id, ["3-7", "12"])
 
+    def test_parse_args_export_subcommand(self):
+        """Test parse_args for 'export' subcommand."""
+        args = misra_pipeline_cli.parse_args(["export"])
+        self.assertEqual(args.subcommand, "export")
+
+    def test_parse_args_export_with_output(self):
+        """Test parse_args for 'export --output path'."""
+        args = misra_pipeline_cli.parse_args(["export", "--output", "/tmp/out.tar.gz"])
+        self.assertEqual(args.subcommand, "export")
+        # forwarded args should include --output
+        self.assertIn("--output", args.args)
+
+    def test_parse_args_collect_subcommand(self):
+        """Test parse_args for 'collect' subcommand."""
+        args = misra_pipeline_cli.parse_args(["collect", "--from", "/tmp/bundle.tar.gz"])
+        self.assertEqual(args.subcommand, "collect")
+        self.assertIn("--from", args.args)
+
 
 class MisraPipelineConfigTests(unittest.TestCase):
     def test_user_config_defaults(self):

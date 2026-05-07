@@ -15,6 +15,8 @@ Advanced commands:
   verify       Verify one chunk result
   bootstrap    Generate agent compatibility files
   validate     Provider validation test
+  export       Export processed chunk results to a bundle
+  collect      Import chunk results from remote workers
   config       Manage CLI configuration
   upgrade      Upgrade .agents/ to a new version
   version      Show CLI and project version
@@ -65,6 +67,8 @@ PIPELINE_COMMANDS: Dict[str, str] = {
     "bootstrap": "bootstrap_agents",
     "doctor": "doctor",
     "validate": "validate_real",
+    "export": "export_chunks",
+    "collect": "collect_chunks",
 }
 
 # Error kinds for agent execution
@@ -216,6 +220,8 @@ Deprecated:
             "bootstrap": "Generate agent compatibility files (advanced)",
             "doctor": "Run pipeline diagnostics",
             "validate": "Provider validation test (advanced)",
+            "export": "Export processed chunk results to a bundle",
+            "collect": "Import chunk results from remote workers",
         }.get(cmd_name, f"Run {module_name}")
         cmd_parser = subparsers.add_parser(cmd_name, help=cmd_help)
         cmd_parser.add_argument(
