@@ -239,7 +239,7 @@ class SplitAndRunPipelineTests(unittest.TestCase):
             ), redirect_stdout(stdout):
                 rc = run_fix_pipeline.main([])
 
-            self.assertEqual(rc, 1)
+            self.assertEqual(rc, 0)
             output = stdout.getvalue()
             # New format: error_kind on separate line, log path, and summary
             self.assertIn("[run] Chunk 1 失败: agent_error", output)
@@ -467,7 +467,7 @@ class ExecutionLogTests(unittest.TestCase):
             ), redirect_stdout(stdout):
                 rc = run_fix_pipeline.main(["--verbose"])
 
-            self.assertEqual(rc, 1)
+            self.assertEqual(rc, 0)
             output = stdout.getvalue()
             # Verbose output should include full stdout/stderr
             self.assertIn("=== CHUNK 001 STDOUT (verbose) ===", output)

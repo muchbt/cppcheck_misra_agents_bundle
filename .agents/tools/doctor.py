@@ -853,7 +853,10 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
         )
     progress_error = None
     try:
-        progress = load_json(progress_path, {})
+        with open(progress_path, "r", encoding="utf-8") as f:
+            progress = json.load(f)
+        if not isinstance(progress, dict):
+            progress = {}
     except (OSError, json.JSONDecodeError) as exc:
         progress = {}
         progress_error = make_result(

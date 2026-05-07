@@ -520,11 +520,46 @@ def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content.encode("utf-8"))
 
+
+def _repair_json_string(raw: str, default: Any) -> Any:
+    text = raw.strip()
+    if text.startswith("```"):
+        first_nl = text.find("\n")
+        if first_nl != -1:
+            text = text[first_nl + 1:]
+        if text.endswith("```"):
+            text = text[:-3].rstrip()
+        text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    for close_char in ("}", "]"):
+        if text.rstrip().endswith("," + close_char):
+            cleaned = text.rstrip()[:-len(close_char)].rstrip().rstrip(",") + close_char
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                pass
+    return default if isinstance(default, (dict, list)) else {}
+
+
+def _ensure_dict(data: Any) -> Dict[str, Any]:
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, list):
+        return {"status_changes": data}
+    return {}
+
 def load_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return {} if default is None else default
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        raw = path.read_text(encoding="utf-8")
+        return _repair_json_string(raw, default if default is not None else {})
 
 def save_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -593,9 +628,12 @@ def prepare_chunk_staging_dir(staging_dir: Path) -> Path:
 
 def _load_required_json_object(path: Path) -> Dict[str, Any]:
     data = load_json(path, {})
-    if not isinstance(data, dict):
-        raise ValueError(f"expected JSON object: {path}")
-    return data
+    if isinstance(data, dict):
+        return data
+    coerced = _ensure_dict(data)
+    if coerced:
+        return coerced
+    raise ValueError(f"expected JSON object or array: {path}")
 
 
 def merge_file_change_index(base: Dict[str, Any], delta: Dict[str, Any]) -> Dict[str, Any]:

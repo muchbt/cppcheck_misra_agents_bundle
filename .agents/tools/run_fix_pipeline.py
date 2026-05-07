@@ -405,7 +405,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             save_json(progress_path, progress)
 
         if not success:
-            progress["status"] = "failed"
             progress["last_chunk_finished_at"] = now_iso()
             progress["last_failure"] = {
                 "chunk_index": idx,
@@ -414,6 +413,19 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "error_kind": last_error_kind or ERROR_KIND_RUNTIME_ERROR,
             }
             save_json(progress_path, progress)
+            append_pipeline_event(
+                RUNTIME_DIR,
+                event="chunk_failed",
+                stage="run",
+                level="error",
+                message=f"chunk {idx} 失败，继续处理下一个 chunk。",
+                chunk_index=idx,
+                returncode=last_rc,
+                data={
+                    "attempt": max_attempts,
+                    "error_kind": last_error_kind or ERROR_KIND_RUNTIME_ERROR,
+                },
+            )
 
             # Verbose output (last attempt only)
             if args.verbose and last_result:
@@ -422,8 +434,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"\n=== CHUNK {idx:03d} STDERR (verbose) ===")
                 print(last_result.get("stderr", "(empty)"))
 
-            print(f"Chunk {idx} failed after {max_attempts} attempt(s).")
-            return 1
+            print(f"Chunk {idx} failed after {max_attempts} attempt(s). Continuing with next chunk.")
+            continue
 
         processed_this_run += 1
         progress["last_chunk_finished_at"] = now_iso()
