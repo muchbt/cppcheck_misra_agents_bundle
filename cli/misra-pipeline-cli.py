@@ -250,6 +250,8 @@ Deprecated:
     run_parser.add_argument("--rule-id", action="append", default=[], help="Rule ID filter (can be repeated)")
     run_parser.add_argument("--misra-only", action="store_true", help="Only process MISRA rules")
     run_parser.add_argument("--include-failed", action="store_true", help="Include previously failed chunks")
+    run_parser.add_argument("--chunk-id", action="append", default=[],
+                            help="Run only this chunk id or range (e.g. 5 or 3-7). Repeatable.")
     run_parser.add_argument("--run-id", default=None, help="Specify run ID (format: YYYYMMDD-XXX)")
     run_parser.add_argument("--verbose", action="store_true", help="Print full stdout/stderr for each chunk")
     run_parser.add_argument(
@@ -1069,6 +1071,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 stage_args.append("--misra-only")
             if args.include_failed:
                 stage_args.append("--include-failed")
+            for cid in args.chunk_id:
+                stage_args.extend(["--chunk-id", cid])
             if args.verbose:
                 stage_args.append("--verbose")
 
@@ -1140,6 +1144,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         oneshot_argv.append("--misra-only")
     if args.include_failed:
         oneshot_argv.append("--include-failed")
+    for cid in args.chunk_id:
+        oneshot_argv.extend(["--chunk-id", cid])
     if args.dry_run:
         oneshot_argv.append("--dry-run")
     if getattr(args, "verbose", False):

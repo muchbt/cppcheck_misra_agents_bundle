@@ -215,6 +215,17 @@ class MisraPipelineCliTests(unittest.TestCase):
             if original is not None:
                 os.environ["PIPELINE_AGENT_PROVIDER"] = original
 
+    def test_parse_args_run_with_chunk_id(self):
+        """Test parse_args for 'run --chunk-id 5'."""
+        args = misra_pipeline_cli.parse_args(["run", "--chunk-id", "5"])
+        self.assertEqual(args.subcommand, "run")
+        self.assertEqual(args.chunk_id, ["5"])
+
+    def test_parse_args_run_with_chunk_id_range(self):
+        """Test parse_args for 'run --chunk-id 3-7 --chunk-id 12'."""
+        args = misra_pipeline_cli.parse_args(["run", "--chunk-id", "3-7", "--chunk-id", "12"])
+        self.assertEqual(args.chunk_id, ["3-7", "12"])
+
 
 class MisraPipelineConfigTests(unittest.TestCase):
     def test_user_config_defaults(self):
