@@ -1,9 +1,21 @@
 {
   "_meta": "Canonical fix patterns for cppcheck/MISRA rules. risk_level comes from rule_policy, not from this file. Injected into chunk JSON per-rule via lookup_fix_pattern().",
   "risk_detail_levels": {
-    "low": ["fix", "example"],
-    "medium": ["fix", "example", "caution"],
-    "high": ["fix", "example", "pitfalls", "context_notes"]
+    "low": [
+      "fix",
+      "example"
+    ],
+    "medium": [
+      "fix",
+      "example",
+      "caution"
+    ],
+    "high": [
+      "fix",
+      "example",
+      "pitfalls",
+      "context_notes"
+    ]
   },
   "patterns": {
     "unusedVariable": {
@@ -13,7 +25,7 @@
     "unreadVariable": {
       "fix": "Remove the unread variable or use its value in a meaningful expression.",
       "example": "result = calc(x); /* fix: unreadVariable — use return value */",
-      "caution": "Verify the variable is not intentionally kept for debugging or assertion."
+      "caution": "Verify the variable is not intentionally unused for debugging or assertion."
     },
     "constVariable": {
       "fix": "Add const qualifier to the variable declaration.",

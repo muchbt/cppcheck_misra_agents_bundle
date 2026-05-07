@@ -1,6 +1,9 @@
 """Tests for fix pattern lookup and chunk dedup logic."""
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = REPO_ROOT / ".agents" / "tools"
@@ -154,10 +157,8 @@ def test_split_produces_unique_fix_patterns_in_chunks():
     """Integration test: verify fix_patterns.json structure and lookup."""
     fp_path = Path(__file__).resolve().parents[1] / ".agents" / "config" / "fix_patterns.json"
     if not fp_path.exists():
-        import pytest
         pytest.skip("fix_patterns.json not yet populated")
 
-    import json
     fix_patterns = json.loads(fp_path.read_text())
 
     assert "_meta" in fix_patterns
@@ -179,10 +180,8 @@ def test_lookup_with_real_fix_patterns_covers_key_rules():
     """Verify fix_patterns.json covers key cppcheck rules."""
     fp_path = Path(__file__).resolve().parents[1] / ".agents" / "config" / "fix_patterns.json"
     if not fp_path.exists():
-        import pytest
         pytest.skip("fix_patterns.json not yet populated")
 
-    import json
     fix_patterns = json.loads(fp_path.read_text())
     patterns = fix_patterns.get("patterns", {})
 
