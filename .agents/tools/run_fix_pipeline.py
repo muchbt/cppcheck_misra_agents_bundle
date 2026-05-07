@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Iterable, List, Optional, Set
+from typing import Iterable, List, Optional, Set, Tuple
 
 from agent_runner import run_chunk_agent
 from common import ERROR_KIND_RUNTIME_ERROR, ERROR_KIND_SUCCESS, CONFIG_DIR, LOGS_DIR, RESULTS_DIR, ROOT, RUNTIME_DIR, append_pipeline_event, get_selected_agent_provider_name, load_json, now_iso, resolve_agent_staging_dir, save_json
@@ -154,6 +154,41 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 def normalize_rule_set(rule_ids: Iterable[str]) -> Set[str]:
     return {item.strip().lower() for item in rule_ids if item and item.strip()}
+
+
+def parse_chunk_id_specs(specs: Iterable[str], total: int) -> Tuple[List[int], List[str]]:
+    """Parse --chunk-id specs into (sorted unique valid ids, warnings)."""
+    valid: Set[int] = set()
+    warnings: List[str] = []
+    for raw in specs:
+        token = (raw or "").strip()
+        if not token:
+            continue
+        if "-" in token and not token.startswith("-"):
+            parts = token.split("-", 1)
+            try:
+                lo, hi = int(parts[0]), int(parts[1])
+            except ValueError:
+                warnings.append(f"忽略无效 chunk-id 范围: '{token}'")
+                continue
+            if lo > hi:
+                lo, hi = hi, lo
+            for i in range(lo, hi + 1):
+                if 1 <= i <= total:
+                    valid.add(i)
+                else:
+                    warnings.append(f"chunk-id {i} 超出范围 (1..{total})，已跳过")
+        else:
+            try:
+                i = int(token)
+            except ValueError:
+                warnings.append(f"忽略无效 chunk-id: '{token}'")
+                continue
+            if 1 <= i <= total:
+                valid.add(i)
+            else:
+                warnings.append(f"chunk-id {i} 超出范围 (1..{total})，已跳过")
+    return sorted(valid), warnings
 
 
 def load_chunk_payload(chunk_index: int) -> dict:
