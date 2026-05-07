@@ -40,6 +40,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--rule-id", action="append", default=[])
     parser.add_argument("--misra-only", action="store_true")
     parser.add_argument("--include-failed", action="store_true")
+    parser.add_argument("--chunk-id", action="append", default=[],
+                        help="Run only this chunk id or range (e.g. 5 or 3-7). Repeatable.")
     parser.add_argument("--verbose", action="store_true", help="打印每个 chunk 完整 stdout/stderr。")
     parser.add_argument("--dry-run", action="store_true", help="预览模式：split 后打印 chunk 摘要，不启动 agent。")
     parser.add_argument("--status", action="store_true", help="查询当前运行进度并输出人类可读摘要。")
@@ -198,6 +200,8 @@ def build_run_args(args: argparse.Namespace, resume_status: str) -> List[str]:
         stage_args.append("--misra-only")
     if args.include_failed or resume_status == "failed":
         stage_args.append("--include-failed")
+    for cid in getattr(args, "chunk_id", []) or []:
+        stage_args.extend(["--chunk-id", cid])
     if args.verbose:
         stage_args.append("--verbose")
     return stage_args
