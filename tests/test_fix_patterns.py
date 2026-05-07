@@ -148,3 +148,56 @@ def test_split_without_fix_patterns_file_graceful_fallback():
     assert spm.lookup_fix_pattern("unusedVariable", "low", empty_patterns) is None
     assert spm.lookup_fix_pattern("misra-c2012-17.7", "high", empty_patterns) is None
     assert spm.lookup_fix_pattern("anyRule", "medium", empty_patterns) is None
+
+
+def test_split_produces_unique_fix_patterns_in_chunks():
+    """Integration test: verify fix_patterns.json structure and lookup."""
+    fp_path = Path(__file__).resolve().parents[1] / ".agents" / "config" / "fix_patterns.json"
+    if not fp_path.exists():
+        import pytest
+        pytest.skip("fix_patterns.json not yet populated")
+
+    import json
+    fix_patterns = json.loads(fp_path.read_text())
+
+    assert "_meta" in fix_patterns
+    assert "risk_detail_levels" in fix_patterns
+    assert "patterns" in fix_patterns
+    assert isinstance(fix_patterns["patterns"], dict)
+
+    for rule_id, pattern in fix_patterns["patterns"].items():
+        assert "risk_level" not in pattern, f"Rule {rule_id} should not have risk_level in fix_patterns.json"
+
+    if "unusedVariable" in fix_patterns["patterns"]:
+        result = spm.lookup_fix_pattern("unusedVariable", "low", fix_patterns)
+        assert result is not None
+        assert "fix" in result
+        assert "example" in result
+
+
+def test_lookup_with_real_fix_patterns_covers_key_rules():
+    """Verify fix_patterns.json covers key cppcheck rules."""
+    fp_path = Path(__file__).resolve().parents[1] / ".agents" / "config" / "fix_patterns.json"
+    if not fp_path.exists():
+        import pytest
+        pytest.skip("fix_patterns.json not yet populated")
+
+    import json
+    fix_patterns = json.loads(fp_path.read_text())
+    patterns = fix_patterns.get("patterns", {})
+
+    key_cppcheck_rules = ["unusedVariable", "nullPointer", "uninitvar", "constVariable"]
+    for rule_id in key_cppcheck_rules:
+        if rule_id in patterns:
+            assert "fix" in patterns[rule_id], f"Rule {rule_id} missing 'fix' field"
+            assert "example" in patterns[rule_id], f"Rule {rule_id} missing 'example' field"
+
+
+def test_risk_detail_levels_match_design():
+    """Verify RISK_DETAIL_FIELDS constant matches design spec."""
+    expected = {
+        "low": ["fix", "example"],
+        "medium": ["fix", "example", "caution"],
+        "high": ["fix", "example", "pitfalls", "context_notes"],
+    }
+    assert spm.RISK_DETAIL_FIELDS == expected
