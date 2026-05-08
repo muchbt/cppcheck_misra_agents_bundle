@@ -22,6 +22,7 @@ USER_STATUS_MAP = {
     "running": "NEEDS_CONTEXT",
 }
 RESUME_IGNORED_ERROR_CODES = {"cppcheck_xml_missing", "cppcheck_xml_invalid"}
+FRESH_IGNORED_ERROR_CODES = {"progress_json_missing"}
 STAGE_MODULES = {
     "split": "split_cppcheck_xml",
     "run": "run_fix_pipeline",
@@ -211,6 +212,8 @@ def filter_blockers(results: List[Dict[str, Any]], mode: str) -> List[Dict[str, 
     blockers: List[Dict[str, Any]] = []
     for result in results:
         if result.get("level") != "error":
+            continue
+        if mode == "fresh" and result.get("code") in FRESH_IGNORED_ERROR_CODES:
             continue
         if mode == "resume" and result.get("code") in RESUME_IGNORED_ERROR_CODES:
             continue

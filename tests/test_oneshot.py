@@ -357,6 +357,54 @@ class OneshotTests(unittest.TestCase):
         self.assertEqual(stage_calls, [])  # No stages should be called
         self.assertIn("--status 查询结果", stdout.getvalue())
 
+    def test_filter_blockers_ignores_progress_json_missing_in_fresh_mode(self) -> None:
+        checks = [
+            {"level": "ok", "code": "python_version", "message": "ok", "detail": ""},
+            {"level": "error", "code": "progress_json_missing", "message": "progress.json 不存在。", "detail": ""},
+        ]
+        blockers = oneshot.filter_blockers(checks, "fresh")
+        codes = [b["code"] for b in blockers]
+        self.assertNotIn("progress_json_missing", codes)
+
+    def test_filter_blockers_keeps_progress_json_missing_in_resume_mode(self) -> None:
+        checks = [
+            {"level": "ok", "code": "python_version", "message": "ok", "detail": ""},
+            {"level": "error", "code": "progress_json_missing", "message": "progress.json 不存在。", "detail": ""},
+        ]
+        blockers = oneshot.filter_blockers(checks, "resume")
+        codes = [b["code"] for b in blockers]
+        self.assertIn("progress_json_missing", codes)
+
+    def test_filter_blockers_ignores_resume_error_codes_in_resume_mode(self) -> None:
+        checks = [
+            {"level": "error", "code": "cppcheck_xml_missing", "message": "xml missing", "detail": ""},
+            {"level": "error", "code": "cppcheck_xml_invalid", "message": "xml invalid", "detail": ""},
+        ]
+        blockers = oneshot.filter_blockers(checks, "resume")
+        codes = [b["code"] for b in blockers]
+        self.assertNotIn("cppcheck_xml_missing", codes)
+        self.assertNotIn("cppcheck_xml_invalid", codes)
+
+    def test_fresh_mode_not_blocked_by_missing_progress_json(self) -> None:
+        stage_calls = []
+        checks_with_missing_progress = [
+            {"level": "ok", "code": "python_version", "message": "ok", "detail": ""},
+            {"level": "error", "code": "progress_json_missing", "message": "progress.json 不存在。", "detail": ""},
+        ]
+        with patch.object(oneshot, "ROOT", self.root), patch.object(
+            oneshot, "RUNTIME_DIR", self.runtime_dir
+        ), patch.object(
+            oneshot, "collect_precheck_results", return_value=checks_with_missing_progress
+        ), patch.object(
+            oneshot.doctor, "print_checks"
+        ), patch.object(
+            oneshot, "run_stage", side_effect=lambda stage, argv: stage_calls.append((stage, list(argv))) or 0
+        ):
+            rc = oneshot.main(["--fresh", "--strategy", "conservative"])
+
+        self.assertEqual(rc, 0)
+        self.assertEqual([name for name, _ in stage_calls], ["split", "run", "merge"])
+
 
 if __name__ == "__main__":
     unittest.main()
