@@ -707,6 +707,71 @@ misra-pipeline config set url_template "https://gitlab.company.com/tools/misra-p
 misra-pipeline init --source local --url /mnt/usb/agents-v1.0.0.tar.gz
 ```
 
+#### 完全离线环境
+
+以下方案适用于**无公网、无 Git、甚至无 curl**的极端离线环境。
+
+**方案 A：`file://` 协议（有 curl，无网络）**
+
+`install.sh` 的 `--url` 通过 `curl` 下载，因此可用 `file://` 协议指向本地压缩包（不经过网络）：
+
+```bash
+./install.sh --url file:///mnt/usb/agents-v0.9.1.tar.gz
+```
+
+**方案 B：手动解压（无 curl，完全离线）**
+
+若目标机器连 `curl` 都没有，直接模拟 `install.sh` 做的事：
+
+```bash
+# 1. 创建目录并解压 CLI
+mkdir -p ~/.misra-pipeline/bin/cli
+tar -xzf /mnt/usb/agents-v0.9.1.tar.gz \
+  --strip-components=1 \
+  -C ~/.misra-pipeline/bin/ \
+  agents-v0.9.1/cli/
+
+# 2. 创建 wrapper 脚本
+cat > ~/.misra-pipeline/bin/misra-pipeline << 'WRAPPER_EOF'
+#!/bin/bash
+python3 "${HOME}/.misra-pipeline/bin/cli/misra-pipeline-cli.py" "$@"
+WRAPPER_EOF
+chmod +x ~/.misra-pipeline/bin/misra-pipeline
+
+# 3. 写入默认配置（后续 init/upgrade 指向本地源）
+cat > ~/.misra-pipeline/config.json << 'CONFIG_EOF'
+{
+  "repo_url": "https://github.com/muchbt/cppcheck_misra_agents_bundle",
+  "download": {
+    "mode": "local",
+    "url_template": "/mnt/usb/agents-{version}.tar.gz",
+    "fallback_mode": "local"
+  }
+}
+CONFIG_EOF
+
+# 4. 加入 PATH
+export PATH="${HOME}/.misra-pipeline/bin:${PATH}"
+misra-pipeline version
+```
+
+**方案 C：预打包 CLI 目录（多机批量部署）**
+
+在**一台在线机器**上完成安装，然后将整个 `~/.misra-pipeline/` 打包分发到所有离线机器：
+
+```bash
+# 在线机器
+./install.sh --version v0.9.1
+tar -czf misra-cli-v0.9.1-bundle.tar.gz -C ~ .misra-pipeline
+
+# 离线机器
+tar -xzf misra-cli-v0.9.1-bundle.tar.gz -C ~
+export PATH="${HOME}/.misra-pipeline/bin:${PATH}"
+misra-pipeline version
+```
+
+此方案离线端**无需 install.sh、无需 tar 结构解析、无需 curl**，解压后立即可用。
+
 **任意 HTTP 服务器示例：**
 
 ```bash

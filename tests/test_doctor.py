@@ -395,6 +395,32 @@ class DoctorTests(unittest.TestCase):
         self.assertNotIn("runtime_strategy_ok", [item["code"] for item in results])
         self.assertNotIn("unfinished_run_absent", [item["code"] for item in results])
 
+    def test_collect_checks_reports_missing_progress_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_dir = root / ".agents" / "config"
+            runtime_dir = root / ".agents" / "runtime"
+            prompts_dir = root / ".agents" / "prompts"
+            runs_dir = root / ".agents" / "runs"
+
+            config_dir.mkdir(parents=True)
+            runtime_dir.mkdir(parents=True)
+            prompts_dir.mkdir(parents=True)
+            runs_dir.mkdir(parents=True)
+
+            (config_dir / "pipeline.json").write_text("{}", encoding="utf-8")
+            (prompts_dir / "fix_chunk_prompt.txt").write_text("short prompt", encoding="utf-8")
+
+            results = doctor.collect_checks(root=root)
+
+        self.assertTrue(any(item["code"] == "progress_json_missing" for item in results))
+        progress_result = next(item for item in results if item["code"] == "progress_json_missing")
+        self.assertEqual(progress_result["level"], "error")
+        self.assertIn("progress.json", progress_result["message"])
+        self.assertIn("progress.json", progress_result["detail"])
+        self.assertNotIn("runtime_strategy_ok", [item["code"] for item in results])
+        self.assertNotIn("unfinished_run_absent", [item["code"] for item in results])
+
     def test_collect_checks_reports_malformed_pipeline_json_without_command_checks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -857,6 +857,14 @@ def collect_checks(root: Path = ROOT) -> List[Dict[str, Any]]:
             progress = json.load(f)
         if not isinstance(progress, dict):
             progress = {}
+    except FileNotFoundError as exc:
+        progress = {}
+        progress_error = make_result(
+            "error",
+            "progress_json_missing",
+            "progress.json 不存在。",
+            f"路径: {progress_path}; 详情: {exc}",
+        )
     except (OSError, json.JSONDecodeError) as exc:
         progress = {}
         progress_error = make_result(
