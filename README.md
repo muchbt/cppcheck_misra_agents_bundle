@@ -52,28 +52,127 @@ misra-pipeline run --provider kimi
 
 ## 分布式多设备工作流
 
-支持将 chunk 分配到多台设备并行处理，最后统一回收：
+支持将 chunk 分配到多台设备并行处理，最后统一回收。
+
+### 完整分发流程
+
+#### 1. Coordinator 切分（设备 A）
 
 ```bash
-# 1. Coordinator 切分
+cd /path/to/your-project
 misra-pipeline run --stage split
+```
 
-# 2. 同步项目到各 Worker（git/rsync）
+执行后，`.agents/runtime/` 目录下会生成：
+- `progress.json` — 含 `run_id`、`total_chunks`、`completed_chunks: []`
+- `issue_status.json` — 初始空对象 `{}`
+- `file_change_index.json` — 初始空对象 `{}`
+- `chunks/` — 各 chunk 的 XML 文件（`chunk_001.xml`、`chunk_002.xml`…）
 
-# 3. 各 Worker 处理指定 chunk
+#### 2. 同步项目到所有 Worker
+
+**方式 A：git（推荐，如果项目已有 git 仓库）**
+
+```bash
+# Coordinator
+git add .agents/runtime/ .agents/config/
+git commit -m "split: run_id=20260507-001, total_chunks=10"
+git push origin main
+
+# 各 Worker
+git pull origin main
+```
+
+**方式 B：rsync（无 git 或需要排除 build 产物时）**
+
+```bash
+# Coordinator → Worker B
+rsync -avz --exclude='build/' --exclude='*.o' \
+  /path/to/project/ user@worker-b:/path/to/project/
+
+# Coordinator → Worker C
+rsync -avz --exclude='build/' --exclude='*.o' \
+  /path/to/project/ user@worker-c:/path/to/project/
+```
+
+**关键**：必须同步 `.agents/` 完整目录（含 `runtime/`、`config/`、`tools/`），因为 Worker 需要：
+- 相同的 `run_id`
+- 相同的 chunk 文件
+- 相同的 `pipeline.json` 配置
+
+#### 3. 各 Worker 处理指定 chunk
+
+**Worker B（处理 chunk 3-4）：**
+
+```bash
+cd /path/to/project
 misra-pipeline run --stage agent --chunk-id 3-4
-misra-pipeline export  # → export-<run_id>-<host>.tar.gz
+misra-pipeline export
+# → 生成 export-20260507-001-<hostname>.tar.gz
+```
 
-# 4. Coordinator 回收
-misra-pipeline collect --from export-*.tar.gz
+**Worker C（处理 chunk 5-6）：**
 
-# 5. 合并生成报告
+```bash
+cd /path/to/project
+misra-pipeline run --stage agent --chunk-id 5-6
+misra-pipeline export
+```
+
+`export` 会自动打包：
+- `manifest.json`（含 `run_id`、`completed_chunks`）
+- `staging/chunk_003/`、`staging/chunk_004/`（delta 文件）
+- `logs/chunk_003.log`、`logs/chunk_004.log`
+- `patches/source.patch`（如果有 git 且有源码修改）
+
+#### 4. 回传 bundle 到 Coordinator
+
+```bash
+# Worker B → Coordinator
+scp export-20260507-001-worker-b.tar.gz user@coordinator:/path/to/project/
+
+# Worker C → Coordinator
+scp export-20260507-001-worker-c.tar.gz user@coordinator:/path/to/project/
+```
+
+#### 5. Coordinator 回收
+
+```bash
+cd /path/to/project
+misra-pipeline collect \
+  --from export-20260507-001-worker-b.tar.gz \
+  --from export-20260507-001-worker-c.tar.gz \
+  --from export-20260507-001-worker-d.tar.gz \
+  --from export-20260507-001-worker-e.tar.gz
+```
+
+`collect` 会：
+1. 解包每个 bundle
+2. 校验 `manifest.format_version == 1`
+3. 校验 `manifest.run_id` 与本地一致
+4. 检测 chunk 冲突（本地已完成的跳过）
+5. `git apply --3way patches/source.patch`（如果有且成功）
+6. 逐 chunk 调用 `import_chunk_staging_artifacts()` 导入 delta
+7. 更新本地 `progress.json` 的 `completed_chunks` 和 `failed_chunks`
+8. 复制日志
+
+#### 6. Coordinator 合并生成报告
+
+```bash
 misra-pipeline run --stage merge
 ```
 
-- `export` 打包 staging delta、日志和可选的 git patch
-- `collect` 校验 run_id、检测冲突、复用 `import_chunk_staging_artifacts` 导入
-- 支持多次 `collect`，幂等（已完成的 chunk 自动跳过）
+### 关键注意事项
+
+| 注意点 | 说明 |
+|--------|------|
+| **run_id 一致性** | 所有设备必须基于同一个 `split` 轮次，`collect` 会拒绝不同 `run_id` 的 bundle |
+| **chunk 不重叠** | 给每个 Worker 分配不重叠的 `--chunk-id` 范围，避免重复劳动 |
+| **幂等性** | `collect` 可安全多次执行，已完成的 chunk 会被跳过 |
+| **source patch** | Worker 上的 agent 修改了源码后，`export` 会尝试 `git diff HEAD` 生成 patch；Coordinator `collect` 时自动 apply |
+| **无 git 也能工作** | 如果项目没有 git，`export` 跳过 patch，`collect` 跳过 apply，只依赖 staging delta |
+| **Coordinator 自己也跑 chunk** | 设备 A 可以同时跑部分 chunk（如 `--chunk-id 1-2`），然后 `collect` 其他设备的 bundle，冲突检测会保护本地结果 |
+
 
 ## 目录结构
 
