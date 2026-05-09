@@ -59,11 +59,38 @@ The staging directory output files must follow these formats:
 - Option A: Flat object `{issue_key: patch}` where patch contains status, risk_level, risk_reason, etc.
 - Option B: Wrapper object `{status_changes: [{issue_key, new_status, ...}]}` or `{issue_status_changes: [...]}`
 
-**file_change_delta.json:**
-- Option A: Flat object `{file_path: {edits: [...], change_summary: "..."}}` where each key is an actual file path
-- Option B: Wrapper array `{file_changes: [{file, summary, linked_issues, edits: [...]}]}` — for chunks with code edits
-- Option C: Inspection-only `{files_inspected: [{file, change_summary}]}` — for chunks where NO edits were applied (e.g. manual review)
+**file_change_delta.json** — MUST use exactly ONE of these formats:
 
-⚠️ Use ONLY the key names above. Do NOT invent alternative key names (e.g. `changed_files`, `file_edits`).
+Format A (preferred): Flat object keyed by actual file paths
+```json
+{
+  "/path/to/src/main.c": {
+    "edits": [{"edit_id": "src/main.c#001", "summary": "added cast", "chunk_index": 1, "related_issue_keys": ["main.c:10:misra-c2012-11.3:abc"]}]
+  },
+  "chunk_index": 1
+}
+```
 
+Format B: Wrapper array with key `file_changes`
+```json
+{
+  "file_changes": [
+    {"file": "/path/to/src/main.c", "summary": "added cast", "linked_issues": ["main.c:10:misra-c2012-11.3:abc"]}
+  ],
+  "chunk_index": 1
+}
+```
+
+Format C: Inspection-only (no edits applied)
+```json
+{
+  "files_inspected": [
+    {"file": "/path/to/src/main.c", "change_summary": "No changes - marked for manual review"}
+  ],
+  "chunk_index": 1
+}
+```
+
+⚠️ Use ONLY the key names shown above (`file_changes`, `files_inspected`, or actual file paths as keys).
+Do NOT use: `files`, `changed_files`, `modifications`, `results`, or any other wrapper key name.
 Keep field names stable and deterministic. Each edit must include `edit_id`, `summary`, `chunk_index`, and `related_issue_keys`.

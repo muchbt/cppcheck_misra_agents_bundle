@@ -271,6 +271,28 @@ def mark_failure(progress: dict, idx: int, returncode: int, attempt: int, exhaus
         progress["failed_chunks"].append(idx)
 
 
+def mark_chunk_issues_failed(chunk_index: int, error_kind: str) -> None:
+    """Mark all issues in a failed chunk as 'failed' in issue_status.json."""
+    issue_status_path = RUNTIME_DIR / "issue_status.json"
+    issue_status = load_json(issue_status_path, {})
+
+    chunk_payload = load_chunk_payload(chunk_index)
+    changed = False
+    for issue in chunk_payload.get("issues", []):
+        issue_key = str(issue.get("issue_key", "")).strip()
+        if not issue_key or issue_key not in issue_status:
+            continue
+        current = issue_status[issue_key]
+        if current.get("status", "pending") == "pending":
+            current["status"] = "failed"
+            current["chunk_index"] = chunk_index
+            current["error_kind"] = error_kind
+            changed = True
+
+    if changed:
+        save_json(issue_status_path, issue_status)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     selected_rules = normalize_rule_set(args.rule_id)
@@ -328,10 +350,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         },
     )
 
-    processed_this_run = 0
+    attempted_this_run = 0
+    succeeded_this_run = 0
 
     while True:
-        if args.max_chunks > 0 and processed_this_run >= args.max_chunks:
+        if args.max_chunks > 0 and succeeded_this_run >= args.max_chunks:
             progress["status"] = "partial"
             save_json(progress_path, progress)
             append_pipeline_event(
@@ -341,11 +364,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                 level="warning",
                 message="达到 --max-chunks 限制，run 阶段部分完成。",
                 data={
-                    "processed": processed_this_run,
+                    "attempted": attempted_this_run,
+                    "succeeded": succeeded_this_run,
                     "max_chunks": args.max_chunks,
                 },
             )
-            print(f"Stopped after processing {processed_this_run} chunk(s) due to --max-chunks.")
+            print(f"Stopped after {attempted_this_run} chunk(s) ({succeeded_this_run} succeeded) due to --max-chunks.")
             return 0
 
         idx = next_chunk(progress, selected_rules, args.misra_only, args.include_failed, requested_ids)
@@ -363,7 +387,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 stage="run",
                 message="run 阶段已完成，无可处理 chunk。",
                 data={
-                    "processed": processed_this_run,
+                    "attempted": attempted_this_run,
+                    "succeeded": succeeded_this_run,
                     "completed_chunks": len(progress.get("completed_chunks", [])),
                     "failed_chunks": len(progress.get("failed_chunks", [])),
                 },
@@ -392,6 +417,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         last_error_kind = ""
         last_result = {}
 
+        attempted_this_run += 1
         for attempt in range(1, max_attempts + 1):
             config = load_json(CONFIG_DIR / "pipeline.json", {})
             chunk_payload = load_chunk_payload(idx)
@@ -475,6 +501,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             save_json(progress_path, progress)
 
         if not success:
+            mark_chunk_issues_failed(idx, last_error_kind or ERROR_KIND_RUNTIME_ERROR)
             progress["last_chunk_finished_at"] = now_iso()
             progress["last_failure"] = {
                 "chunk_index": idx,
@@ -507,6 +534,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Chunk {idx} failed after {max_attempts} attempt(s). Continuing with next chunk.")
             continue
 
-        processed_this_run += 1
+        succeeded_this_run += 1
         progress["last_chunk_finished_at"] = now_iso()
         save_json(progress_path, progress)

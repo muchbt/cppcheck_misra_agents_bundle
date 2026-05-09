@@ -11,8 +11,11 @@ NON_INTERACTIVE_COMMAND_PREFIX = ["claude"]
 SANITIZED_ENV_KEYS = set()
 CLAUDE_APPEND_SYSTEM_PROMPT = (
     "Use the local cppcheck-misra-fix skill from the current workspace when available. "
-    "Follow the staging output format contract defined in the cppcheck-misra-fix SKILL.md file."
+    "Follow the staging output format contract defined in the cppcheck-misra-fix SKILL.md file. "
+    "Do NOT use the Task tool or spawn subagents; process all work directly in the main session."
 )
+
+_SUBAGENT_TOOLS = frozenset({"Task"})
 
 _PERM_FLAGS = frozenset({"--dangerously-skip-permissions", "--permission-mode"})
 
@@ -49,6 +52,8 @@ def build_launch_spec(config: Dict[str, Any], chunk: Dict[str, Any]) -> Dict[str
         argv.extend(["--add-dir", str(staging_paths["chunk_dir"])])
     if "--append-system-prompt" not in argv:
         argv.extend(["--append-system-prompt", CLAUDE_APPEND_SYSTEM_PROMPT])
+    if "--disallowedTools" not in argv and "--disallowed-tools" not in argv:
+        argv.extend(["--disallowedTools"] + sorted(_SUBAGENT_TOOLS))
     # fix: misra-c2012-11.3 — 非交互模式需要跳过所有权限确认，否则会因权限提示导致挂起
     if not _has_perm_flag(argv):
         argv.append("--dangerously-skip-permissions")

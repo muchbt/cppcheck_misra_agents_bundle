@@ -54,9 +54,38 @@ The staging directory output files must follow these formats:
   - Normalized passthrough fields: `risk_level`, `risk_reason`, `requires_review_after_fix`, `verified`, `fix_summary`
   - Accepted reason aliases: `reason`, `blocker_reason`, `message`
 
-**file_change_delta.json:**
-- Option A: Flat object `{file_path: {edits: [...], change_summary: "..."}}` where each key is an actual file path
-- Option B: Wrapper array under one of these keys: `file_changes`, `files_changed`, `files_touched`, `changes`, `modified_files`, or `file_edits` — each entry uses `file` (or `file_path`/`path`) to identify the file
-- Option C: Inspection-only `{files_inspected: [{file, change_summary}]}` — for chunks where NO edits were applied (e.g. manual review)
+**file_change_delta.json** — MUST use exactly ONE of these formats:
 
-⚠️ The normalization layer accepts the aliases above, but prefer canonical key names when possible. Each edit must include `edit_id`, `summary`, `chunk_index`, and `related_issue_keys` (alternatives: `linked_issues` or `linked_issue_keys`).
+Format A (preferred): Flat object keyed by actual file paths
+```json
+{
+  "/path/to/src/main.c": {
+    "edits": [{"edit_id": "src/main.c#001", "summary": "added cast", "chunk_index": 1, "related_issue_keys": ["main.c:10:misra-c2012-11.3:abc"]}]
+  },
+  "chunk_index": 1
+}
+```
+
+Format B: Wrapper array with key `file_changes`
+```json
+{
+  "file_changes": [
+    {"file": "/path/to/src/main.c", "summary": "added cast", "linked_issues": ["main.c:10:misra-c2012-11.3:abc"]}
+  ],
+  "chunk_index": 1
+}
+```
+
+Format C: Inspection-only (no edits applied)
+```json
+{
+  "files_inspected": [
+    {"file": "/path/to/src/main.c", "change_summary": "No changes - marked for manual review"}
+  ],
+  "chunk_index": 1
+}
+```
+
+⚠️ Use ONLY the key names shown above (`file_changes`, `files_inspected`, or actual file paths as keys).
+Do NOT use: `files`, `changed_files`, `modifications`, `results`, or any other wrapper key name.
+Each edit must include `edit_id`, `summary`, `chunk_index`, and `related_issue_keys` (alternatives: `linked_issues` or `linked_issue_keys`).

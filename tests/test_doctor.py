@@ -540,6 +540,72 @@ class KimiAuthTests(unittest.TestCase):
         self.assertEqual(result["level"], "ok")
         self.assertEqual(result["code"], "kimi_auth_not_applicable")
 
+    def test_check_agent_subagent_disabled_ok_for_claude(self) -> None:
+        config = {
+            "agent": {
+                "provider": "claude",
+                "providers": {
+                    "claude": {
+                        "launch": {
+                            "argv": ["claude", "-p", "--dangerously-skip-permissions", "--disallowedTools", "Task"],
+                            "prompt_via": "arg",
+                            "cwd": "project_root",
+                            "env": {},
+                            "requires_tty": False,
+                            "output": {"mode": "exit_code"},
+                        },
+                    },
+                },
+            },
+        }
+        result = doctor.check_agent_subagent_disabled(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_subagent_disabled")
+
+    def test_check_agent_subagent_disabled_warning_when_missing(self) -> None:
+        config = {
+            "agent": {
+                "provider": "claude",
+                "providers": {
+                    "claude": {
+                        "launch": {
+                            "argv": ["claude", "-p", "--dangerously-skip-permissions"],
+                            "prompt_via": "arg",
+                            "cwd": "project_root",
+                            "env": {},
+                            "requires_tty": False,
+                            "output": {"mode": "exit_code"},
+                        },
+                    },
+                },
+            },
+        }
+        result = doctor.check_agent_subagent_disabled(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "warning")
+        self.assertEqual(result["code"], "agent_subagent_not_disabled")
+
+    def test_check_agent_subagent_disabled_ok_for_provider_without_subagent_tools(self) -> None:
+        config = {
+            "agent": {
+                "provider": "kimi",
+                "providers": {
+                    "kimi": {
+                        "launch": {
+                            "argv": ["kimi", "--print"],
+                            "prompt_via": "stdin",
+                            "cwd": "project_root",
+                            "env": {},
+                            "requires_tty": False,
+                            "output": {"mode": "exit_code"},
+                        },
+                    },
+                },
+            },
+        }
+        result = doctor.check_agent_subagent_disabled(config, root=REPO_ROOT)
+        self.assertEqual(result["level"], "ok")
+        self.assertEqual(result["code"], "agent_subagent_disabled")
+
 
 if __name__ == "__main__":
     unittest.main()

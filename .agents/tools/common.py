@@ -677,8 +677,12 @@ def _first_matching_str(item: Dict[str, Any], keys: Tuple[str, ...], default: st
     return default
 
 
-_KNOWN_FILE_CHANGES_KEYS = ("file_changes", "files_changed", "files_touched", "changes", "modified_files", "file_edits")
-_KNOWN_FILE_PATH_KEYS = ("file", "file_path", "path")
+_KNOWN_FILE_CHANGES_KEYS = (
+    "file_changes", "files_changed", "files_touched", "files",
+    "changes", "modified_files", "file_edits", "changed_files"
+)
+_KNOWN_FILE_PATH_KEYS = ("file", "file_path", "path", "filename")
+_KNOWN_FCD_META_KEYS = frozenset({"chunk_index", "metadata", "notes", "summary", "status"})
 _KNOWN_STATUS_CHANGES_KEYS = ("status_changes", "issue_status_changes", "issue_status_delta")
 _STATUS_FIELD_ALIASES: Dict[str, str] = {
     "review_required_after_fix": "requires_review_after_fix",
@@ -703,11 +707,14 @@ def normalize_file_change_delta(
     if file_changes is not None:
         normalized: Dict[str, Any] = {}
         for item in file_changes:
+            if isinstance(item, str) and item.strip():
+                normalized[item.strip()] = {"edits": []}
+                continue
             if not isinstance(item, dict):
-                raise ValueError("file_changes entry must be an object")
+                continue
             file_path = _first_matching_str(item, _KNOWN_FILE_PATH_KEYS)
             if not file_path:
-                raise ValueError("file_changes entry must include file")
+                continue
 
             current_entry = normalized.get(file_path, {"edits": []})
             preview_entry = {
@@ -822,12 +829,34 @@ def normalize_file_change_delta(
                 current_entry["edits"] = [*current_entry.get("edits", []), edit]
         return {file_path: current_entry}
 
+    # --- Structural inference: detect list-of-dict-with-file under unknown wrapper key ---
+    for key, value in file_change_delta.items():
+        if key in _KNOWN_FCD_META_KEYS:
+            continue
+        if (isinstance(value, list) and value
+                and isinstance(value[0], dict)
+                and any(value[0].get(k) for k in _KNOWN_FILE_PATH_KEYS)):
+            return normalize_file_change_delta(
+                base_file_change_index, {"file_changes": value}, chunk_index
+            )
+        if (isinstance(value, list) and value
+                and isinstance(value[0], str)):
+            normalized = {}
+            for fname in value:
+                if isinstance(fname, str) and fname.strip():
+                    normalized[fname.strip()] = {"edits": []}
+            return normalized
+        if isinstance(value, str) and ("/" in value or value.endswith((".c", ".h", ".cpp", ".hpp"))):
+            return {value.strip(): {"edits": []}}
+
     normalized = {}
     for file_path, delta_entry in file_change_delta.items():
-        if file_path == "chunk_index":
+        if file_path in _KNOWN_FCD_META_KEYS:
             continue
         if not isinstance(delta_entry, dict):
-            raise ValueError(f"file_change_index entry must be an object: {file_path}")
+            print(f"[normalize] WARNING: skipping file_change_delta['{file_path}'] "
+                  f"(expected dict, got {type(delta_entry).__name__})")
+            continue
         normalized[file_path] = delta_entry
     return normalized
 
@@ -910,10 +939,10 @@ def normalize_issue_status_delta(
         normalized: Dict[str, Any] = {}
         for item in status_changes:
             if not isinstance(item, dict):
-                raise ValueError("status_changes entry must be an object")
+                continue
             issue_key = str(item.get("issue_key", "")).strip()
             if not issue_key:
-                raise ValueError("status_changes entry must include issue_key")
+                continue
             patch = _normalize_status_item(item, issue_key, issue_edit_ids.get(issue_key, []), chunk_index)
             normalized[issue_key] = patch
         return normalized
@@ -927,13 +956,25 @@ def normalize_issue_status_delta(
         patch = _normalize_status_item(issue_status_delta, issue_key, issue_edit_ids.get(issue_key, []), chunk_index)
         return {issue_key: patch}
 
+    _KNOWN_ISD_META_KEYS = frozenset({
+        "chunk_index", "metadata", "notes",
+        "issue_status_delta", "status_changes", "issue_status_changes",
+    })
     normalized = {}
+    issue_edit_ids = _build_issue_edit_index(file_change_delta)
     for issue_key, patch in issue_status_delta.items():
-        if issue_key == "chunk_index":
+        if issue_key in _KNOWN_ISD_META_KEYS:
             continue
         if not isinstance(patch, dict):
-            raise ValueError(f"issue_status entry must be an object: {issue_key}")
-        normalized[issue_key] = patch
+            print(f"[normalize] WARNING: skipping issue_status_delta['{issue_key}'] "
+                  f"(expected dict, got {type(patch).__name__})")
+            continue
+        normalized_patch = dict(patch)
+        if "chunk_index" not in normalized_patch:
+            normalized_patch["chunk_index"] = int(chunk_index)
+        if "edit_ids" not in normalized_patch:
+            normalized_patch["edit_ids"] = issue_edit_ids.get(issue_key, [])
+        normalized[issue_key] = normalized_patch
     return normalized
 
 
@@ -961,12 +1002,26 @@ def import_chunk_staging_artifacts(
     raw_issue_status_delta = _load_required_json_object(issue_status_delta_path)
     file_change_index = _load_required_json_object(runtime_dir / "file_change_index.json")
     raw_file_change_delta = _load_required_json_object(file_change_delta_path)
-    file_change_delta = normalize_file_change_delta(file_change_index, raw_file_change_delta, chunk_index)
-    issue_status_delta = normalize_issue_status_delta(raw_issue_status_delta, file_change_delta, chunk_index)
+
+    # --- Normalize with degradation safety net ---
+    try:
+        file_change_delta = normalize_file_change_delta(file_change_index, raw_file_change_delta, chunk_index)
+        merged_file_change_index = merge_file_change_index(file_change_index, file_change_delta)
+    except Exception as exc:
+        print(f"[import] WARNING: file_change_delta normalization failed for chunk {chunk_index}: "
+              f"{exc} — degrading to empty file changes")
+        file_change_delta = {}
+        merged_file_change_index = dict(file_change_index)
+
+    try:
+        issue_status_delta = normalize_issue_status_delta(raw_issue_status_delta, file_change_delta, chunk_index)
+    except Exception as exc:
+        print(f"[import] WARNING: issue_status_delta normalization failed for chunk {chunk_index}: "
+              f"{exc} — degrading to empty status delta")
+        issue_status_delta = {}
+
     issue_status.update(issue_status_delta)
     save_json(runtime_dir / "issue_status.json", issue_status)
-
-    merged_file_change_index = merge_file_change_index(file_change_index, file_change_delta)
     save_json(runtime_dir / "file_change_index.json", merged_file_change_index)
 
     imported_json_path = results_dir / f"chunk_{int(chunk_index):03d}_result.json"

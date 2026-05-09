@@ -309,6 +309,52 @@ def check_agent_launch(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     )
 
 
+def check_agent_subagent_disabled(config: Any, root: Path = ROOT) -> Dict[str, Any]:
+    provider_name = _get_agent_provider_name(config)
+    provider = get_provider(provider_name)
+    if provider is None:
+        return make_result(
+            "error",
+            "agent_provider_unsupported",
+            "当前 agent.provider 不受支持。",
+            f"provider: {provider_name}",
+        )
+    subagent_tools = getattr(provider, "_SUBAGENT_TOOLS", None) or frozenset()
+    if not subagent_tools:
+        return make_result(
+            "ok",
+            "agent_subagent_disabled",
+            "当前 provider 无需禁止 subagent 工具。",
+            f"provider: {provider_name}",
+        )
+    launch = _get_agent_launch(config)
+    argv = launch.get("argv", []) if isinstance(launch, dict) else []
+    disallowed_flag = None
+    disallowed_tools: list[str] = []
+    for i, arg in enumerate(argv):
+        if arg in ("--disallowedTools", "--disallowed-tools"):
+            disallowed_flag = arg
+            j = i + 1
+            while j < len(argv) and not argv[j].startswith("-"):
+                disallowed_tools.append(argv[j])
+                j += 1
+            break
+    missing_tools = sorted(subagent_tools - {t.lstrip("-") for t in disallowed_tools})
+    if missing_tools:
+        return make_result(
+            "warning",
+            "agent_subagent_not_disabled",
+            "当前 provider 未禁止 subagent 工具，可能导致 agent 生成 subagent 日志文件。",
+            f"provider: {provider_name}; 缺少禁止的工具: {', '.join(missing_tools)}; 建议在 launch.argv 中添加 --disallowedTools {' '.join(missing_tools)}",
+        )
+    return make_result(
+        "ok",
+        "agent_subagent_disabled",
+        "当前 provider 已禁止 subagent 工具。",
+        f"provider: {provider_name}; 禁止的工具: {', '.join(sorted(subagent_tools))}",
+    )
+
+
 def check_agent_staging_dir(config: Any, root: Path = ROOT) -> Dict[str, Any]:
     try:
         staging_dir = resolve_agent_staging_dir(config, root=root)
@@ -929,6 +975,7 @@ register_check("_common", check_agent_staging_dir)
 register_check("claude", check_agent_skill_visibility)
 register_check("claude", check_agent_auth)
 register_check("claude", check_agent_network)
+register_check("claude", check_agent_subagent_disabled)
 
 # Codex-specific checks
 register_check("codex", check_agent_skill_visibility)

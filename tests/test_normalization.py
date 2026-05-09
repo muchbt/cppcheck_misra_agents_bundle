@@ -420,3 +420,121 @@ class TestLoadJsonRobust:
         p.write_text('```json\n{"a": 1}\n```', encoding="utf-8")
         data = common.load_json(p, {})
         assert data == {"a": 1}
+
+
+class TestFileChangeDeltaDegradation:
+    EMPTY_BASE = {}
+
+    def test_list_of_strings_degrades_to_inspection(self):
+        raw = {"files": ["a.c", "b.c"]}
+        result = common.normalize_file_change_delta(self.EMPTY_BASE, raw, 0)
+        assert "a.c" in result
+        assert "b.c" in result
+        assert result["a.c"]["edits"] == []
+        assert result["b.c"]["edits"] == []
+
+    def test_unknown_wrapper_list_of_dicts_inferred(self):
+        raw = {"modifications": [{"file": "a.c", "summary": "fix", "linked_issues": ["k:1"]}]}
+        result = common.normalize_file_change_delta(self.EMPTY_BASE, raw, 0)
+        assert "a.c" in result
+        assert len(result["a.c"]["edits"]) == 1
+
+    def test_unknown_wrapper_string_value_degrades(self):
+        raw = {"files": "a.c"}
+        result = common.normalize_file_change_delta(self.EMPTY_BASE, raw, 0)
+        assert "a.c" in result
+        assert result["a.c"]["edits"] == []
+
+    def test_non_dict_value_skipped_not_raised(self):
+        raw = {"a.c": {"edits": []}, "bad_key": 42}
+        result = common.normalize_file_change_delta(self.EMPTY_BASE, raw, 0)
+        assert "a.c" in result
+        assert "bad_key" not in result
+
+    def test_completely_empty(self):
+        raw = {"chunk_index": 1}
+        result = common.normalize_file_change_delta(self.EMPTY_BASE, raw, 0)
+        assert result == {}
+
+
+class TestIssueStatusDeltaDegradation:
+    EMPTY_FCD = {}
+
+    def test_passthrough_injects_chunk_index(self):
+        raw = {"a.c:1:rule:abc": {"status": "fixed", "risk_level": "high"}}
+        result = common.normalize_issue_status_delta(raw, self.EMPTY_FCD, 7)
+        assert result["a.c:1:rule:abc"]["chunk_index"] == 7
+
+    def test_passthrough_skips_meta_keys(self):
+        raw = {
+            "a.c:1:rule:abc": {"status": "fixed"},
+            "issue_status_delta": {"nested": "data"},
+            "chunk_index": 5,
+        }
+        result = common.normalize_issue_status_delta(raw, self.EMPTY_FCD, 5)
+        assert "a.c:1:rule:abc" in result
+        assert "issue_status_delta" not in result
+        assert "chunk_index" not in result
+
+    def test_non_dict_entry_skipped_not_raised(self):
+        raw = {"a.c:1:rule:abc": {"status": "fixed"}, "bad": "string_value"}
+        result = common.normalize_issue_status_delta(raw, self.EMPTY_FCD, 0)
+        assert "a.c:1:rule:abc" in result
+        assert "bad" not in result
+
+
+class TestImportDegradation:
+    """import_chunk_staging_artifacts never fails on normalize errors."""
+
+    def test_import_survives_garbage_file_change_delta(self, tmp_path):
+        runtime_dir = tmp_path / "runtime"
+        results_dir = runtime_dir / "results"
+        staging_dir = tmp_path / "staging" / "chunk_099"
+        results_dir.mkdir(parents=True)
+        staging_dir.mkdir(parents=True)
+
+        common.save_json(runtime_dir / "issue_status.json", {
+            "a.c:1:rule:abc": {"status": "pending"},
+        })
+        common.save_json(runtime_dir / "file_change_index.json", {})
+        common.save_json(staging_dir / "file_change_delta.json", {"garbage": 123})
+        common.save_json(staging_dir / "issue_status_delta.json", {
+            "a.c:1:rule:abc": {"status": "fixed"},
+        })
+        common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 99})
+        (staging_dir / "chunk_result.md").write_text("# chunk 99\n", encoding="utf-8")
+
+        paths = common.import_chunk_staging_artifacts(
+            staging_dir, 99, runtime_dir=runtime_dir, results_dir=results_dir,
+        )
+        assert paths["chunk_result_json_path"].exists()
+        assert paths["chunk_result_md_path"].exists()
+
+    def test_import_survives_normalize_exception(self, tmp_path, monkeypatch):
+        """Safety net catches unexpected exception from normalize."""
+        runtime_dir = tmp_path / "runtime"
+        results_dir = runtime_dir / "results"
+        staging_dir = tmp_path / "staging" / "chunk_099"
+        results_dir.mkdir(parents=True)
+        staging_dir.mkdir(parents=True)
+
+        common.save_json(runtime_dir / "issue_status.json", {
+            "a.c:1:rule:abc": {"status": "pending"},
+        })
+        common.save_json(runtime_dir / "file_change_index.json", {})
+        common.save_json(staging_dir / "file_change_delta.json", {"valid": "data"})
+        common.save_json(staging_dir / "issue_status_delta.json", {
+            "a.c:1:rule:abc": {"status": "fixed"},
+        })
+        common.save_json(staging_dir / "chunk_result.json", {"chunk_index": 99})
+        (staging_dir / "chunk_result.md").write_text("# chunk 99\n", encoding="utf-8")
+
+        def raise_always(*args, **kwargs):
+            raise RuntimeError("simulated normalize failure")
+        monkeypatch.setattr(common, "normalize_file_change_delta", raise_always)
+
+        paths = common.import_chunk_staging_artifacts(
+            staging_dir, 99, runtime_dir=runtime_dir, results_dir=results_dir,
+        )
+        assert paths["chunk_result_json_path"].exists()
+        assert paths["chunk_result_md_path"].exists()
