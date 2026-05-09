@@ -1020,7 +1020,11 @@ def import_chunk_staging_artifacts(
               f"{exc} — degrading to empty status delta")
         issue_status_delta = {}
 
-    issue_status.update(issue_status_delta)
+    for issue_key, delta in issue_status_delta.items():
+        if issue_key in issue_status:
+            issue_status[issue_key].update(delta)
+        else:
+            issue_status[issue_key] = delta
     save_json(runtime_dir / "issue_status.json", issue_status)
     save_json(runtime_dir / "file_change_index.json", merged_file_change_index)
 

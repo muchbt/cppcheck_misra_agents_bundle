@@ -35,6 +35,21 @@ def count_file_changes(file_data: Dict[str, Any]) -> int:
     return 0
 
 
+def _parse_issue_key(issue_key: str) -> tuple[str, str]:
+    """Parse file path and rule_id from issue_key.
+
+    issue_key format: <file_path>:<line>:<rule_id>:<hash>
+    The file_path may contain colons (e.g., Windows paths), so we split
+    from the right and take the last two parts as rule_id and hash.
+    """
+    parts = issue_key.rsplit(":", 2)
+    if len(parts) >= 3:
+        file_path = ":".join(parts[:-2])
+        rule_id = parts[-2]
+        return file_path, rule_id
+    return issue_key, ""
+
+
 def build_report_paths() -> Dict[str, str]:
     return {
         "final_summary_md": ".agents/reports/final_summary.md",
@@ -59,8 +74,16 @@ def collect_summary(
         status_counts[status] += 1
         strategy_counts[str(item.get("fix_strategy", "unknown"))] += 1
         if status == "fixed":
-            fixed_by_rule[str(item.get("rule_id", ""))] += 1
-            fixed_by_file[str(item.get("file", ""))] += 1
+            rule_id = str(item.get("rule_id", "")).strip()
+            file_path = str(item.get("file", "")).strip()
+            if not rule_id or not file_path:
+                parsed_file, parsed_rule = _parse_issue_key(issue_key)
+                if not file_path:
+                    file_path = parsed_file
+                if not rule_id:
+                    rule_id = parsed_rule
+            fixed_by_rule[rule_id] += 1
+            fixed_by_file[file_path] += 1
             if item.get("risk_level") == "high":
                 fixed_high_risk.append(issue_key)
             if item.get("requires_review_after_fix"):
@@ -180,9 +203,17 @@ def build_review_markdown(
     if summary.get("review_required_after_fix"):
         for issue_key in summary["review_required_after_fix"]:
             item = issue_status.get(issue_key, {})
+            file_path = str(item.get("file", "")).strip()
+            rule_id = str(item.get("rule_id", "")).strip()
+            if not file_path or not rule_id:
+                parsed_file, parsed_rule = _parse_issue_key(issue_key)
+                if not file_path:
+                    file_path = parsed_file
+                if not rule_id:
+                    rule_id = parsed_rule
             lines.append(
                 f"- {issue_key}：{item.get('risk_reason', '未提供原因')} "
-                f"(文件：{item.get('file', '')}，规则：{item.get('rule_id', '')})"
+                f"(文件：{file_path}，规则：{rule_id})"
             )
     else:
         lines.append("- 本次未出现“修复后仍需复核”的问题。")
@@ -211,19 +242,35 @@ def build_review_checklist(
     review_statuses = {"needs_manual_review", "failed"}
     for issue_key in summary.get("review_required_after_fix", []):
         item = issue_status.get(issue_key, {})
+        file_path = str(item.get("file", "")).strip()
+        rule_id = str(item.get("rule_id", "")).strip()
+        if not file_path or not rule_id:
+            parsed_file, parsed_rule = _parse_issue_key(issue_key)
+            if not file_path:
+                file_path = parsed_file
+            if not rule_id:
+                rule_id = parsed_rule
         edit_ids = ", ".join(item.get("edit_ids", [])) or "-"
         rows.append(
-            f"| {issue_key} | {item.get('file', '')} | {item.get('rule_id', '')} | "
+            f"| {issue_key} | {file_path} | {rule_id} | "
             f"{item.get('status', '')} | {edit_ids} | 修复后仍需人工确认 |"
         )
 
     for issue_key, item in sorted(issue_status.items()):
         if item.get("status") not in review_statuses:
             continue
+        file_path = str(item.get("file", "")).strip()
+        rule_id = str(item.get("rule_id", "")).strip()
+        if not file_path or not rule_id:
+            parsed_file, parsed_rule = _parse_issue_key(issue_key)
+            if not file_path:
+                file_path = parsed_file
+            if not rule_id:
+                rule_id = parsed_rule
         edit_ids = ", ".join(item.get("edit_ids", [])) or "-"
         reason = item.get("risk_reason", "") or "未自动修复，需人工确认"
         rows.append(
-            f"| {issue_key} | {item.get('file', '')} | {item.get('rule_id', '')} | "
+            f"| {issue_key} | {file_path} | {rule_id} | "
             f"{item.get('status', '')} | {edit_ids} | {reason} |"
         )
 

@@ -23,7 +23,8 @@ class MisraPipelineCliTests(unittest.TestCase):
         """Test version command shows CLI version from VERSION file."""
         result = misra_pipeline_cli.cmd_version_mock()
         self.assertIn("CLI version:", result)
-        self.assertIn("v0.9.4", result)
+        expected_version = misra_pipeline_cli.get_current_version()
+        self.assertIn(expected_version, result)
 
     def test_parse_args_version_subcommand(self):
         """Test parse_args for 'version' subcommand."""
