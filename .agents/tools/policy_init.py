@@ -28,6 +28,7 @@ AVAILABLE_TEMPLATES = {
     "misra_c2012_relaxed": "MISRA C:2012 relaxed policy - low risk auto_fix, medium risk careful_fix",
     "autosar_baseline": "AUTOSAR baseline policy - RTE/MCAL/BSW require manual review",
     "cppcheck_common": "Cppcheck native rule policy - common error/warning strategies",
+    "cppcheck_full": "Cppcheck full rule policy - comprehensive cppcheck rules coverage",
 }
 
 VALID_RULE_ACTIONS = {"fix", "skip", "needs_manual_review", "careful_fix", "auto_fix"}
