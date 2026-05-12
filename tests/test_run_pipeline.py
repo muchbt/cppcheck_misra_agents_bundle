@@ -796,6 +796,100 @@ class ChunkIdParserTests(unittest.TestCase):
             output = stdout.getvalue()
             self.assertIn("使用 --include-failed 可重跑", output)
 
+    def test_check_previous_fix_detects_existing_comment(self) -> None:
+        """_check_previous_fix 应能检测源代码中已有的 fix 注释。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            src_file = Path(tmp) / "test.c"
+            src_file.write_text(
+                "int a; /* fix: misra-c2012-9.3 — zero-init */\n"
+                "int b;\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(
+                split_cppcheck_xml._check_previous_fix(str(src_file), 1, "misra-c2012-9.3")
+            )
+            self.assertFalse(
+                split_cppcheck_xml._check_previous_fix(str(src_file), 2, "misra-c2012-9.3")
+            )
+            self.assertFalse(
+                split_cppcheck_xml._check_previous_fix(str(src_file), 1, "variableScope")
+            )
+
+    def test_check_previous_fix_missing_file(self) -> None:
+        """_check_previous_fix 对不存在的文件应返回 False。"""
+        self.assertFalse(
+            split_cppcheck_xml._check_previous_fix("/nonexistent/path/file.c", 10, "unusedVariable")
+        )
+
+    def test_parse_xml_sets_previous_fix_attempted(self) -> None:
+        """parse_xml 应在 issue 上设置 previous_fix_attempted 字段。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_path = root / "cppcheck.xml"
+            src_path = root / "src.c"
+            src_path.write_text(
+                "int unused = 0; /* fix: unusedVariable — removed */\n",
+                encoding="utf-8",
+            )
+            xml_path.write_text(
+                '<results><errors>'
+                '<error id="unusedVariable" severity="style" msg="Unused variable: unused">'
+                f'<location file="{src_path}" line="1"/>'
+                '</error>'
+                '</errors></results>',
+                encoding="utf-8",
+            )
+
+            config = {
+                "filter": {"include_severity": ["style"], "exclude_information": True},
+                "misra": {"enabled": True, "detect_prefixes": ["misra"]},
+                "fix_strategy": {},
+                "verification": {"rerun_cppcheck_for_touched_files": True},
+            }
+            policy = {
+                "default": {"action": "auto_fix", "risk_level": "low"},
+                "actions": {"unusedVariable": {"action": "auto_fix", "risk_level": "low"}},
+                "patterns": [],
+            }
+            issues = split_cppcheck_xml.parse_xml(xml_path, config, policy, "all_auto")
+            self.assertEqual(len(issues), 1)
+            self.assertTrue(issues[0].get("previous_fix_attempted"))
+            self.assertEqual(issues[0]["rule_id"], "unusedVariable")
+
+    def test_parse_xml_skips_previous_fix_check_when_disabled(self) -> None:
+        """当 rerun_cppcheck_for_touched_files 为 False 时，previous_fix_attempted 应始终为 False。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            xml_path = root / "cppcheck.xml"
+            src_path = root / "src.c"
+            src_path.write_text(
+                "int unused = 0; /* fix: unusedVariable — removed */\n",
+                encoding="utf-8",
+            )
+            xml_path.write_text(
+                '<results><errors>'
+                '<error id="unusedVariable" severity="style" msg="Unused variable: unused">'
+                f'<location file="{src_path}" line="1"/>'
+                '</error>'
+                '</errors></results>',
+                encoding="utf-8",
+            )
+
+            config = {
+                "filter": {"include_severity": ["style"], "exclude_information": True},
+                "misra": {"enabled": True, "detect_prefixes": ["misra"]},
+                "fix_strategy": {},
+                "verification": {"rerun_cppcheck_for_touched_files": False},
+            }
+            policy = {
+                "default": {"action": "auto_fix", "risk_level": "low"},
+                "actions": {"unusedVariable": {"action": "auto_fix", "risk_level": "low"}},
+                "patterns": [],
+            }
+            issues = split_cppcheck_xml.parse_xml(xml_path, config, policy, "all_auto")
+            self.assertEqual(len(issues), 1)
+            self.assertFalse(issues[0].get("previous_fix_attempted"))
+
 
 if __name__ == "__main__":
     unittest.main()

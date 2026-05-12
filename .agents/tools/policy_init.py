@@ -360,11 +360,20 @@ def add_rule(
 
     # Check if rule already exists
     if rule_already_exists and not force:
-        print(
-            f"Error: Rule '{rule_id}' already exists. Use --force to overwrite.",
-            file=sys.stderr,
-        )
-        return 1
+        if sys.stdin.isatty():
+            print(f"Rule '{rule_id}' already exists:")
+            existing_cfg = actions[rule_id]
+            print(f"  existing: action={existing_cfg.get('action', 'N/A')}, risk_level={existing_cfg.get('risk_level', 'N/A')}")
+            print(f"  proposed:  action={action}, risk_level={'medium' if risk_level is None and action not in ('auto_fix', 'fix') else risk_level or 'low' if action in ('auto_fix', 'fix') else 'high'}")
+            if not _confirm_action("Overwrite?", default=False):
+                print("Aborted.")
+                return 0
+        else:
+            print(
+                f"Error: Rule '{rule_id}' already exists. Use --force to overwrite.",
+                file=sys.stderr,
+            )
+            return 1
 
     # Build the action config
     action_config: Dict[str, Any] = {"action": action}
@@ -468,18 +477,52 @@ def _select_template_interactive() -> List[str]:
         print(f"Invalid choice. Enter numbers between 1 and {len(template_list)}.", file=sys.stderr)
 
 
+def _confirm_action(prompt: str, default: bool = False) -> bool:
+    """Prompt user for yes/no confirmation in TTY mode."""
+    if not sys.stdin.isatty():
+        return default
+    suffix = " [Y/n] " if default else " [y/N] "
+    try:
+        choice = input(prompt + suffix).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return default
+    if not choice:
+        return default
+    return choice in ("y", "yes")
+
+
+def _describe_action_diff(rule_id: str, old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]) -> str:
+    """Build a short diff description for a single rule action config."""
+    parts: List[str] = []
+    for key in ("action", "risk_level"):
+        old_val = old_cfg.get(key, "N/A")
+        new_val = new_cfg.get(key, "N/A")
+        if old_val != new_val:
+            parts.append(f"{key}: {old_val} -> {new_val}")
+    return f"  {rule_id}: {', '.join(parts)}" if parts else f"  {rule_id}: (identical)"
+
+
 def init_policy(templates: List[str], output_path: Path, force: bool) -> int:
     """Initialize policy from one or more templates (merged)."""
     if not templates:
         templates = _select_template_interactive()
 
-    if output_path.exists() and not force:
-        print(
-            f"Error: Output file already exists: {output_path}",
-            file=sys.stderr,
-        )
-        print("Use --force to overwrite.", file=sys.stderr)
-        return 1
+    existing_policy: Optional[Dict[str, Any]] = None
+    if output_path.exists():
+        existing_policy = load_policy(output_path)
+        if not force:
+            if sys.stdin.isatty():
+                print(f"Policy file already exists: {output_path}")
+                if not _confirm_action("Overwrite?", default=False):
+                    print("Aborted.")
+                    return 0
+            else:
+                print(
+                    f"Error: Output file already exists: {output_path}",
+                    file=sys.stderr,
+                )
+                print("Use --force to overwrite.", file=sys.stderr)
+                return 1
 
     # Ensure parent directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -518,6 +561,30 @@ def init_policy(templates: List[str], output_path: Path, force: bool) -> int:
         except json.JSONDecodeError as e:
             print(f"Error: Template '{name}' is not valid JSON: {e}", file=sys.stderr)
             return 1
+
+    # Check rule conflicts with existing policy and prompt
+    if existing_policy and not force:
+        existing_actions = existing_policy.get("actions", {})
+        conflicts: List[str] = []
+        identicals: List[str] = []
+        for key in merged["actions"]:
+            if key in existing_actions:
+                if merged["actions"][key] != existing_actions[key]:
+                    conflicts.append(key)
+                else:
+                    identicals.append(key)
+
+        if conflicts and sys.stdin.isatty():
+            print(f"\n{len(conflicts)} rule(s) already exist with different settings:")
+            for rule_id in conflicts:
+                print(_describe_action_diff(rule_id, existing_actions[rule_id], merged["actions"][rule_id]))
+            if identicals:
+                print(f"\n{len(identicals)} rule(s) already exist with identical settings (will be kept as-is).")
+            print()
+            if not _confirm_action(f"Overwrite these {len(conflicts)} rule(s)?", default=False):
+                for key in conflicts:
+                    merged["actions"][key] = existing_actions[key]
+                print(f"Kept existing settings for {len(conflicts)} rule(s).")
 
     # Write merged policy
     try:

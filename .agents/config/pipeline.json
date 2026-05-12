@@ -37,7 +37,7 @@
   },
   "verification": {
     "mode": "light",
-    "rerun_cppcheck_for_touched_files": false,
+    "rerun_cppcheck_for_touched_files": true,
     "custom_command": ""
   },
   "agent": {

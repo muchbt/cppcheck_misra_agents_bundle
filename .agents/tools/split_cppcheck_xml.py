@@ -136,6 +136,27 @@ def classify_issue(
         "requires_review_after_fix": requires_review_after_fix,
     }
 
+def _check_previous_fix(file_path: str, line: int, rule_id: str) -> bool:
+    """Check if a previous fix comment for this rule exists at the given line.
+
+    When the user re-runs cppcheck and the same issue still appears on a line
+    that already has a `/* fix: <rule_id> ... */` comment, it means the
+    previous fix was incomplete or incorrect.  This flag lets the agent know
+    it must re-analyse and apply a correct fix.
+    """
+    try:
+        p = Path(file_path)
+        if not p.exists():
+            return False
+        with open(p, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        if line <= 0 or line > len(lines):
+            return False
+        return f"fix: {rule_id}" in lines[line - 1]
+    except Exception:
+        return False
+
+
 def parse_xml(xml_file: Path, config: Dict[str, Any], policy: Dict[str, Any], strategy: str) -> List[Dict[str, Any]]:
     try:
         tree = ET.parse(xml_file)
@@ -148,6 +169,10 @@ def parse_xml(xml_file: Path, config: Dict[str, Any], policy: Dict[str, Any], st
     exclude_information = bool(config["filter"].get("exclude_information", True))
     detect_prefixes = config["misra"]["detect_prefixes"]
     strategy_config = config.get("fix_strategy", {})
+
+    enable_previous_fix_check = bool(
+        config.get("verification", {}).get("rerun_cppcheck_for_touched_files", False)
+    )
 
     dedup = {}
     for err in root.findall(".//error"):
@@ -178,6 +203,10 @@ def parse_xml(xml_file: Path, config: Dict[str, Any], policy: Dict[str, Any], st
         if key in dedup:
             continue
 
+        previous_fix_attempted = False
+        if enable_previous_fix_check:
+            previous_fix_attempted = _check_previous_fix(file_path, line, rule_id)
+
         dedup[key] = {
             "issue_key": build_issue_key(file_path, line, rule_id, msg),
             "file": file_path,
@@ -187,6 +216,7 @@ def parse_xml(xml_file: Path, config: Dict[str, Any], policy: Dict[str, Any], st
             "msg": msg,
             "is_misra": is_misra_rule(rule_id, detect_prefixes),
             "fix_strategy": strategy,
+            "previous_fix_attempted": previous_fix_attempted,
             **issue_policy,
         }
 

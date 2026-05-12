@@ -153,8 +153,8 @@ class PolicyInitTests(unittest.TestCase):
                 content2.get("default"),
             )
 
-    def test_policy_init_rejects_existing_without_force(self) -> None:
-        """Test that 'policy init' rejects existing file without --force."""
+    def test_policy_init_rejects_existing_without_force_non_tty(self) -> None:
+        """Test that 'policy init' rejects existing file without --force in non-TTY mode."""
         with tempfile.TemporaryDirectory() as tmp:
             output_path = Path(tmp) / "policy.json"
 
@@ -162,11 +162,52 @@ class PolicyInitTests(unittest.TestCase):
             output_path.write_text("{}", encoding="utf-8")
 
             with patch("sys.stderr", new_callable=StringIO):
-                result = policy_init.init_policy(
-                    "misra_c2012_conservative", output_path, force=False
-                )
+                with patch.object(policy_init.sys.stdin, "isatty", return_value=False):
+                    result = policy_init.init_policy(
+                        "misra_c2012_conservative", output_path, force=False
+                    )
 
             self.assertEqual(result, 1)
+            # File should still contain original content
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "{}")
+
+    def test_policy_init_prompt_overwrite_existing_tty_yes(self) -> None:
+        """Test that 'policy init' prompts and overwrites when user says yes in TTY."""
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "policy.json"
+            output_path.write_text("{}", encoding="utf-8")
+
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                with patch.object(policy_init.sys.stdin, "isatty", return_value=True):
+                    with patch("builtins.input", return_value="y"):
+                        result = policy_init.init_policy(
+                            ["misra_c2012_conservative"], output_path, force=False
+                        )
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("Policy initialized", output)
+            # File should now contain valid policy
+            with open(output_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.assertIn("actions", data)
+
+    def test_policy_init_prompt_overwrite_existing_tty_no(self) -> None:
+        """Test that 'policy init' prompts and aborts when user says no in TTY."""
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "policy.json"
+            output_path.write_text("{}", encoding="utf-8")
+
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                with patch.object(policy_init.sys.stdin, "isatty", return_value=True):
+                    with patch("builtins.input", return_value="n"):
+                        result = policy_init.init_policy(
+                            "misra_c2012_conservative", output_path, force=False
+                        )
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("Aborted", output)
             # File should still contain original content
             self.assertEqual(output_path.read_text(encoding="utf-8"), "{}")
 
@@ -283,6 +324,36 @@ class PolicyInitTests(unittest.TestCase):
                     )
 
             self.assertEqual(result, 0)
+
+    def test_policy_init_rule_conflicts_tty_keep_existing(self) -> None:
+        """Test that init_policy shows rule conflicts and user can keep existing rules."""
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "policy.json"
+
+            # First, create a policy with one template
+            result1 = policy_init.init_policy(
+                ["misra_c2012_conservative"], output_path, force=False
+            )
+            self.assertEqual(result1, 0)
+
+            # Now try to init with a different template that has conflicting rules
+            # User says "y" to file overwrite, then "n" to keep existing rules for conflicts
+            with patch("sys.stdout", new_callable=StringIO):
+                with patch.object(policy_init.sys.stdin, "isatty", return_value=True):
+                    with patch("builtins.input", side_effect=["y", "n"]):
+                        result2 = policy_init.init_policy(
+                            ["misra_c2012_relaxed"], output_path, force=False
+                        )
+
+            self.assertEqual(result2, 0)
+
+            # Read the result - conflicts should have been kept from original
+            with open(output_path, "r", encoding="utf-8") as f:
+                result_data = json.load(f)
+            # The description should reflect the new merge
+            self.assertIn("misra_c2012_relaxed", result_data.get("_description", ""))
+            # But rules that existed in conservative should have been kept
+            # (since user said no to overwriting conflicts)
 
     def test_parse_args_list_subcommand(self) -> None:
         """Test parse_args for 'list' subcommand."""
@@ -474,25 +545,83 @@ class PolicyInitTests(unittest.TestCase):
             self.assertEqual(data["actions"]["newTestRule"]["action"], "auto_fix")
 
     def test_policy_add_existing_rule_without_force(self) -> None:
-        """Test 'policy add' rejects existing rule without --force."""
+        """Test 'policy add' rejects existing rule without --force in non-TTY mode."""
         with tempfile.TemporaryDirectory() as tmp:
             policy_path = Path(tmp) / "policy.json"
             shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
 
             with patch("sys.stderr", new_callable=StringIO):
-                result = policy_init.main(
-                    [
-                        "-p",
-                        str(policy_path),
-                        "add",
-                        "--rule-id",
-                        "unusedVariable",
-                        "--action",
-                        "skip",
-                    ]
-                )
+                with patch.object(policy_init.sys.stdin, "isatty", return_value=False):
+                    result = policy_init.main(
+                        [
+                            "-p",
+                            str(policy_path),
+                            "add",
+                            "--rule-id",
+                            "unusedVariable",
+                            "--action",
+                            "skip",
+                        ]
+                    )
 
             self.assertEqual(result, 1)
+
+    def test_policy_add_existing_rule_tty_prompt_yes(self) -> None:
+        """Test 'policy add' prompts and overwrites when user confirms in TTY."""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
+
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                with patch.object(policy_init.sys.stdin, "isatty", return_value=True):
+                    with patch("builtins.input", return_value="y"):
+                        result = policy_init.main(
+                            [
+                                "-p",
+                                str(policy_path),
+                                "add",
+                                "--rule-id",
+                                "unusedVariable",
+                                "--action",
+                                "skip",
+                            ]
+                        )
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("Updated rule 'unusedVariable'", output)
+            with open(policy_path) as f:
+                data = json.load(f)
+            self.assertEqual(data["actions"]["unusedVariable"]["action"], "skip")
+
+    def test_policy_add_existing_rule_tty_prompt_no(self) -> None:
+        """Test 'policy add' prompts and aborts when user declines in TTY."""
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            shutil.copy2(policy_init.DEFAULT_POLICY_PATH, policy_path)
+
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                with patch.object(policy_init.sys.stdin, "isatty", return_value=True):
+                    with patch("builtins.input", return_value="n"):
+                        result = policy_init.main(
+                            [
+                                "-p",
+                                str(policy_path),
+                                "add",
+                                "--rule-id",
+                                "unusedVariable",
+                                "--action",
+                                "skip",
+                            ]
+                        )
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("Aborted", output)
+            with open(policy_path) as f:
+                data = json.load(f)
+            # Original rule should be unchanged
+            self.assertNotEqual(data["actions"]["unusedVariable"]["action"], "skip")
 
     def test_policy_add_existing_rule_with_force(self) -> None:
         """Test 'policy add' with --force overwrites existing rule."""

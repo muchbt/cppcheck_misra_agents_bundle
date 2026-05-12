@@ -27,3 +27,4 @@ Requirements:
 14. Do not wait indefinitely for environmental side effects; write the blocker into the staging files for this chunk
 15. Ask the user only when explicit authorization is required and no safe in-workspace path exists
 16. Use only the staging paths listed above for this chunk's output files; do not directly overwrite canonical runtime result files
+17. If an issue has "previous_fix_attempted": true, the source line already contains a fix comment for the same rule_id but cppcheck still reports the issue. The previous fix was incomplete or incorrect. You MUST re-analyse the line, remove or update the existing incorrect fix comment, and apply the correct fix. Do NOT skip the issue just because a fix comment exists.
