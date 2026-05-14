@@ -140,6 +140,303 @@
       "example": "if (a < b) /* fix: comparisonError — corrected comparison from <= to < */",
       "caution": "Verify the intended boundary condition (< vs <= vs == vs !=)."
     },
+    "returnAddressOfAutoVariable": {
+      "fix": "Do not return the address of a local (auto) variable; use static storage or heap allocation.",
+      "example": "static int val; return &​val; /* fix: returnAddressOfAutoVariable — returned address of static instead of auto */",
+      "pitfalls": "Using static storage makes the function non-reentrant.",
+      "context_notes": "In multithreaded code, prefer caller-provided output buffers over static storage."
+    },
+    "autovarInvalidDeallocation": {
+      "fix": "Do not call free/delete on a stack-allocated (auto) variable.",
+      "example": "/* fix: autovarInvalidDeallocation — removed free() on stack variable */",
+      "pitfalls": "Freeing stack memory causes undefined behavior and likely crashes.",
+      "context_notes": "Verify whether the variable was intended to be heap-allocated."
+    },
+    "returnAddressOfFunctionParameter": {
+      "fix": "Do not return the address of a function parameter; copy to heap or use caller-provided buffer.",
+      "example": "memcpy(out, &param, sizeof(param)); /* fix: returnAddressOfFunctionParameter — copied to caller buffer */",
+      "pitfalls": "Function parameters are stack-allocated and become invalid after return."
+    },
+    "negativeMemoryAllocationSize": {
+      "fix": "Ensure the allocation size argument is non-negative; use size_t type.",
+      "example": "size_t sz = (size_t)len; void *p = malloc(sz); /* fix: negativeMemoryAllocationSize — ensured non-negative size */",
+      "caution": "A signed-to-unsigned conversion of a negative value produces a very large allocation.",
+      "pitfalls": "Negative sizes wrapped to unsigned may exhaust memory or succeed with a huge allocation.",
+      "context_notes": "Validate the size value at the source before passing to allocation functions."
+    },
+    "mismatchSize": {
+      "fix": "Ensure the size argument to allocation/copy functions matches the target type size.",
+      "example": "int *p = malloc(n * sizeof(int)); /* fix: mismatchSize — matched sizeof to target type */",
+      "caution": "Using sizeof(pointer) instead of sizeof(*pointer) is a common mistake."
+    },
+    "negativeArraySize": {
+      "fix": "Ensure the array size expression is non-negative.",
+      "example": "/* fix: negativeArraySize — validated array size is non-negative before use */",
+      "pitfalls": "Negative array size is undefined behavior in C."
+    },
+    "negativeIndex": {
+      "fix": "Ensure the array index is non-negative before use.",
+      "example": "if (idx >= 0) { val = arr[idx]; } /* fix: negativeIndex — added non-negative index check */",
+      "caution": "The index expression may come from untrusted input; validate at the source.",
+      "pitfalls": "Negative indices access memory before the array, causing undefined behavior."
+    },
+    "insecureCmdLineArgs": {
+      "fix": "Validate and bound-check command-line arguments before copying into fixed-size buffers.",
+      "example": "strncpy(buf, argv[1], sizeof(buf) - 1U); buf[sizeof(buf) - 1U] = '\\0'; /* fix: insecureCmdLineArgs — bounded copy */",
+      "pitfalls": "Unbounded strcpy of argv can overflow stack buffers.",
+      "context_notes": "In embedded systems, command-line arguments may not apply; verify usage context."
+    },
+    "integerOverflow": {
+      "fix": "Widen operands or add overflow check before the arithmetic operation.",
+      "example": "uint32_t r = (uint32_t)a * (uint32_t)b; /* fix: integerOverflow — widened operands */",
+      "caution": "Signed integer overflow is undefined behavior in C.",
+      "pitfalls": "Overflow checks after the operation are too late; the UB has already occurred.",
+      "context_notes": "Use compiler builtins (__builtin_mul_overflow) or manual pre-checks for safety-critical code."
+    },
+    "floatConversionOverflow": {
+      "fix": "Add range check before converting floating-point value to integer type.",
+      "example": "if (f >= INT_MIN && f <= INT_MAX) { i = (int)f; } /* fix: floatConversionOverflow — range check */",
+      "pitfalls": "Float-to-int conversion overflow is undefined behavior.",
+      "context_notes": "Consider the target integer type's range limits (INT_MIN/INT_MAX, UINT_MAX, etc.)."
+    },
+    "uninitstring": {
+      "fix": "Initialize the string buffer before use (e.g., memset or assign a null terminator).",
+      "example": "char buf[64] = {0}; /* fix: uninitstring — zero-initialized string buffer */",
+      "caution": "Ensure the initialization covers the full buffer length."
+    },
+    "memleak": {
+      "fix": "Free the allocated memory on all code paths, including error paths.",
+      "example": "free(ptr); ptr = NULL; /* fix: memleak — freed allocation on all paths */",
+      "caution": "Ensure the pointer is not used after free.",
+      "pitfalls": "Error paths are the most common source of memory leaks.",
+      "context_notes": "Use a goto-cleanup pattern to centralize memory release."
+    },
+    "memleakOnRealloc": {
+      "fix": "Use a temporary pointer for realloc; only update the original on success.",
+      "example": "void *tmp = realloc(ptr, new_sz); if (tmp != NULL) { ptr = tmp; } /* fix: memleakOnRealloc — safe realloc pattern */",
+      "pitfalls": "If realloc fails and the result is assigned directly to ptr, the original memory is leaked.",
+      "context_notes": "In safety-critical code, avoid realloc entirely; use static allocation."
+    },
+    "deallocret": {
+      "fix": "Do not return freed/deallocated memory; restructure to return before free or copy data.",
+      "example": "int result = *ptr; free(ptr); return result; /* fix: deallocret — captured value before free */",
+      "pitfalls": "Returning a pointer to freed memory causes use-after-free in the caller."
+    },
+    "deallocuse": {
+      "fix": "Do not use memory after it has been freed; restructure code to use before free.",
+      "example": "use(ptr); free(ptr); ptr = NULL; /* fix: deallocuse — moved use before free */",
+      "pitfalls": "Use-after-free is undefined behavior and a security vulnerability (CWE-416).",
+      "context_notes": "Set pointer to NULL immediately after free to catch accidental reuse."
+    },
+    "mismatchAllocDealloc": {
+      "fix": "Match allocation and deallocation functions (malloc/free, new/delete, new[]/delete[]).",
+      "example": "free(ptr); /* fix: mismatchAllocDealloc — matched free() with malloc() */",
+      "pitfalls": "Mismatched alloc/dealloc causes undefined behavior and memory corruption.",
+      "context_notes": "In C code, always pair malloc/calloc/realloc with free."
+    },
+    "unusedAllocatedMemory": {
+      "fix": "Remove the allocation if the memory is never used, or use it in a meaningful expression.",
+      "example": "/* fix: unusedAllocatedMemory — removed unused allocation */",
+      "caution": "The allocation may be intentionally reserved for future use; verify intent."
+    },
+    "assignBoolToPointer": {
+      "fix": "Do not assign a boolean value to a pointer; use NULL or a valid address.",
+      "example": "ptr = NULL; /* fix: assignBoolToPointer — assigned NULL instead of boolean */",
+      "pitfalls": "Assigning true/false to a pointer creates an invalid pointer value."
+    },
+    "invalidFunctionArg": {
+      "fix": "Pass a valid argument value to the function as documented by its contract.",
+      "example": "/* fix: invalidFunctionArg — corrected argument to valid range */",
+      "caution": "Check the function documentation for valid input ranges.",
+      "pitfalls": "Invalid arguments may cause undefined behavior or silent data corruption."
+    },
+    "invalidFunctionArgBool": {
+      "fix": "Pass the correct type (bool vs int) to the function parameter.",
+      "example": "/* fix: invalidFunctionArgBool — passed boolean value instead of integer */",
+      "caution": "Verify the function signature expects a boolean parameter."
+    },
+    "strPlusChar": {
+      "fix": "Use string concatenation instead of adding a char to a string pointer (pointer arithmetic).",
+      "example": "strncat(str, &ch, 1); /* fix: strPlusChar — proper string concatenation */",
+      "pitfalls": "Adding a char to a string pointer advances the pointer by the char's ASCII value, not appending."
+    },
+    "ignoredReturnValue": {
+      "fix": "Use the return value or explicitly cast to (void) if intentionally discarding.",
+      "example": "(void)printf(\"msg\"); /* fix: ignoredReturnValue — cast unused return to void */",
+      "caution": "If the function can fail, prefer capturing and checking the return value.",
+      "context_notes": "In safety-critical code, always check return values of functions that can fail."
+    },
+    "wrongPipeParameterSize": {
+      "fix": "Pass the correct size argument to pipe() system call.",
+      "example": "int fds[2]; pipe(fds); /* fix: wrongPipeParameterSize — correct array size for pipe */",
+      "caution": "pipe() requires an array of exactly 2 int elements."
+    },
+    "memsetFloat": {
+      "fix": "Do not use memset on floating-point variables; assign directly.",
+      "example": "float f = 0.0f; /* fix: memsetFloat — direct assignment instead of memset */",
+      "pitfalls": "memset fills bytes; all-zero bytes is not necessarily 0.0 for float on all platforms.",
+      "context_notes": "IEEE 754 guarantees +0.0 is all-zero bits, but MISRA forbids relying on representation."
+    },
+    "sizeofCalculation": {
+      "fix": "Move the calculation outside of sizeof(); sizeof evaluates type, not value.",
+      "example": "size_t s = sizeof(int); int r = a + b; /* fix: sizeofCalculation — moved calculation outside sizeof */",
+      "pitfalls": "Calculations inside sizeof are not evaluated at runtime (except VLAs in C99+)."
+    },
+    "strncatUsage": {
+      "fix": "Use the remaining buffer space as the size argument, not the total buffer size.",
+      "example": "strncat(buf, src, sizeof(buf) - strlen(buf) - 1U); /* fix: strncatUsage — correct remaining size */",
+      "pitfalls": "strncat's third argument is the max chars to append, not the total buffer size.",
+      "context_notes": "Prefer snprintf for safer string assembly."
+    },
+    "selfInitialization": {
+      "fix": "Initialize the variable with a valid value, not with itself.",
+      "example": "int x = 0; /* fix: selfInitialization — replaced self-init with valid value */",
+      "pitfalls": "Self-initialization reads an uninitialized value, causing undefined behavior."
+    },
+    "uninitdata": {
+      "fix": "Initialize the allocated data before use (memset or explicit assignment).",
+      "example": "memset(ptr, 0, size); /* fix: uninitdata — zero-initialized allocated data */",
+      "caution": "Verify that zero is the correct initial value for the data.",
+      "context_notes": "calloc() zero-initializes automatically; prefer it over malloc+memset when appropriate."
+    },
+    "uninitMemberVar": {
+      "fix": "Initialize the member variable in the constructor or at declaration.",
+      "example": "/* fix: uninitMemberVar — initialized member variable to default value */",
+      "caution": "Choose an appropriate initial value matching the domain semantics."
+    },
+    "unusedStructMember": {
+      "fix": "Remove the unused struct member or use it in a meaningful expression.",
+      "example": "/* fix: unusedStructMember — removed unused member 'flags' from struct */",
+      "caution": "The member may be required for alignment, padding, or ABI compatibility."
+    },
+    "IOWithoutPositioning": {
+      "fix": "Add fseek/fsetpos/rewind between read and write operations on the same file.",
+      "example": "fseek(fp, 0, SEEK_CUR); /* fix: IOWithoutPositioning — added positioning between I/O ops */",
+      "pitfalls": "Mixing read and write without positioning causes undefined behavior per C standard."
+    },
+    "readWriteOnlyFile": {
+      "fix": "Open the file with the correct mode that permits reading.",
+      "example": "fp = fopen(path, \"r+\"); /* fix: readWriteOnlyFile — opened with read-write mode */",
+      "pitfalls": "Reading from a write-only file causes undefined behavior."
+    },
+    "writeReadOnlyFile": {
+      "fix": "Open the file with the correct mode that permits writing.",
+      "example": "fp = fopen(path, \"r+\"); /* fix: writeReadOnlyFile — opened with read-write mode */",
+      "pitfalls": "Writing to a read-only file causes undefined behavior."
+    },
+    "wrongPrintfScanfArgNum": {
+      "fix": "Match the number of format specifiers with the number of arguments.",
+      "example": "printf(\"%d %d\", a, b); /* fix: wrongPrintfScanfArgNum — matched arg count to format */",
+      "pitfalls": "Too few arguments causes undefined behavior; too many are silently ignored.",
+      "context_notes": "Use compiler warnings (-Wformat) to catch format/argument mismatches at compile time."
+    },
+    "invalidScanfFormatWidth": {
+      "fix": "Add or correct the width specifier in scanf format string to match buffer size.",
+      "example": "scanf(\"%63s\", buf); /* fix: invalidScanfFormatWidth — width matches buf size minus 1 */",
+      "pitfalls": "Missing width specifier in scanf allows unbounded input, causing buffer overflow."
+    },
+    "sprintfOverlappingData": {
+      "fix": "Ensure source and destination buffers do not overlap in sprintf calls.",
+      "example": "char tmp[64]; sprintf(tmp, \"%s_suffix\", buf); strcpy(buf, tmp); /* fix: sprintfOverlappingData — used temp buffer */",
+      "pitfalls": "Overlapping source and destination in sprintf is undefined behavior."
+    },
+    "invalidscanf": {
+      "fix": "Add a width specifier to scanf %s format to prevent buffer overflow.",
+      "example": "scanf(\"%63s\", buf); /* fix: invalidscanf — added width limit to scanf format */",
+      "pitfalls": "scanf %s without width limit can overflow any fixed-size buffer."
+    },
+    "shiftNegative": {
+      "fix": "Ensure the shift amount is non-negative.",
+      "example": "uint32_t r = val << 4U; /* fix: shiftNegative — ensured non-negative shift amount */",
+      "pitfalls": "Shifting by a negative amount is undefined behavior in C.",
+      "context_notes": "Cast shift amounts to unsigned to prevent accidental negative values."
+    },
+    "shiftTooManyBits": {
+      "fix": "Ensure the shift amount is less than the bit width of the type.",
+      "example": "uint32_t r = val << (n % 32U); /* fix: shiftTooManyBits — clamped shift to type width */",
+      "pitfalls": "Shifting by >= bit width is undefined behavior.",
+      "context_notes": "For uint32_t, valid shift range is 0..31; for uint16_t, 0..15."
+    },
+    "shiftTooManyBitsSigned": {
+      "fix": "Ensure the shift amount is less than the bit width of the signed type, and the value is non-negative.",
+      "example": "int32_t r = val << 4; /* fix: shiftTooManyBitsSigned — shift within signed type width */",
+      "pitfalls": "Shifting a negative signed value or shifting into the sign bit is undefined behavior.",
+      "context_notes": "Prefer unsigned types for bitwise operations to avoid signed shift UB."
+    },
+    "zerodiv": {
+      "fix": "Add a zero-check before the division/modulo operation.",
+      "example": "if (divisor != 0) { result = a / divisor; } /* fix: zerodiv — added zero-division guard */",
+      "pitfalls": "Division by zero is undefined behavior and typically causes a hardware exception.",
+      "context_notes": "In safety-critical code, return an explicit error code when divisor is zero."
+    },
+    "zerodivcond": {
+      "fix": "Review the condition: either the division by zero is possible, or the check is redundant.",
+      "example": "if (d != 0) { r = a / d; } /* fix: zerodivcond — ensured divisor check covers division */",
+      "caution": "This may indicate a logic error where the zero check and division are on different code paths."
+    },
+    "unknownEvaluationOrder": {
+      "fix": "Split the expression so each sub-expression with side effects is in a separate statement.",
+      "example": "int a = f(); int b = g(); result = a + b; /* fix: unknownEvaluationOrder — separated side effects */",
+      "pitfalls": "Unsequenced side effects cause undefined behavior (e.g., x = x++ is UB).",
+      "context_notes": "C11 defines sequence points more precisely; still prefer clear separation."
+    },
+    "knownConditionTrueFalse": {
+      "fix": "Review and fix the condition that is always true or always false; remove dead branch if intended.",
+      "example": "/* fix: knownConditionTrueFalse — removed always-true condition and dead else branch */",
+      "caution": "An always-true/false condition may indicate a logic error or missing variable update.",
+      "context_notes": "If intentional (e.g., configuration-based), document with a comment."
+    },
+    "unreachableCode": {
+      "fix": "Remove the unreachable code or fix the control flow so it becomes reachable.",
+      "example": "/* fix: unreachableCode — removed unreachable code after return */",
+      "caution": "Unreachable code may be defensive or for future use; verify intent before removal."
+    },
+    "redundantAssignment": {
+      "fix": "Remove the redundant assignment that is overwritten before being read.",
+      "example": "/* fix: redundantAssignment — removed overwritten assignment */",
+      "caution": "The assignment may have intended side effects (e.g., volatile); verify before removing."
+    },
+    "constStatement": {
+      "fix": "Remove the statement with no side effect, or fix it to perform the intended action.",
+      "example": "/* fix: constStatement — removed or corrected statement with no effect */",
+      "caution": "The statement may be an incomplete expression (missing assignment or function call)."
+    },
+    "unusedFunction": {
+      "fix": "Remove the unused function or mark it as used.",
+      "example": "/* fix: unusedFunction — removed unused function 'helper()' */",
+      "caution": "The function may be used by other translation units or via function pointer; verify linkage."
+    },
+    "unassignedVariable": {
+      "fix": "Assign a value to the variable before it is used, or remove it if unnecessary.",
+      "example": "int count = 0; /* fix: unassignedVariable — assigned initial value */",
+      "caution": "The variable may be set conditionally; ensure all paths assign before use."
+    },
+    "duplicateBreak": {
+      "fix": "Remove the duplicate break statement.",
+      "example": "/* fix: duplicateBreak — removed duplicate break */",
+      "caution": "Verify the second break was not intended for a different code path after refactoring."
+    },
+    "selfAssignment": {
+      "fix": "Remove the self-assignment or fix to assign the intended source variable.",
+      "example": "/* fix: selfAssignment — removed self-assignment 'x = x' */",
+      "caution": "May indicate a typo where a different source variable was intended."
+    },
+    "duplicateExpression": {
+      "fix": "Fix the duplicate operand to the intended different operand.",
+      "example": "if (a != b) /* fix: duplicateExpression — corrected duplicate operand */",
+      "caution": "Duplicate expressions in comparisons (a == a) may indicate a copy-paste error."
+    },
+    "stringLiteralWrite": {
+      "fix": "Do not write to a string literal; use a char array instead.",
+      "example": "char buf[] = \"hello\"; buf[0] = 'H'; /* fix: stringLiteralWrite — writable char array */",
+      "pitfalls": "Writing to a string literal is undefined behavior and may cause segfault.",
+      "context_notes": "String literals are stored in read-only memory on most platforms."
+    },
+    "uselessAssignmentArg": {
+      "fix": "Remove the useless assignment to a function argument, or use the modified value.",
+      "example": "/* fix: uselessAssignmentArg — removed useless assignment to parameter */",
+      "caution": "In C, modifying a parameter does not affect the caller's variable."
+    },
     "misra-c2012-2.1": {
       "fix": "Remove unreachable code or fix the control flow so the code becomes reachable.",
       "example": "/* fix: misra-c2012-2.1 — removed unreachable code after return */",
