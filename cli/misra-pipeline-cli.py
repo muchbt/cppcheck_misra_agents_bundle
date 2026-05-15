@@ -6,6 +6,7 @@ Primary commands:
   run          Run the MISRA fix pipeline (split→agent→merge)
   status       Show current pipeline run progress
   policy       Manage rule policy configuration
+  scan         cppcheck scan workflow (expand → filter-db → cppcheck → filter-xml → html-report)
   doctor       Diagnose pipeline environment
   env-check    Check CLI installation
 
@@ -151,6 +152,7 @@ Primary commands:
   run           Run the MISRA fix pipeline (split -> agent -> merge).
   status        Show current pipeline run progress.
   policy        Manage rule policy configuration.
+  scan          cppcheck scan workflow (expand -> filter-db -> cppcheck -> filter-xml -> html-report).
   doctor        Diagnose pipeline environment.
   env-check     Check CLI installation and environment.
 
@@ -243,6 +245,19 @@ Deprecated:
         help="Override agent provider (sets PIPELINE_AGENT_PROVIDER env var)",
     )
 
+    # scan subcommand (cppcheck scan workflow with nested subcommands)
+    scan_parser = subparsers.add_parser(
+        "scan",
+        help="cppcheck scan workflow (expand → filter-db → cppcheck → filter-xml → html-report)",
+    )
+    scan_subparsers = scan_parser.add_subparsers(dest="scan_action", help="Scan subcommand")
+
+    # Nested subcommands for scan workflow (add_help=False to forward --help to cppcheck_scan.py)
+    for action in ["expand", "filter-db", "cppcheck", "filter-xml", "html-report"]:
+        scan_subparsers.add_parser(action, help=f"Run {action} step", add_help=False)
+
+    # Note: Default (no scan_action) runs full 'scan' workflow
+
     # run subcommand (absorbs oneshot functionality)
     run_parser = subparsers.add_parser("run", help="Run the MISRA fix pipeline (split→agent→merge)")
     run_parser.add_argument("--fresh", action="store_true", help="Force fresh start, ignore existing progress")
@@ -273,13 +288,20 @@ Deprecated:
     # oneshot deprecated alias
     subparsers.add_parser("oneshot", help="(deprecated) Use 'run' instead")
 
-    # Use parse_known_args so --flags like --dry-run pass through to subcommands
+    # Use parse_known_args so --flags pass through to subcommands
     parsed, forwarded = parser.parse_known_args(argv if argv is not None else sys.argv[1:])
     # Attach forwarded args to the namespace
     if parsed.subcommand in PIPELINE_COMMANDS:
         parsed.args = forwarded
     elif parsed.subcommand == "policy":
         parsed.policy_args = forwarded
+    elif parsed.subcommand == "scan":
+        # Include scan_action in the forwarded args for cppcheck_scan.py
+        scan_action = getattr(parsed, "scan_action", None)
+        if scan_action:
+            parsed.scan_args = [scan_action] + forwarded
+        else:
+            parsed.scan_args = forwarded
 
     return parsed
 
@@ -1026,6 +1048,40 @@ def _dispatch_policy_command(policy_args: list[str]) -> int:
         sys.argv = original_argv
 
 
+def _dispatch_scan_command(scan_args: list[str]) -> int:
+    """Dispatch scan command to cppcheck_scan module."""
+    tools_dir = Path.cwd() / ".agents" / "tools"
+    if not tools_dir.exists():
+        print(
+            f"Error: {tools_dir} not found. Run 'misra-pipeline init' first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    tools_dir_str = str(tools_dir.resolve())
+    if tools_dir_str not in sys.path:
+        sys.path.insert(0, tools_dir_str)
+
+    try:
+        cppcheck_scan = importlib.import_module("cppcheck_scan")
+    except ImportError as exc:
+        print(
+            f"Error: Failed to import cppcheck_scan: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    original_argv = sys.argv
+    try:
+        sys.argv = ["cppcheck_scan.py", *scan_args]
+        return _call_module_main(cppcheck_scan, scan_args)
+    except Exception as exc:
+        print(f"Error running scan: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        sys.argv = original_argv
+
+
 # ── Run & Status commands ─────────────────────────────────────────────────────
 
 def _import_oneshot_helpers():
@@ -1204,6 +1260,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return _dispatch_pipeline_command(args.subcommand, args.args, provider=provider)
     elif args.subcommand == "policy":
         return _dispatch_policy_command(args.policy_args)
+    elif args.subcommand == "scan":
+        return _dispatch_scan_command(args.scan_args)
 
     return 0
 
