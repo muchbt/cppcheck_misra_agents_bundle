@@ -1852,8 +1852,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 # =========================================================================
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: Optional[List[str]] = None) -> int:
+    """Main entry point. Supports both CLI invocation and module import.
+
+    Args:
+        argv: Command line arguments. If None, uses sys.argv[1:].
+
+    Returns:
+        Exit code (0 for success, non-zero for error).
+    """
+    args = parse_args(argv)
 
     commands = {
         "expand": cmd_expand,
