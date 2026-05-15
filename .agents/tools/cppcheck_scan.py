@@ -1769,7 +1769,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     if argv is None:
         argv = sys.argv[1:]
 
-    if not argv or argv[0] not in SUBCOMMAND_NAMES:
+    # If --help or -h is at root level, don't prepend "scan" - let argparse show all subcommands
+    if argv and argv[0] in ("-h", "--help"):
+        pass
+    elif not argv or argv[0] not in SUBCOMMAND_NAMES:
         argv = ["scan"] + list(argv)
 
     parser = argparse.ArgumentParser(
